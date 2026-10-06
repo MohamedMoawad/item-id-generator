@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "ItemIdGenerator",
+    "id": "a4a4dfed-37c0-4073-bef5-80c771fc4050",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.23.2"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "Generates a conditional item ID and writes it to a list column."
+      },
+      "longDescription": {
+        "default": "ItemIdGenerator calls the GenerateItemId Azure Function, then writes the returned ID to the SharePoint list field chosen in the property pane."
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "ItemIdGenerator",
+        "description": "Generates a conditional item ID and writes it to a SharePoint list field.",
+        "id": "9be73e47-2334-4e5f-8e5a-394e668e3520",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/item-id-generator.sppkg"
+  }
+}

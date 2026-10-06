@@ -1,0 +1,7 @@
+node_modules/
+local.settings.json
+bin/
+obj/
+dist/
+*.js.map
+.DS_Store

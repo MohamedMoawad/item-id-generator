@@ -1,0 +1,23 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "ItemIdGenerator",
+    "environment": "spo",
+    "packageManager": "npm",
+    "skipFeatureDeployment": true,
+    "useGulp": false,
+    "componentType": "webpart",
+    "template": "react",
+    "componentName": "ItemIdGenerator",
+    "componentDescription": "Generate a conditional item ID and write it back to a SharePoint list field.",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.22.2",
+    "sdksVersions": {},
+    "version": "1.23.2",
+    "libraryName": "item-id-generator",
+    "libraryId": "a4a4dfed-37c0-4073-bef5-80c771fc4050",
+    "solutionShortDescription": "ItemIdGenerator description",
+    "isDomainIsolated": false
+  }
+}

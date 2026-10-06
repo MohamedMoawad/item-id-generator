@@ -1,0 +1,60 @@
+.itemIdGenerator {
+  overflow: hidden;
+  padding: 16px;
+  color: "[theme:bodyText, default: #323130]";
+  color: var(--bodyText);
+  box-sizing: border-box;
+}
+
+.header {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.lede {
+  margin: 0 0 16px;
+  max-width: 68ch;
+}
+
+.settings {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.settings li {
+  margin: 0 0 4px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+}
+
+.actions {
+  margin-top: 12px;
+}
+
+.status {
+  margin-top: 12px;
+  max-width: 640px;
+}
+
+.resultLabel {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.resultValue {
+  margin: 0;
+  padding: 10px 12px;
+  max-width: 640px;
+  word-break: break-all;
+  font-family: Consolas, "Courier New", monospace;
+  background-color: "[theme:neutralLighter, default: #f3f2f1]";
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+}

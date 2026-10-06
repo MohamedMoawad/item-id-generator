@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Secrets and local environment
+local.settings.json
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# SPFx build output
+dist/
+lib/
+lib-dts/
+lib-commonjs/
+lib-esm/
+temp/
+release/
+.heft/
+*.sppkg
+coverage/
+jest-output/
+*.scss.ts
+
+# Azure Functions local storage
+bin/
+obj/
+__blobstorage__/
+__queuestorage__/
+__azurite_db*__.json
+AzuriteConfig
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vs/
+.ntvs_analysis.dat
