@@ -3,7 +3,6 @@ import * as ReactDom from 'react-dom';
 import { Version } from '@microsoft/sp-core-library';
 import {
   type IPropertyPaneConfiguration,
-  PropertyPaneDropdown,
   PropertyPaneTextField
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
@@ -12,12 +11,11 @@ import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import * as strings from 'ItemIdGeneratorWebPartStrings';
 import ItemIdGenerator from './components/ItemIdGenerator';
 import { IItemIdGeneratorProps } from './components/IItemIdGeneratorProps';
+import { DEFAULT_CONFIG_LIST_TITLE } from './services/configContract';
 
 export interface IItemIdGeneratorWebPartProps {
-  functionUrl: string;
-  listName: string;
-  targetFieldInternalName: string;
-  condition: string;
+  configListTitle: string;
+  registerWebhookUrl: string;
 }
 
 export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemIdGeneratorWebPartProps> {
@@ -25,11 +23,9 @@ export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemI
     const element: React.ReactElement<IItemIdGeneratorProps> = React.createElement(
       ItemIdGenerator,
       {
-        functionUrl: this.properties.functionUrl || '',
-        listName: this.properties.listName || '',
-        targetFieldInternalName: this.properties.targetFieldInternalName || '',
-        condition: this.properties.condition || 'default',
-        webAbsoluteUrl: this.context.pageContext.web.absoluteUrl,
+        configListTitle: this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE,
+        siteAbsoluteUrl: this.context.pageContext.site.absoluteUrl,
+        registerWebhookUrl: this.properties.registerWebhookUrl || '',
         spHttpClient: this.context.spHttpClient
       }
     );
@@ -72,28 +68,15 @@ export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemI
             {
               groupName: strings.BasicGroupName,
               groupFields: [
-                PropertyPaneTextField('functionUrl', {
-                  label: strings.FunctionUrlFieldLabel,
-                  description: strings.FunctionUrlFieldDescription,
-                  placeholder: 'https://<function-app>.azurewebsites.net/api/GenerateItemId'
+                PropertyPaneTextField('configListTitle', {
+                  label: strings.ConfigListTitleFieldLabel,
+                  description: strings.ConfigListTitleFieldDescription,
+                  placeholder: DEFAULT_CONFIG_LIST_TITLE
                 }),
-                PropertyPaneTextField('listName', {
-                  label: strings.ListNameFieldLabel,
-                  description: strings.ListNameFieldDescription,
-                  placeholder: 'Requests'
-                }),
-                PropertyPaneTextField('targetFieldInternalName', {
-                  label: strings.TargetFieldFieldLabel,
-                  description: strings.TargetFieldFieldDescription,
-                  placeholder: 'GeneratedItemId'
-                }),
-                PropertyPaneDropdown('condition', {
-                  label: strings.ConditionFieldLabel,
-                  selectedKey: this.properties.condition || 'default',
-                  options: [
-                    { key: 'default', text: 'Default ({list}-{timestamp})' },
-                    { key: 'VIP', text: 'VIP (VIP-{list}-{timestamp})' }
-                  ]
+                PropertyPaneTextField('registerWebhookUrl', {
+                  label: strings.RegisterWebhookUrlFieldLabel,
+                  description: strings.RegisterWebhookUrlFieldDescription,
+                  placeholder: 'https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>'
                 })
               ]
             }

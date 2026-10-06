@@ -14,47 +14,61 @@
 
 .lede {
   margin: 0 0 16px;
-  max-width: 68ch;
+  max-width: 72ch;
 }
 
-.settings {
-  margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.status {
+  margin: 0 0 12px;
+  max-width: 720px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.card {
+  padding: 12px;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  background-color: "[theme:neutralLighter, default: #f3f2f1]";
+}
+
+.cardTitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cardMeta {
+  margin: 0;
   font-size: 13px;
 }
 
-.settings li {
-  margin: 0 0 4px;
+.formula {
+  margin: 8px 0 0;
+  font-family: Consolas, "Courier New", monospace;
+  word-break: break-all;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  max-width: 480px;
+  max-width: 640px;
+  margin-top: 8px;
 }
 
 .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
-}
-
-.status {
-  margin-top: 12px;
-  max-width: 640px;
-}
-
-.resultLabel {
-  margin: 12px 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.resultValue {
-  margin: 0;
-  padding: 10px 12px;
-  max-width: 640px;
-  word-break: break-all;
-  font-family: Consolas, "Courier New", monospace;
-  background-color: "[theme:neutralLighter, default: #f3f2f1]";
-  border: 1px solid "[theme:neutralLight, default: #edebe9]";
 }

@@ -1,13 +1,10 @@
 define([], function () {
   return {
-    PropertyPaneDescription: 'Configure the Function call and the list column that stores the generated ID.',
-    BasicGroupName: 'Item ID settings',
-    FunctionUrlFieldLabel: 'Function URL',
-    FunctionUrlFieldDescription: 'Full GenerateItemId URL. For a function key, append ?code=<function-key>. Do not commit the key.',
-    ListNameFieldLabel: 'List name',
-    ListNameFieldDescription: 'List title as shown in Site contents. Example: Requests.',
-    TargetFieldFieldLabel: 'Target field internal name',
-    TargetFieldFieldDescription: 'Internal name of the single-line text column. Example: GeneratedItemId.',
-    ConditionFieldLabel: 'Condition'
+    PropertyPaneDescription: 'Create RequestNumberConfig on this site collection and point active rows at RegisterWebhook.',
+    BasicGroupName: 'Configuration',
+    ConfigListTitleFieldLabel: 'Config list title',
+    ConfigListTitleFieldDescription: 'List title on the site collection. Default is RequestNumberConfig.',
+    RegisterWebhookUrlFieldLabel: 'RegisterWebhook URL',
+    RegisterWebhookUrlFieldDescription: 'Full Azure Function URL including the function key. Page editors can see this value.'
   };
 });

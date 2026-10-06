@@ -16,10 +16,10 @@
     },
     "metadata": {
       "shortDescription": {
-        "default": "Generates a conditional item ID and writes it to a list column."
+        "default": "Configuration web part for RequestNumberConfig."
       },
       "longDescription": {
-        "default": "ItemIdGenerator calls the GenerateItemId Azure Function, then writes the returned ID to the SharePoint list field chosen in the property pane."
+        "default": "Provisions RequestNumberConfig, stores a target list URL and GUID, and registers the spoWebhook subscription."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -28,7 +28,7 @@
     "features": [
       {
         "title": "ItemIdGenerator",
-        "description": "Generates a conditional item ID and writes it to a SharePoint list field.",
+        "description": "Configuration web part for automatic request-number rules.",
         "id": "9be73e47-2334-4e5f-8e5a-394e668e3520",
         "version": "1.0.0.0"
       }

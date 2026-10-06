@@ -1,13 +1,10 @@
 declare interface IItemIdGeneratorWebPartStrings {
   PropertyPaneDescription: string;
   BasicGroupName: string;
-  FunctionUrlFieldLabel: string;
-  FunctionUrlFieldDescription: string;
-  ListNameFieldLabel: string;
-  ListNameFieldDescription: string;
-  TargetFieldFieldLabel: string;
-  TargetFieldFieldDescription: string;
-  ConditionFieldLabel: string;
+  ConfigListTitleFieldLabel: string;
+  ConfigListTitleFieldDescription: string;
+  RegisterWebhookUrlFieldLabel: string;
+  RegisterWebhookUrlFieldDescription: string;
 }
 
 declare module 'ItemIdGeneratorWebPartStrings' {

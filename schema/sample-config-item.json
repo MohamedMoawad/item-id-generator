@@ -1,0 +1,13 @@
+{
+  "Title": "Operations requests",
+  "TargetListUrl": "https://<tenant>.sharepoint.com/sites/<site>/Lists/Requests",
+  "TargetListGuid": "<target-list-guid>",
+  "NumberColumnInternalName": "RequestNumber",
+  "Formula": "REQ-{yyyy}{MM}-{seq}",
+  "CurrentCount": 0,
+  "ResetPeriod": "Month",
+  "LastResetDate": null,
+  "IsActive": true,
+  "PadLength": 4,
+  "WebhookSubscriptionId": ""
+}

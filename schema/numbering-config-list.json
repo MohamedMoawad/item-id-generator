@@ -1,0 +1,94 @@
+{
+  "list": {
+    "title": "RequestNumberConfig",
+    "description": "One row per SharePoint list or library that should receive an auto-generated request number. Create it on the site collection root. The configuration web part can create this list.",
+    "template": "genericList",
+    "baseTemplate": 100
+  },
+  "columns": [
+    {
+      "internalName": "Title",
+      "displayName": "Title",
+      "type": "Text",
+      "required": true,
+      "notes": "Built in on a generic list. Friendly name of the rule."
+    },
+    {
+      "internalName": "TargetListUrl",
+      "displayName": "Target list URL",
+      "type": "Text",
+      "required": true,
+      "notes": "Absolute https URL of the list or library to number. AllItems.aspx is accepted. The web URL is derived from this path."
+    },
+    {
+      "internalName": "TargetListGuid",
+      "displayName": "Target list GUID",
+      "type": "Text",
+      "required": true,
+      "notes": "GUID returned by GetList for TargetListUrl. One active row per GUID."
+    },
+    {
+      "internalName": "NumberColumnInternalName",
+      "displayName": "Number column internal name",
+      "type": "Text",
+      "required": true,
+      "notes": "Internal name of a single-line text column on the target list, for example RequestNumber. Create that column on the target list yourself."
+    },
+    {
+      "internalName": "Formula",
+      "displayName": "Formula",
+      "type": "Text",
+      "required": true,
+      "notes": "UTC tokens {yyyy} {yy} {MM} {dd} {HH} {mm} {seq} {seq:n}. {seq} uses PadLength. {seq:n} overrides it. A formula without {seq} is rejected."
+    },
+    {
+      "internalName": "CurrentCount",
+      "displayName": "Current count",
+      "type": "Number",
+      "decimals": 0,
+      "notes": "Owned by the Azure Function. New rows start at 0. The configuration web part does not write this field on edit."
+    },
+    {
+      "internalName": "ResetPeriod",
+      "displayName": "Reset period",
+      "type": "Choice",
+      "choices": ["None", "Day", "Month", "Year"],
+      "default": "Month",
+      "notes": "None never resets. Day, Month, and Year compare UTC period keys derived from LastResetDate."
+    },
+    {
+      "internalName": "LastResetDate",
+      "displayName": "Last reset date",
+      "type": "DateTime",
+      "notes": "Owned by the Azure Function. Empty does not wipe CurrentCount. The first issued number stamps this date."
+    },
+    {
+      "internalName": "IsActive",
+      "displayName": "Is active",
+      "type": "Boolean",
+      "default": true,
+      "notes": "Inactive rows are ignored. Missing is inactive."
+    },
+    {
+      "internalName": "PadLength",
+      "displayName": "Pad length",
+      "type": "Number",
+      "decimals": 0,
+      "minimum": 0,
+      "maximum": 12,
+      "default": 4,
+      "notes": "Default width for {seq}. 0 means no padding."
+    },
+    {
+      "internalName": "WebhookSubscriptionId",
+      "displayName": "Webhook subscription ID",
+      "type": "Text",
+      "notes": "Written by RegisterWebhook after SharePoint accepts the spoWebhook subscription. Changing TargetListGuid clears it so the next save can register again."
+    }
+  ],
+  "fieldCreation": {
+    "endpoint": "{site}/_api/web/lists/getbytitle('RequestNumberConfig')/fields/CreateFieldAsXml",
+    "options": 25,
+    "optionsMeaning": "AddToDefaultContentType (1) + AddFieldInternalNameHint (8) + AddFieldToDefaultView (16)"
+  }
+}

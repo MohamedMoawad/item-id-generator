@@ -3,12 +3,17 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "WEBHOOK_URL": "",
+    "NUMBERING_CONFIG_SITE_URL": "https://<tenant>.sharepoint.com/sites/<site>",
+    "NUMBERING_CONFIG_LIST_TITLE": "RequestNumberConfig",
+    "SHAREPOINT_TENANT_ID": "<directory-tenant-id>",
+    "SHAREPOINT_CLIENT_ID": "<application-client-id>",
+    "SHAREPOINT_CLIENT_SECRET": "",
+    "SHAREPOINT_WEBHOOK_CLIENT_STATE": "<webhook-client-state>",
+    "SPO_WEBHOOK_NOTIFICATION_URL": "https://<function-app>.azurewebsites.net/api/spoWebhook?code=<function-key>",
     "APPLICATIONINSIGHTS_CONNECTION_STRING": ""
   },
   "Host": {
-    "LocalHttpPort": 7071,
-    "CORS": "https://<tenant>.sharepoint.com,https://localhost:4321",
+    "CORS": "https://<tenant>.sharepoint.com",
     "CORSCredentials": false
   }
 }

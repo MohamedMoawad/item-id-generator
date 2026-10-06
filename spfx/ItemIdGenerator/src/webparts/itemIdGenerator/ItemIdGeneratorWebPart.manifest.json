@@ -18,14 +18,12 @@
   "preconfiguredEntries": [{
     "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
     "group": { "default": "Advanced" },
-    "title": { "default": "ItemIdGenerator" },
-    "description": { "default": "Generate a conditional item ID and write it back to a SharePoint list field." },
-    "officeFabricIconFontName": "NumberSymbol",
+    "title": { "default": "Request number config" },
+    "description": { "default": "Provision RequestNumberConfig, resolve a list URL, and register the numbering webhook." },
+    "officeFabricIconFontName": "Settings",
     "properties": {
-      "functionUrl": "https://<function-app>.azurewebsites.net/api/GenerateItemId",
-      "listName": "Requests",
-      "targetFieldInternalName": "GeneratedItemId",
-      "condition": "default"
+      "configListTitle": "RequestNumberConfig",
+      "registerWebhookUrl": "https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>"
     }
   }]
 }

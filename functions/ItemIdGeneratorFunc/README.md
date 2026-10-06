@@ -1,152 +1,81 @@
 # ItemIdGeneratorFunc
 
-Azure Functions (Node.js programming model v4) HTTP trigger that generates a conditional SharePoint item ID.
+Azure Functions v4 (Node.js) worker for request numbers.
 
-- Runtime: Azure Functions host v4, `@azure/functions` 4.16.5
-- Node.js: 22.x (`>=22.14.0 <23`)
-- Trigger: `GenerateItemId`, HTTP POST, auth level `function`
+| Function | Trigger | Job |
+| --- | --- | --- |
+| `spoWebhook` | HTTP POST, auth level `function` | Echo `validationtoken` as `text/plain`, or check `clientState` and enqueue the list. |
+| `processRequestNumber` | Queue `request-numbers` | Lease the list, increment `RequestNumberConfig`, PATCH a blank number column. |
+| `RegisterWebhook` | HTTP POST, auth level `function` | App-only. Subscribe the target list to `spoWebhook` and store the subscription id. |
 
-## Request and response
+`src/index.js` loads those three modules. Do not add a second numbering flow.
 
-```http
-POST /api/GenerateItemId
-Content-Type: application/json
+## Settings
 
-{ "listName": "Requests", "condition": "VIP", "itemId": 15 }
-```
+Copy `local.settings.json.example` to `local.settings.json`. Placeholders only. Leave the secret empty in source control.
 
-Extra JSON fields are kept as metadata for rules you add (department, role, list column values). They are not required.
-
-Success:
-
-```json
-{ "id": "VIP-Requests-1700000000000" }
-```
-
-That is HTTP status 200 and a JSON body `{ id }`. The v4 programming model returns it as `{ status: 200, jsonBody: { id } }`, and the host serializes `jsonBody`.
-
-| Condition | ID |
+| Name | Purpose |
 | --- | --- |
-| `VIP` (trim, case-insensitive) | `VIP-{listName}-{timestamp}` |
-| anything else, including `default` or empty | `{listName}-{timestamp}` |
+| `AzureWebJobsStorage` | Queue and blob leases. Local value `UseDevelopmentStorage=true` needs Azurite. |
+| `NUMBERING_CONFIG_SITE_URL` | Fallback site collection for `RequestNumberConfig`. `RegisterWebhook` can override it with `configSiteUrl`. |
+| `NUMBERING_CONFIG_LIST_TITLE` | Default `RequestNumberConfig`. |
+| `SHAREPOINT_TENANT_ID` | Directory (tenant) id. |
+| `SHAREPOINT_CLIENT_ID` | Application (client) id. |
+| `SHAREPOINT_CLIENT_SECRET` | Client secret. Not committed. Certificate auth is not implemented. |
+| `SHAREPOINT_WEBHOOK_CLIENT_STATE` | Shared secret SharePoint echoes on each notification. Rejected when empty or still a `<placeholder>`. |
+| `SPO_WEBHOOK_NOTIFICATION_URL` | Full `spoWebhook` URL including `?code=<function-key>`. SharePoint calls this during subscribe and on each change. |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Optional. |
 
-`listName` is trimmed and internal whitespace becomes a hyphen. `timestamp` is Unix epoch milliseconds. `itemId` must be a positive integer (the SharePoint list item ID).
+`Host.CORS` in the example allows the SharePoint origin so the browser can call `RegisterWebhook`. `spoWebhook` is called by SharePoint, not by the browser, so it does not need CORS. Set the same origin on the Function App in Azure (`az functionapp cors add`).
 
-Validation failures return HTTP 400 and `{ "error": "..." }`.
+The app needs application permission **Sites.Selected**, admin consent, and site permission on the config site collection and on each target web.
 
-## Add a rule
+## spoWebhook
 
-Edit `src/rules/idRules.js`. `registerRule` inserts at the front, so the new rule runs before VIP. First match wins.
-
-```javascript
-const { registerRule } = require('./rules/idRules');
-
-registerRule({
-  id: 'department',
-  matches: (ctx) => typeof ctx.metadata.department === 'string' && ctx.metadata.department.trim() !== '',
-  format: (ctx) => `${ctx.metadata.department.trim()}-${ctx.listName}-${ctx.timestamp}`
-});
-```
-
-Call `registerRule` from `src/index.js` after the function module loads, or append to the `rules` array in `idRules.js` if this rule should lose to VIP.
-
-## Optional webhook
-
-If `WEBHOOK_URL` is unset or blank, nothing is called. If it is set, the Function POSTs:
-
-```json
-{ "id": "VIP-Requests-1700000000000", "itemId": 15, "condition": "VIP", "listName": "Requests" }
-```
-
-A webhook failure is logged and the generated ID is still returned to the caller.
-
-## Prerequisites
-
-- Node.js 22.14 or newer, below 23
-- [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local) v4 (`func`)
-- Azurite, only if you keep `AzureWebJobsStorage` as `UseDevelopmentStorage=true`
-
-## Create, run, and test
-
-This folder is already a v4 JavaScript function app (`package.json` `main` loads `src/index.js`, which registers `GenerateItemId`). You do not need to run `func init` again unless you want an empty app beside it.
-
-Equivalent commands the Core Tools would use to create this layout:
-
-```bash
-func init ItemIdGeneratorFunc --worker-runtime node --model v4 --language javascript
-cd ItemIdGeneratorFunc
-func new --name GenerateItemId --template "HTTP trigger" --authlevel function
-```
-
-Run what is already here:
-
-```bash
-cd functions/ItemIdGeneratorFunc
-cp local.settings.json.example local.settings.json
-npm install
-npm test
-func start
-```
-
-`func start` prints a function key and a local URL:
+SharePoint proves the notification URL with:
 
 ```text
-http://localhost:7071/api/GenerateItemId
+POST /api/spoWebhook?code=<function-key>&validationtoken=<token>
 ```
 
-Try it:
+The response is the raw token, `Content-Type: text/plain`, not JSON.
+
+A change notification has `value[]` with `resource`, `siteUrl`, `clientState`, and `subscriptionId`. It does not include the new item id. A mismatched `clientState` is HTTP 403. An unusable server secret is HTTP 500 so SharePoint retries instead of accepting a forged call. The queue message is `{ siteUrl, listId, subscriptionId }`.
+
+## processRequestNumber
+
+1. Acquire blob lease `list-{guid}` in `numbering-locks` for 60 seconds. A 409 throws so the message retries.
+2. Load the one active `RequestNumberConfig` row whose `TargetListGuid` matches. Zero rows is an ack. Two rows is an error.
+3. Read the latest 200 items. Number those whose number column is blank, lowest id first. A message that includes `itemId` numbers only that item.
+4. MERGE `CurrentCount` and `LastResetDate` with `If-Match`. HTTP 412 retries, up to 200 attempts.
+5. MERGE the number onto the item with its own ETag. If the column is already filled, skip it. A crash between steps 4 and 5 leaves a gap.
+
+`host.json` sets `batchSize` 1, `newBatchThreshold` 0, `visibilityTimeout` 1 minute, and `maxDequeueCount` 5. `batchSize` does not cover a second Function instance. The lease does.
+
+Formula tokens are UTC: `{yyyy}` `{yy}` `{MM}` `{dd}` `{HH}` `{mm}` `{seq}` `{seq:n}`. `{seq}` uses `PadLength`. An empty `LastResetDate` does not reset the count.
+
+## RegisterWebhook
+
+```json
+{ "configSiteUrl": "https://<tenant>.sharepoint.com/sites/<site>", "configItemId": 7 }
+```
+
+The function reads that row with the app principal, POSTs to `{web}/_api/web/lists('{guid}')/subscriptions`, and MERGEs `WebhookSubscriptionId`. The subscription resource is the list API URL. Expiration is about 170 days (SharePoint allows 180). If the id is already set, the response is `{ "alreadyRegistered": true }` and SharePoint is not called. An inactive row is not registered.
+
+Renewal is not implemented. Deactivating a row does not delete the subscription.
+
+## Commands
+
+Functions are already in `src/functions`. These templates match them if you recreate the project:
 
 ```bash
-curl -X POST "http://localhost:7071/api/GenerateItemId?code=<function-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"listName":"Requests","condition":"VIP","itemId":15}'
+npm install
+npm test
+npm install -g azure-functions-core-tools@4 --unsafe-perm true
+func start
+func azure functionapp publish <function-app>
 ```
 
-`npm test` runs the Node.js test runner (`node --test`) against the rules, the webhook, and the HTTP handler. It does not start the Functions host.
+`func start` is `npm start`. Run Azurite first. `npm test` does not load `src/index.js`, so it does not need the Functions host.
 
-In `local.settings.json`, replace `https://<tenant>.sharepoint.com` with the SharePoint origin that will call the Function. `local.settings.json` is gitignored. The example file has empty secrets only.
-
-For an HTTP-only local run without Azurite, set `AzureWebJobsStorage` to `""`.
-
-## Deploy
-
-Create a Function App on the Azure Functions v4 runtime and Node 22. Then:
-
-```bash
-func azure functionapp publish <function-app-name>
-```
-
-Set application settings in the portal or with the Azure CLI. Do not put real values in source:
-
-| Setting | Value |
-| --- | --- |
-| `WEBHOOK_URL` | `https://<webhook-host>/path` or leave empty |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | From the Application Insights resource |
-
-`host.json` already turns on Application Insights sampling. The connection string is what attaches this app to a resource.
-
-## CORS
-
-Local CORS is the `Host.CORS` value in `local.settings.json`. That file is not deployed.
-
-On the Function App CORS blade, allow the SharePoint origin and the local debug origin you actually use:
-
-- `https://<tenant>.sharepoint.com`
-- `https://localhost:4321` while you are debugging SPFx
-
-Do not use `*` once the app is called from SharePoint with anything other than a public anonymous API. This starter does not send credentialed CORS requests (`CORSCredentials` is false). The function key travels in the query string.
-
-## Azure AD authentication
-
-Placeholder names only. This repo does not contain a client ID, tenant ID, or client secret.
-
-The trigger uses `authLevel: 'function'` so local and prototype calls pass `?code=<function-key>`. Treat that key like a password. Do not commit it, and do not leave it in a web part property on a production page: page editors can read property pane values.
-
-Production path:
-
-1. Create an app registration. Client ID `<application-client-id>`, tenant `<directory-tenant-id>`, application ID URI `api://<application-id-uri>`.
-2. On the Function App, enable authentication (Easy Auth) with the Microsoft identity provider. Redirect URI `https://<function-app>.azurewebsites.net/.auth/login/aad/callback`.
-3. Change `authLevel` to `anonymous` so Easy Auth is the only gate. A function key and Easy Auth at the same time is easy to misconfigure.
-4. Call the Function from SPFx with `AadHttpClient` and a `webApiPermissionRequests` entry. The shape is in the repository README.
-
-No sample client ID is checked in on purpose.
+There is no separate `GenerateItemId` HTTP API. The web part must not mint numbers.

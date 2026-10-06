@@ -1,85 +1,35 @@
 # ItemIdGenerator
 
-SharePoint Framework 1.23.2 React web part for SharePoint Online. It POSTs `{ listName, condition, itemId }` to the `GenerateItemId` Azure Function, shows the returned ID, and writes that ID to a list column with `SPHttpClient`.
+SharePoint Framework 1.23.2 React web part. It configures request numbers. It does not generate them.
 
-Scaffolded with `@microsoft/generator-sharepoint` 1.23.2 (`yo @microsoft/sharepoint`), React, SharePoint Online only. The generator's default toolchain is Heft. The npm package name is `item-id-generator` (the generator kebab-cases the solution name). The web part and the App Catalog solution name are `ItemIdGenerator`.
+On the site collection (`pageContext.site.absoluteUrl`):
 
-Node.js must be at least 22.14.0 and below 23.
+1. **Ensure RequestNumberConfig** creates the generic list and any missing columns (`TargetListUrl`, `TargetListGuid`, `NumberColumnInternalName`, `Formula`, `CurrentCount`, `ResetPeriod`, `LastResetDate`, `IsActive`, `PadLength`, `WebhookSubscriptionId`). Field XML is added with `CreateFieldAsXml` and Options 25. Opening the page does not create the list. Saving a rule ensures it first.
+2. Paste a list or library URL and choose **Resolve list**. The web part calls `GetList` on the web derived from that URL and stores the GUID.
+3. **Save rule** writes the row. The body for an edit does not include `CurrentCount` or `LastResetDate`. If the target GUID changed, `WebhookSubscriptionId` is cleared.
+4. When the row is active and the property pane has a real `RegisterWebhook` URL, the web part POSTs `{ configSiteUrl, configItemId }`. A placeholder URL (anything containing `<`) saves the row and warns that the webhook was not registered. A registration failure does not roll back the row.
 
-## Property pane
+Create the number column, such as `RequestNumber`, on the target list yourself.
 
-| Setting | Example | Sent to |
-| --- | --- | --- |
-| Function URL | `https://<function-app>.azurewebsites.net/api/GenerateItemId` | `fetch` POST |
-| List name | `Requests` | JSON `listName`, and the list updated afterwards |
-| Target field internal name | `GeneratedItemId` | SharePoint field on the list item |
-| Condition | `Default` or `VIP` | JSON `condition` |
+The property pane holds the config list title (default `RequestNumberConfig`) and the full `RegisterWebhook` URL, including the function key. Page editors can read that URL. Function CORS must allow `https://<tenant>.sharepoint.com`.
 
-The list item ID is typed in the web part, because it changes per item. It is posted as `itemId` and used in the REST URL `items(<id>)`.
-
-Create the target column first: single line of text. The internal name is the `Field=` value in the column settings URL, not the display name. `src/webparts/itemIdGenerator/services/updateListItemField.ts` documents the list title and the field internal name next to the MERGE request.
-
-While the Function uses a function key, the property pane URL is:
-
-```text
-http://localhost:7071/api/GenerateItemId?code=<function-key>
-```
-
-Do not store a real key in the manifest or in git. The manifest ships the placeholder `https://<function-app>.azurewebsites.net/api/GenerateItemId`. Page editors can read property values, so a function key in the URL is only for local debugging.
-
-## Local serve
-
-`npm start` is this project's debug command. It runs `heft start --clean`, which serves `https://localhost:4321`. That replaces `gulp serve`.
-
-Gulp is not installed here. SPFx 1.22 and later default to Heft. `gulp serve` and `gulp package-solution --ship` apply only if you scaffold again with `yo @microsoft/sharepoint --use-gulp`.
+## Commands
 
 ```bash
-cd spfx/ItemIdGenerator
 npm install
+npm test
 npm start
+npm run package-solution
 ```
 
-Trust the developer certificate when the toolchain asks. `config/serve.json` opens `https://{tenantDomain}/_layouts/workbench.aspx`. Replace `{tenantDomain}` with your tenant host if serve does not prompt for it.
+The generator uses Heft. `npm start` is the old `gulp serve`. `npm run package-solution` is `gulp package-solution --ship`. The debug server listens on `https://localhost:4321`. `config/serve.json` loads the hosted workbench. That workbench retires on 2026-12-01.
 
-The hosted workbench retires on 1 December 2026. For a normal page, load the debug manifests on that page:
+`npm test` covers the pure contract: create versus update bodies, URL parsing, field internal names, and the RegisterWebhook payload. It does not import `@microsoft/sp-http`.
 
-```text
-?debug=true&noredir=true&debugManifestsFile=https://localhost:4321/temp/manifests.js
-```
+## Deploy
 
-`npm test` runs the Heft Jest suite. It covers the JSON body and the list MERGE URL. It does not call Azure or SharePoint.
+Upload `sharepoint/solution/item-id-generator.sppkg` to the App Catalog. `skipFeatureDeployment` is true, so make the solution available to all sites when the catalog asks. Add **Request number config** to a page on the site collection.
 
-## Package and App Catalog
+The web part uses the current user's `SPHttpClient`. That user needs permission to create a list on the site collection and to read the target list. Webhook registration itself is app-only inside the Function, because SharePoint calls `spoWebhook` back during subscribe and the browser cannot finish that handshake.
 
-`npm run build` runs the production tests and then packages the solution. `npm run package-solution` only packages. That command replaces `gulp package-solution --ship`.
-
-```bash
-npm run build
-```
-
-Upload `sharepoint/solution/item-id-generator.sppkg` to the tenant App Catalog (or a site collection catalog). The package was built with `skipFeatureDeployment: true`, so when the catalog asks, make the solution available to all sites. Add the **ItemIdGenerator** web part to a modern page, edit the web part, and fill in the property pane.
-
-Deploy the Function before authors use the page. The browser calls the Function directly, so the Function App has to allow this site's origin. See CORS below.
-
-`config/deploy-azure-storage.json` still has the generator placeholders `<!-- STORAGE ACCOUNT NAME -->` and `<!-- ACCESS KEY -->`. Leave them, or replace them locally and do not commit a real access key. Client-side assets are included in the `.sppkg` (`includeClientSideAssets` is true), so Azure CDN deployment is optional.
-
-## CORS
-
-The web part uses `fetch` from the SharePoint page, not `SPHttpClient`, because the Function is not on the SharePoint domain. The Function App must allow:
-
-- `https://<tenant>.sharepoint.com`
-- `https://localhost:4321` during local debug
-
-Local Function CORS is `Host.CORS` in `functions/ItemIdGeneratorFunc/local.settings.json`. Production CORS is configured on the Function App. Details and the Azure AD placeholder are in that project's README and the repository README.
-
-If the browser reports a CORS or network failure, the web part keeps the message on the page and does not write the list item.
-
-## List update
-
-After a successful Function response, `updateListItemField` sends `SPHttpClient.post` with `X-HTTP-Method: MERGE` to:
-
-```text
-{web}/_api/web/lists/getbytitle('<List name>')/items(<item id>)
-```
-
-The body is `{ "<target field internal name>": "<generated id>" }`. If SharePoint asks for the list item entity type, the comments in `updateListItemField.ts` show the verbose `__metadata` form. The generated ID stays visible even when the MERGE fails, so it can be copied.
+This UI was not opened against a live tenant in this environment.

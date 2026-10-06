@@ -35,6 +35,7 @@ __blobstorage__/
 __queuestorage__/
 __azurite_db*__.json
 AzuriteConfig
+azurite/
 
 # OS and editor
 .DS_Store

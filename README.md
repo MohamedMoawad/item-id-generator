@@ -1,92 +1,92 @@
-# Item ID generator
+# Request numbers for SharePoint Online
 
-Starter monorepo for SharePoint Online conditional item IDs, in the spirit of an Infowise-style "generate an ID when a condition matches" rule. A SharePoint Framework web part asks an Azure Function for an ID, then writes that ID back to a list column. The Function can optionally notify a webhook.
+When someone creates a list item, this repo assigns the next request number. The create can come from the list form, quick edit, or Power Automate. A SharePoint webhook is the trigger. The SPFx web part only configures the rule.
 
+Do not also run a Power Automate flow that writes the same number column. Two writers will race.
+
+## Why a web part cannot do this
+
+A web part runs in one browser, for one person, on one page. It never sees an item created by Power Automate, a grid edit on another machine, or a second tab. Two browsers that both read `CurrentCount` will write the same number. The counter has to live in one worker that can lose the race and retry.
+
+## Flow
+
+```text
+SPFx configuration web part
+  ensure RequestNumberConfig on the site collection
+  paste list URL -> GetList -> save row
+  POST RegisterWebhook
+        |
+        v
+SharePoint list subscription
+  notificationUrl = spoWebhook
+        |
+        v
+any create (form, grid, Power Automate)
+        |
+        v
+spoWebhook
+  echo validationtoken as text/plain, or check clientState and enqueue
+        |
+        v
+queue request-numbers
+        |
+        v
+processRequestNumber
+  blob lease for that list
+  ETag compare-and-swap on RequestNumberConfig
+  PATCH the item when the number column is still blank
 ```
-SharePoint page
-  ItemIdGenerator web part
-    POST { listName, condition, itemId }
-      -> Azure Function GenerateItemId
-           -> rules (default, VIP, or rules you add)
-           -> optional POST { id, itemId, condition, listName } to WEBHOOK_URL
-    <- HTTP 200 { id }
-    MERGE the ID into the list item field (SPHttpClient)
-```
 
-The two projects install separately. This is not an npm workspace: SharePoint Framework's Heft rig breaks when its packages are hoisted.
-
-| Path | What it is |
+| Path | Role |
 | --- | --- |
-| `spfx/ItemIdGenerator` | SPFx 1.23.2 React web part. npm package name `item-id-generator`. |
-| `functions/ItemIdGeneratorFunc` | Azure Functions v4 Node.js HTTP trigger `GenerateItemId`. |
+| `schema/` | `RequestNumberConfig` columns, a sample row, and a PnP script. |
+| `functions/ItemIdGeneratorFunc` | `spoWebhook`, `processRequestNumber`, and `RegisterWebhook`. |
+| `spfx/ItemIdGenerator` | Configuration web part. It provisions the list, resolves a list URL, and calls `RegisterWebhook`. |
+
+## Concurrency
+
+1. **Lease.** `processRequestNumber` takes a 60-second blob lease named `list-{guid}` in container `numbering-locks`. `host.json` sets queue `batchSize` to 1, which only limits one instance. A second instance that dequeues the same list fails the lease and the message retries after the 60-second visibility timeout (`maxDequeueCount` 5). Different lists run in parallel.
+2. **ETag.** The winner reads `CurrentCount` and MERGEs `CurrentCount` plus `LastResetDate` with `If-Match`. HTTP 412 reads the row again. One hundred parallel reservations in the unit test produce sequences 1 through 100.
+3. **Blank column.** The worker skips an item that already has a number. SharePoint notifications do not include the item id, so the worker reads the latest 200 items and numbers the blank ones, oldest id first. A queue message may also carry `itemId` for a manual replay.
+
+A crash after the counter moves and before the item PATCH leaves a gap. It does not reuse the number.
+
+Reset uses UTC. `None` never resets. An empty `LastResetDate` does not wipe `CurrentCount`. `Day`, `Month`, and `Year` reset when the UTC period key changes.
 
 ## Versions
 
-Chosen from the current stable releases on 6 October 2026, not the SPFx 1.24 preview.
-
-| Piece | Version | Why |
-| --- | --- | --- |
-| Node.js | 22.14.0 up to, but not including, 23 | SPFx 1.23 engine range. Azure Functions Node.js v4 also supports Node 22. |
-| `@microsoft/generator-sharepoint` | 1.23.2 (`latest`) | Current SharePoint Online stable generator. 1.24 is still `next` (1.24.0-rc.0). |
-| Toolchain | Heft (generator default) | Gulp is opt-in with `--use-gulp` and is legacy from SPFx 1.22 onward. |
-| React | 17.0.1 | The version the 1.23 generator scaffolds. React 18 lands with SPFx 1.24. |
-| `@azure/functions` | 4.16.5 | Current v4 programming model. |
-
-## Local development order
-
-1. **Function.** From `functions/ItemIdGeneratorFunc`, copy `local.settings.json.example` to `local.settings.json`, replace the `<tenant>` CORS placeholder, run `npm install`, `npm test`, then `func start`. Copy the function key from the console.
-2. **Web part.** From `spfx/ItemIdGenerator`, run `npm install`, then `npm start`. In the property pane, set the Function URL to `http://localhost:7071/api/GenerateItemId?code=<function-key>`.
-3. **List.** Create a single-line text column (example internal name `GeneratedItemId`) on the list named in the property pane (example title `Requests`).
-4. Open the web part, enter a list item ID, and generate. The part shows the ID and writes it to that column.
-
-Details, including App Catalog deployment, are in each project's README.
-
-## Environment variables
-
-Set these in `functions/ItemIdGeneratorFunc/local.settings.json` locally, and in the Function App configuration when you deploy. Do not commit `local.settings.json` or real keys.
-
-| Name | Required | Purpose |
-| --- | --- | --- |
-| `FUNCTIONS_WORKER_RUNTIME` | yes | `node` |
-| `AzureWebJobsStorage` | local tools | `UseDevelopmentStorage=true` when Azurite is running. HTTP-only local runs can use an empty string if storage is not needed. |
-| `WEBHOOK_URL` | no | When non-empty, the Function POSTs `{ id, itemId, condition, listName }` after it generates an ID. When empty, the webhook is skipped. |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | no | Application Insights. Leave empty until the resource exists. |
-
-The web part does not use environment variables. Its Function URL, list name, target field internal name, and condition are property pane settings.
-
-## ID rules
-
-| Condition | ID |
+| Piece | Version |
 | --- | --- |
-| anything except VIP, including `default` | `{listName}-{timestamp}` |
-| `VIP` (case-insensitive) | `VIP-{listName}-{timestamp}` |
+| Node.js | `>=22.14.0 <23` (`.nvmrc` is 22) |
+| SPFx | 1.23.2, Heft, React 17. SPFx 1.24 is still a release candidate. |
+| Azure Functions | programming model v4, `@azure/functions` 4.16.5 |
+| Storage | `@azure/storage-blob` 12.34.0 |
 
-`timestamp` is Unix epoch milliseconds. Whitespace in the list title collapses to a hyphen. Add department, role, or column-value rules in `functions/ItemIdGeneratorFunc/src/rules/idRules.js` with `registerRule`. First match wins.
+This is not an npm workspace. SPFx Heft breaks when dependencies are hoisted.
 
-## Next steps
+## Local development
 
-**App registration (Azure AD).** The Function is registered with `authLevel: 'function'`, so a function key in the web part URL works for a prototype. Anyone who can edit the page can read that key. For a real tenant, turn on App Service authentication (Easy Auth) with a Microsoft Entra app registration and stop embedding the key. Placeholder values only:
+1. Create `RequestNumberConfig` with the web part or `schema/provision-numbering-config.ps1`. Add a single-line text column such as `RequestNumber` on each target list.
+2. Register an Entra application with application permission **Sites.Selected**, admin-consent it, and grant that app access to the site collection and to each target web. Copy `functions/ItemIdGeneratorFunc/local.settings.json.example` to `local.settings.json` and fill the placeholders locally. Do not commit that file.
+3. Start Azurite so the queue and the lease container have a storage account (`UseDevelopmentStorage=true`).
+4. From `functions/ItemIdGeneratorFunc`: `npm install`, `npm test`, then `npm start`.
+5. Put the `spoWebhook` URL, including `?code=<function-key>`, in `SPO_WEBHOOK_NOTIFICATION_URL`. Put the same style of URL for `RegisterWebhook` in the web part property pane. Allow the SharePoint origin in Function CORS. The example `local.settings.json` sets `Host.CORS` for local runs.
+6. From `spfx/ItemIdGenerator`: `npm install`, `npm test`, `npm start`. The debug server is `https://localhost:4321`. Open the hosted workbench on the site collection. Hosted workbench retires on 2026-12-01. Package with `npm run package-solution`.
 
-- Application (client) ID: `<application-client-id>`
-- Directory (tenant) ID: `<directory-tenant-id>`
-- Application ID URI: `api://<application-id-uri>`
-- Redirect URI: `https://<function-app>.azurewebsites.net/.auth/login/aad/callback`
+`gulp serve` in older docs is `npm start`. `gulp package-solution --ship` is `npm run package-solution`.
 
-No client ID is included in this repo. After Easy Auth is on, set the Function `authLevel` to `anonymous` so the platform, not a key, is the gate, and call the API with `AadHttpClient` instead of `fetch`. A permission request you would add later in `spfx/ItemIdGenerator/config/package-solution.json` looks like this, still with placeholders:
+## App registration
 
-```json
-"webApiPermissionRequests": [
-  {
-    "resource": "api://<application-id-uri>",
-    "scope": "access_as_user"
-  }
-]
-```
+`RegisterWebhook` and the queue worker use client credentials (`client_secret`) against `https://{sharepoint-host}/.default`. Certificate client assertion is not implemented. If the tenant rejects secrets, that is a gap.
 
-**CORS.** Local `local.settings.json` is not deployed. On the Function App, allow `https://<tenant>.sharepoint.com`. Do not leave `*` in production. The hosted SharePoint workbench retires on 1 December 2026; debug against a real page.
+The function key on `RegisterWebhook` is the gate. Anyone with the key can pass `configSiteUrl` and point the app at a site collection the app principal can read. The property pane shows that URL to page editors. Treat the key as a secret and prefer a short-lived key for a prototype.
 
-**Application Insights.** Create an Application Insights resource, then set `APPLICATIONINSIGHTS_CONNECTION_STRING` on the Function App. `host.json` already enables request sampling. Do not commit the connection string.
+## Gaps
 
-**SharePoint package.** Build and upload the `.sppkg` from the SPFx README. Create the target text column before authors use the web part.
-
-**Uniqueness.** Epoch milliseconds are enough for a starter and can collide if two items are generated in the same millisecond. Add a short random suffix in the rules module if that matters.
+- Webhook renewal is not implemented. SharePoint expires a subscription after at most 180 days. Registration asks for about 170 days.
+- The worker scans the latest 200 items. It does not store a change token. A burst larger than that can leave older blank items unnumbered until another notification or a replay message with `itemId`.
+- Deactivating a row does not delete the SharePoint subscription.
+- Changing the target list clears `WebhookSubscriptionId` and registers a new subscription. The old subscription remains until it expires.
+- A failed item PATCH after a successful increment burns a sequence.
+- Certificate authentication is not implemented.
+- The SPFx UI was not exercised in a SharePoint tenant. Unit tests cover the list contract, field XML, URL parsing, the counter, and webhook registration with a fake `fetch`.

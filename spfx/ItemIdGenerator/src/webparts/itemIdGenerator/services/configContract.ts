@@ -1,0 +1,264 @@
+import { CONFIG_FIELD_DEFINITIONS } from './requestNumberFields';
+
+export const DEFAULT_CONFIG_LIST_TITLE = 'RequestNumberConfig';
+
+export type ResetPeriod = 'None' | 'Day' | 'Month' | 'Year';
+
+export const RESET_PERIODS: ResetPeriod[] = ['None', 'Day', 'Month', 'Year'];
+
+export interface IConfigDraft {
+  id?: number;
+  etag?: string;
+  title: string;
+  targetListUrl: string;
+  targetListGuid: string;
+  targetListTitle?: string;
+  loadedTargetListGuid?: string;
+  numberColumnInternalName: string;
+  formula: string;
+  resetPeriod: ResetPeriod;
+  isActive: boolean;
+  padLength: number;
+  currentCount?: number;
+  lastResetDate?: string;
+  webhookSubscriptionId?: string;
+}
+
+export interface ISharePointConfigItem {
+  Id: number;
+  Title?: string;
+  TargetListUrl?: string;
+  TargetListGuid?: string;
+  NumberColumnInternalName?: string;
+  Formula?: string;
+  CurrentCount?: number;
+  ResetPeriod?: string;
+  LastResetDate?: string;
+  IsActive?: boolean | string | number;
+  PadLength?: number | string;
+  WebhookSubscriptionId?: string;
+  'odata.etag'?: string;
+  '@odata.etag'?: string;
+}
+
+export interface IListLocation {
+  webAbsoluteUrl: string;
+  serverRelativeUrl: string;
+}
+
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FIELD_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const SELECT_FIELDS = [
+  'Id',
+  'Title',
+  ...CONFIG_FIELD_DEFINITIONS.map((field) => field.internalName)
+];
+
+export function emptyDraft(): IConfigDraft {
+  return {
+    title: '',
+    targetListUrl: '',
+    targetListGuid: '',
+    numberColumnInternalName: 'RequestNumber',
+    formula: 'REQ-{yyyy}{MM}-{seq}',
+    resetPeriod: 'Month',
+    isActive: true,
+    padLength: 4
+  };
+}
+
+export function normalizeGuid(value: string): string {
+  return value.trim().replace(/[{}]/g, '').toLowerCase();
+}
+
+export function isActiveValue(value: boolean | string | number | undefined): boolean {
+  return value === true || value === 1 || value === '1' || value === 'true' || value === 'Yes';
+}
+
+export function isPlaceholderSetting(value: string): boolean {
+  const text = value.trim();
+  return text.length === 0 || text.indexOf('<') >= 0;
+}
+
+export function validateDraft(draft: IConfigDraft): string | undefined {
+  if (!draft.title.trim()) {
+    return 'Enter a title for this rule.';
+  }
+  if (!isHttpsUrl(draft.targetListUrl)) {
+    return 'Target list URL must be an https URL.';
+  }
+  if (!GUID_PATTERN.test(normalizeGuid(draft.targetListGuid))) {
+    return 'Paste the list URL and choose Resolve list before saving.';
+  }
+  if (!FIELD_PATTERN.test(draft.numberColumnInternalName.trim())) {
+    return 'Number column internal name must look like RequestNumber.';
+  }
+  if (draft.formula.indexOf('{seq') === -1) {
+    return 'Formula must include {seq} or {seq:n}.';
+  }
+  if (RESET_PERIODS.indexOf(draft.resetPeriod) === -1) {
+    return 'Choose a reset period.';
+  }
+  if (!Number.isInteger(draft.padLength) || draft.padLength < 0 || draft.padLength > 12) {
+    return 'Pad length must be a whole number from 0 to 12.';
+  }
+  return undefined;
+}
+
+export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
+  const guid = item.TargetListGuid || '';
+  const padLength = Number(item.PadLength);
+  return {
+    id: item.Id,
+    etag: item['odata.etag'] || item['@odata.etag'] || '*',
+    title: item.Title || '',
+    targetListUrl: item.TargetListUrl || '',
+    targetListGuid: guid,
+    loadedTargetListGuid: guid,
+    numberColumnInternalName: item.NumberColumnInternalName || '',
+    formula: item.Formula || '',
+    resetPeriod: normalizeResetPeriod(item.ResetPeriod),
+    isActive: isActiveValue(item.IsActive),
+    padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
+    currentCount: Number(item.CurrentCount) || 0,
+    lastResetDate: item.LastResetDate || '',
+    webhookSubscriptionId: item.WebhookSubscriptionId || ''
+  };
+}
+
+export function buildCreateBody(draft: IConfigDraft): Record<string, string | number | boolean> {
+  return {
+    Title: draft.title.trim(),
+    TargetListUrl: draft.targetListUrl.trim(),
+    TargetListGuid: normalizeGuid(draft.targetListGuid),
+    NumberColumnInternalName: draft.numberColumnInternalName.trim(),
+    Formula: draft.formula.trim(),
+    ResetPeriod: draft.resetPeriod,
+    IsActive: draft.isActive,
+    PadLength: draft.padLength,
+    CurrentCount: 0
+  };
+}
+
+export function buildUpdateBody(draft: IConfigDraft): Record<string, string | number | boolean> {
+  const body: Record<string, string | number | boolean> = {
+    Title: draft.title.trim(),
+    TargetListUrl: draft.targetListUrl.trim(),
+    TargetListGuid: normalizeGuid(draft.targetListGuid),
+    NumberColumnInternalName: draft.numberColumnInternalName.trim(),
+    Formula: draft.formula.trim(),
+    ResetPeriod: draft.resetPeriod,
+    IsActive: draft.isActive,
+    PadLength: draft.padLength
+  };
+  const previous = draft.loadedTargetListGuid ? normalizeGuid(draft.loadedTargetListGuid) : '';
+  if (previous && previous !== normalizeGuid(draft.targetListGuid)) {
+    body.WebhookSubscriptionId = '';
+  }
+  return body;
+}
+
+export function buildRegisterWebhookBody(configSiteUrl: string, configItemId: number): {
+  configSiteUrl: string;
+  configItemId: number;
+} {
+  return {
+    configSiteUrl: trimSlash(configSiteUrl),
+    configItemId
+  };
+}
+
+export function escapeListTitle(title: string): string {
+  return title.replace(/'/g, "''");
+}
+
+export function deriveWebFromListUrl(listUrl: string): IListLocation {
+  const url = new URL(listUrl.trim());
+  if (url.protocol !== 'https:') {
+    throw new Error('Target list URL must use https.');
+  }
+  let path = decodeURIComponent(url.pathname);
+  path = path.replace(/\/Forms\/AllItems\.aspx$/i, '');
+  path = path.replace(/\/AllItems\.aspx$/i, '');
+  path = path.replace(/\/+$/, '');
+  const listsMatch = path.match(/^(.*)\/lists\/[^/]+$/i);
+  const webPath = listsMatch ? (listsMatch[1] || '') : path.slice(0, path.lastIndexOf('/'));
+  return {
+    webAbsoluteUrl: `${url.origin}${webPath || ''}`,
+    serverRelativeUrl: path
+  };
+}
+
+export function buildListItemsUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}/items?$select=${SELECT_FIELDS.join(',')}&$top=200`;
+}
+
+export function buildCreateItemUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}/items`;
+}
+
+export function buildUpdateItemUrl(siteAbsoluteUrl: string, listTitle: string, itemId: number): string {
+  return `${buildCreateItemUrl(siteAbsoluteUrl, listTitle)}(${itemId})`;
+}
+
+export function buildListUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}?$select=Id,Title`;
+}
+
+export function buildCreateListUrl(siteAbsoluteUrl: string): string {
+  return `${trimSlash(siteAbsoluteUrl)}/_api/web/lists`;
+}
+
+export function buildCreateListBody(listTitle: string): { BaseTemplate: number; Title: string; Description: string } {
+  return {
+    BaseTemplate: 100,
+    Title: listTitle,
+    Description: 'Per-list request number rules. The Azure Function owns CurrentCount and LastResetDate.'
+  };
+}
+
+export function buildFieldsUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}/fields?$select=InternalName&$top=200`;
+}
+
+export function buildCreateFieldUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}/fields/CreateFieldAsXml`;
+}
+
+export function buildGetListUrl(listUrl: string): string {
+  const location = deriveWebFromListUrl(listUrl);
+  const quoted = `'${location.serverRelativeUrl.replace(/'/g, "''")}'`;
+  return `${location.webAbsoluteUrl}/_api/web/GetList(@listUrl)?@listUrl=${encodeURIComponent(quoted)}&$select=Id,Title`;
+}
+
+export function sharePointError(status: number, body: string, listTitle: string): string {
+  if (status === 404) {
+    return `The list "${listTitle}" was not found on this site collection. Choose Ensure ${listTitle} to create it.`;
+  }
+  const detail = body.trim().slice(0, 300);
+  return `SharePoint returned HTTP ${status}. ${detail}`;
+}
+
+function listApi(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${trimSlash(siteAbsoluteUrl)}/_api/web/lists/getbytitle('${escapeListTitle(listTitle)}')`;
+}
+
+function trimSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value.trim()).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeResetPeriod(value: string | undefined): ResetPeriod {
+  if (value === 'Day' || value === 'Month' || value === 'Year' || value === 'None') {
+    return value;
+  }
+  return 'None';
+}
