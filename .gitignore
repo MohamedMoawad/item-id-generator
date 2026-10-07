@@ -24,6 +24,7 @@ temp/
 release/
 .heft/
 *.sppkg
+!deploy/item-id-generator.sppkg
 coverage/
 jest-output/
 *.scss.ts

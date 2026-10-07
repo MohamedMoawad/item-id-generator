@@ -4,6 +4,17 @@ When someone creates a list item, this repo assigns the next request number. The
 
 Do not also run a Power Automate flow that writes the same number column. Two writers will race.
 
+## Upload files
+
+Built packages are in [deploy/](deploy/README.md).
+
+| File | Use |
+| --- | --- |
+| [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | Upload to the SharePoint app catalog, then add **Request number config** to the site collection. |
+| [deploy/item-id-generator-func.zip](deploy/item-id-generator-func.zip) | Deploy to an Azure Function App with [deploy/publish-function.ps1](deploy/publish-function.ps1). |
+
+Saving an active row in the web part registers the list webhook. That subscription is what watches for new items. Details are in [deploy/README.md](deploy/README.md).
+
 ## Why a web part cannot do this
 
 A web part runs in one browser, for one person, on one page. It never sees an item created by Power Automate, a grid edit on another machine, or a second tab. Two browsers that both read `CurrentCount` will write the same number. The counter has to live in one worker that can lose the race and retry.
