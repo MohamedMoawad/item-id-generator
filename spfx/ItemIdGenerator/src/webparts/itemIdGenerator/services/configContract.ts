@@ -258,6 +258,25 @@ export function buildAllPropertiesUrl(siteAbsoluteUrl: string): string {
   return `${trimSlash(siteAbsoluteUrl)}/_api/web/AllProperties`;
 }
 
+// SP.PropertyValues accepts MERGE only under OData 3. SPHttpClient v1 defaults to
+// OData 4, which turns MERGE into PATCH and SharePoint returns HTTP 400.
+export function buildPropertyBagMerge(propertyName: string, value: string): { headers: { [key: string]: string }; body: string } {
+  const payload: { [key: string]: string | { type: string } } = {
+    __metadata: { type: 'SP.PropertyValues' }
+  };
+  payload[propertyName] = value;
+  return {
+    headers: {
+      Accept: 'application/json;odata=verbose',
+      'Content-Type': 'application/json;odata=verbose',
+      'OData-Version': '3.0',
+      'IF-MATCH': '*',
+      'X-HTTP-Method': 'MERGE'
+    },
+    body: JSON.stringify(payload)
+  };
+}
+
 export function buildCreateListUrl(siteAbsoluteUrl: string): string {
   return `${trimSlash(siteAbsoluteUrl)}/_api/web/lists`;
 }

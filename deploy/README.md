@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.2.1.0** is named **Request number config**. Upload this file over the previous package in the app catalog and choose to replace it. Version 1.2.1 fixes the HTTP 400 on **Request number settings** (`__metadata` is not valid on `SP.XmlSchemaFieldCreationInformation`). If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.2.2.0** is named **Request number config**. Upload this file over the previous package in the app catalog and choose to replace it. Version 1.2.1 fixes column creation. Version 1.2.2 stores the RegisterWebhook URL with an OData 3 MERGE, because `SP.PropertyValues` rejects PATCH. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.

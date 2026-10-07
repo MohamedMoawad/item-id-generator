@@ -1,6 +1,7 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
   buildAllPropertiesUrl,
+  buildPropertyBagMerge,
   buildCreateBody,
   buildCreateFieldUrl,
   buildCreateItemUrl,
@@ -276,19 +277,13 @@ export async function saveRegisterWebhookUrl(
   siteAbsoluteUrl: string,
   registerWebhookUrl: string
 ): Promise<void> {
-  const body: { [key: string]: string } = {};
-  body[REGISTER_WEBHOOK_PROPERTY] = registerWebhookUrl.trim();
+  const merge = buildPropertyBagMerge(REGISTER_WEBHOOK_PROPERTY, registerWebhookUrl.trim());
   const response = await spHttpClient.post(
     buildAllPropertiesUrl(siteAbsoluteUrl),
     SPHttpClient.configurations.v1,
     {
-      headers: {
-        Accept: 'application/json;odata.metadata=none',
-        'Content-Type': 'application/json;charset=utf-8',
-        'IF-MATCH': '*',
-        'X-HTTP-Method': 'MERGE'
-      },
-      body: JSON.stringify(body)
+      headers: merge.headers,
+      body: merge.body
     }
   );
   if (!response.ok) {

@@ -1,6 +1,7 @@
 import {
   buildCreateBody,
   buildGetListUrl,
+  buildPropertyBagMerge,
   buildListAbsoluteUrl,
   buildListItemsUrl,
   buildRegisterWebhookBody,
@@ -140,5 +141,15 @@ describe('RequestNumberConfig contract', () => {
     expect(isConfigList('Requests', '/sites/ops/Lists/Requests', 'RequestNumberConfig')).toBe(false);
     expect(hasPermissionFlag('4', PERMISSION_EDIT_LIST_ITEMS)).toBe(true);
     expect(hasPermissionFlag('1', PERMISSION_EDIT_LIST_ITEMS)).toBe(false);
+  });
+
+  it('stores the RegisterWebhook URL with an OData 3 MERGE', () => {
+    const merge = buildPropertyBagMerge('RequestNumberRegisterWebhookUrl', 'https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc');
+    const body = JSON.parse(merge.body) as { __metadata: { type: string }; RequestNumberRegisterWebhookUrl: string };
+    expect(merge.headers['OData-Version']).toBe('3.0');
+    expect(merge.headers['X-HTTP-Method']).toBe('MERGE');
+    expect(merge.headers['Content-Type']).toContain('odata=verbose');
+    expect(body.__metadata.type).toBe('SP.PropertyValues');
+    expect(body.RequestNumberRegisterWebhookUrl).toContain('/api/RegisterWebhook');
   });
 });
