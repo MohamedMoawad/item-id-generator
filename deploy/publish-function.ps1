@@ -55,8 +55,6 @@ $settingsFile = Join-Path ([System.IO.Path]::GetTempPath()) ("item-id-settings-"
 $settings = @(
     @{ name = 'FUNCTIONS_WORKER_RUNTIME'; value = 'node' },
     @{ name = 'WEBSITE_NODE_DEFAULT_VERSION'; value = '~22' },
-    @{ name = 'SCM_DO_BUILD_DURING_DEPLOYMENT'; value = 'true' },
-    @{ name = 'ENABLE_ORYX_BUILD'; value = 'true' },
     @{ name = 'NUMBERING_CONFIG_SITE_URL'; value = $SharePointSiteUrl.TrimEnd('/') },
     @{ name = 'NUMBERING_CONFIG_LIST_TITLE'; value = 'RequestNumberConfig' },
     @{ name = 'SHAREPOINT_TENANT_ID'; value = $TenantId },
@@ -73,8 +71,8 @@ finally {
     Remove-Item $settingsFile -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host 'Deploying the function zip. npm install runs on Azure.'
-az functionapp deployment source config-zip --resource-group $ResourceGroup --name $FunctionAppName --src $zip --build-remote true --output none
+Write-Host 'Deploying the function zip. node_modules is already in the zip.'
+az functionapp deployment source config-zip --resource-group $ResourceGroup --name $FunctionAppName --src $zip --output none
 if ($LASTEXITCODE -ne 0) { throw 'Zip deploy failed.' }
 
 function Get-FunctionKey([string]$FunctionName) {

@@ -5,7 +5,7 @@ Two files in this folder:
 | File | Where it goes |
 | --- | --- |
 | `item-id-generator.sppkg` | SharePoint app catalog. This is the app you add to the site. |
-| `item-id-generator-func.zip` | Azure Function App. This is the webhook that numbers new items. |
+| `item-id-generator-func.zip` | Upload this zip to the Function App. It already contains the Node packages. |
 
 The list subscription is a SharePoint webhook, which is the current replacement for a remote event receiver. SharePoint calls `spoWebhook` when an item is added, changed, or deleted. The worker numbers items whose number column is still blank, so an already numbered item is left alone.
 
@@ -22,44 +22,67 @@ Package version **1.2.1.0** is named **Request number config**. Upload this file
 
 Paste the **RegisterWebhook** URL into that panel once. It is stored for the whole site collection. Each list keeps its own formula, column, and reset.
 
-## 2. Publish the Azure Function
+## 2. Upload the Azure Function zip
 
-This environment cannot sign in to your Azure subscription. Run the script from your machine in PowerShell.
+Download [item-id-generator-func.zip](item-id-generator-func.zip) and keep it as a zip. Do not unzip it and zip the folder again. `host.json` has to sit at the root of the archive, and the Node packages are already inside.
 
-Before that, in Microsoft Entra:
+The Function App has to be **Code**, **Node.js 22**, **Functions 4.x**, **Linux**. Consumption or App Service is fine. A container app cannot take this zip.
 
-1. App registration, application permission **Sites.Selected**, admin consent.
-2. Grant that app access to the site collection that will hold `RequestNumberConfig` and to each target web. SharePoint admin center or `Grant-PnPAzureADAppSitePermission`.
+In Microsoft Entra, before the webhook can write numbers:
+
+1. App registration with application permission **Sites.Selected**, and admin consent.
+2. Grant that app access to the site collection that holds `RequestNumberConfig` and to each target web.
 3. Create a client secret. Keep it out of git.
-4. Pick a long random string for the webhook client state. That same string is `SHAREPOINT_WEBHOOK_CLIENT_STATE`.
+4. Pick a long random string. That string is `SHAREPOINT_WEBHOOK_CLIENT_STATE`.
 
-```powershell
-az login
-cd deploy
-.\publish-function.ps1 `
-  -ResourceGroup 'item-id-rg' `
-  -FunctionAppName 'item-id-func' `
-  -StorageAccount 'itemidfuncstore' `
-  -Location 'eastus' `
-  -SharePointSiteUrl 'https://<tenant>.sharepoint.com/sites/<site>' `
-  -TenantId '<directory-tenant-id>' `
-  -ClientId '<application-client-id>' `
-  -ClientSecret '<client-secret>' `
-  -WebhookClientState '<webhook-client-state>' `
-  -SharePointOrigin 'https://<tenant>.sharepoint.com'
-```
+### App settings
 
-The script creates the resource group, storage account, and Node 22 Function App, deploys the zip, turns on remote `npm install`, saves `SPO_WEBHOOK_NOTIFICATION_URL`, and allows the SharePoint origin through CORS. It prints two URLs.
+On the Function App, open **Settings** → **Environment variables** → **App settings**. Add these, then **Apply** and restart.
 
-Storage account names are 3–24 lowercase letters and numbers, and must be globally unique. Function App names must be globally unique too.
+| Name | Value |
+| --- | --- |
+| `NUMBERING_CONFIG_SITE_URL` | `https://<tenant>.sharepoint.com/sites/<site>` |
+| `NUMBERING_CONFIG_LIST_TITLE` | `RequestNumberConfig` |
+| `SHAREPOINT_TENANT_ID` | Directory (tenant) id |
+| `SHAREPOINT_CLIENT_ID` | Application (client) id |
+| `SHAREPOINT_CLIENT_SECRET` | The client secret |
+| `SHAREPOINT_WEBHOOK_CLIENT_STATE` | The random string from above |
+| `WEBSITE_NODE_DEFAULT_VERSION` | `~22` |
+
+`FUNCTIONS_WORKER_RUNTIME` is already `node` on a Node Function App. Leave `WEBSITE_RUN_FROM_PACKAGE` unset. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built.
+
+`AzureWebJobsStorage` is created with the Function App. That connection is the queue and the numbering lock. Do not delete it.
+
+### Zip upload
+
+**Deployment Center** connects GitHub. It does not take a zip file. The upload page is one menu away:
+
+1. Open the Function App.
+2. **Development Tools** → **Advanced Tools** → **Go**. A new tab opens.
+3. In that tab, **Tools** → **Zip Push Deploy**.
+4. Drag `item-id-generator-func.zip` onto the page.
+5. Wait until the log says the deployment succeeded.
+6. Back on the Function App, **Restart**.
+7. Open **Overview** → **Functions**. You should see `spoWebhook`, `RegisterWebhook`, and `processRequestNumber`.
+
+### URLs to copy
+
+1. Open `spoWebhook` → **Function keys** → copy the **default** key.
+2. Add this app setting, then apply and restart again:
+
+   `SPO_WEBHOOK_NOTIFICATION_URL` = `https://<function-app>.azurewebsites.net/api/spoWebhook?code=<that-key>`
+
+3. Open `RegisterWebhook` → **Get function URL** and copy it. That is the URL you paste into **Request number settings** in SharePoint.
+4. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save.
+
+`publish-function.ps1` is an optional Azure CLI path that creates the app and uploads the same zip. The portal steps above are enough.
 
 ## 3. Register the webhook on the list
 
-1. Edit the **Request number config** web part.
-2. Property pane: list title `RequestNumberConfig`.
-3. Paste the **RegisterWebhook** URL from the script, including `?code=`. Page editors can see that URL.
-4. Add a single-line text column on the target list, for example internal name `RequestNumber`.
-5. On the page, choose **Ensure RequestNumberConfig**, paste the target list URL, **Resolve list**, then **Save rule** with **Active** checked.
+1. Add a single-line text column on the target list, for example internal name `RequestNumber`.
+2. Open that list and choose **Request number settings**.
+3. Paste the **RegisterWebhook** URL, including `?code=`. People who can edit the page can see that URL.
+4. Set the formula, the number column, and the reset, leave **Active** checked, and save.
 
 Save calls `RegisterWebhook`. That function subscribes the target list to `spoWebhook` and stores the subscription id on the row. From then on, a new item from the form, the grid, or Power Automate is queued and numbered.
 
