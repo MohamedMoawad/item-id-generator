@@ -26,7 +26,7 @@ Paste the **RegisterWebhook** URL into that panel once. It is stored for the who
 
 Download [item-id-generator-func.zip](item-id-generator-func.zip) and keep it as a zip. Do not unzip it and zip the folder again. `host.json` has to sit at the root of the archive, and the Node packages are already inside.
 
-The Function App has to be **Code**, **Node.js 22**, **Functions 4.x**, **Linux**. Consumption or App Service is fine. A container app cannot take this zip.
+The Function App has to be **Code**, **Node.js 22**, **Functions 4.x**. Windows or Linux is fine. A container app cannot take this zip. On **Settings → Configuration → General settings**, set the Node version to **22**.
 
 In Microsoft Entra, before the webhook can write numbers:
 
@@ -54,7 +54,7 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 
 `AzureWebJobsFeatureFlags=EnableWorkerIndexing` is what makes `spoWebhook`, `RegisterWebhook`, and `processRequestNumber` show on the **Functions** page. Without it the host finds no `function.json` files and the page stays empty after a successful zip deploy. If that setting already has another value, add `,EnableWorkerIndexing` on the end. Do not replace the other flags.
 
-Leave `WEBSITE_RUN_FROM_PACKAGE` unset. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built.
+On a **Windows** app that already has other functions, set `WEBSITE_RUN_FROM_PACKAGE` to `1` and save **before** you upload the zip again. That mounts this zip as the whole app and removes leftover functions such as `WebhookHandler`. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built. Do not set `WEBSITE_RUN_FROM_PACKAGE` on a Linux Consumption app.
 
 `AzureWebJobsStorage` is created with the Function App. That connection is the queue and the numbering lock. Do not delete it.
 
