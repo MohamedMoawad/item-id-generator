@@ -1,11 +1,12 @@
 # Deploy
 
-Two files in this folder:
+Files in this folder:
 
 | File | Where it goes |
 | --- | --- |
 | `item-id-generator.sppkg` | SharePoint app catalog. This is the app you add to the site. |
-| `item-id-generator-func.zip` | Upload this zip to the Function App. It already contains the Node packages. |
+| `item-id-generator-func-net.zip` | .NET 8 isolated Function App. Upload this zip. It is the webhook package to use. |
+| `item-id-generator-func.zip` | Older Node package. Do not upload this onto a .NET Function App. |
 
 The list subscription is a SharePoint webhook, which is the current replacement for a remote event receiver. SharePoint calls `spoWebhook` when an item is added, changed, or deleted. The worker numbers items whose number column is still blank, so an already numbered item is left alone.
 
@@ -22,11 +23,16 @@ Package version **1.2.1.0** is named **Request number config**. Upload this file
 
 Paste the **RegisterWebhook** URL into that panel once. It is stored for the whole site collection. Each list keeps its own formula, column, and reset.
 
-## 2. Upload the Azure Function zip
+## 2. Create a .NET Function App and upload the zip
 
-Download [item-id-generator-func.zip](item-id-generator-func.zip) and keep it as a zip. Do not unzip it and zip the folder again. `host.json` has to sit at the root of the archive, and the Node packages are already inside.
+Download [item-id-generator-func-net.zip](item-id-generator-func-net.zip) and keep it zipped. `host.json` and `functions.metadata` are at the root. The metadata file is what makes **spoWebhook**, **RegisterWebhook**, and **processRequestNumber** show in the portal. This is a published .NET 8 isolated app, not the Node zip.
 
-The Function App has to be **Code**, **Node.js 22**, **Functions 4.x**. Windows or Linux is fine. A container app cannot take this zip. On **Settings → Configuration → General settings**, set the Node version to **22**.
+`spo-autogen-function` is a Node app. Do not upload this zip there. Create a new Function App:
+
+1. Azure portal → **Create a resource** → **Function App**.
+2. Publish **Code**. Runtime stack **.NET**. Version **8 (Isolated)**. Operating system **Windows** if you use the existing Windows plan `ASP-rgshared-a442`, otherwise Linux.
+3. Region **Qatar Central** if you want it next to the other app. Give it a new name. Do not reuse `spo-autogen-function`.
+4. Create it. **Settings → Configuration → General settings** should show **.NET 8 Isolated**. `FUNCTIONS_WORKER_RUNTIME` is `dotnet-isolated`. Leave `AzureWebJobsFeatureFlags` unset. That flag is only for the Node package.
 
 In Microsoft Entra, before the webhook can write numbers:
 
@@ -47,14 +53,9 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 | `SHAREPOINT_CLIENT_ID` | Application (client) id |
 | `SHAREPOINT_CLIENT_SECRET` | The client secret |
 | `SHAREPOINT_WEBHOOK_CLIENT_STATE` | The random string from above |
-| `WEBSITE_NODE_DEFAULT_VERSION` | `~22` |
-| `AzureWebJobsFeatureFlags` | `EnableWorkerIndexing` |
-| `FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR` | `true` |
-| `FUNCTIONS_WORKER_RUNTIME` | `node` |
+| `FUNCTIONS_WORKER_RUNTIME` | `dotnet-isolated` |
 
-`AzureWebJobsFeatureFlags=EnableWorkerIndexing` is what makes `spoWebhook`, `RegisterWebhook`, and `processRequestNumber` show on the **Functions** page. Without it the host finds no `function.json` files and the page stays empty after a successful zip deploy. If that setting already has another value, add `,EnableWorkerIndexing` on the end. Do not replace the other flags.
-
-On a **Windows** app that already has other functions, set `WEBSITE_RUN_FROM_PACKAGE` to `1` and save **before** you upload the zip again. That mounts this zip as the whole app and removes leftover functions such as `WebhookHandler`. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built. Do not set `WEBSITE_RUN_FROM_PACKAGE` on a Linux Consumption app.
+The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app. On **Windows**, set `WEBSITE_RUN_FROM_PACKAGE` to `1` and save **before** the zip upload. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. The zip is already built. Do not set `WEBSITE_RUN_FROM_PACKAGE` on a Linux Consumption app.
 
 `AzureWebJobsStorage` is created with the Function App. That connection is the queue and the numbering lock. Do not delete it.
 
@@ -65,9 +66,9 @@ On a **Windows** app that already has other functions, set `WEBSITE_RUN_FROM_PAC
 1. Open the Function App.
 2. **Development Tools** → **Advanced Tools** → **Go**. A new tab opens.
 3. In that tab, **Tools** → **Zip Push Deploy**.
-4. Drag `item-id-generator-func.zip` onto the page.
+4. Drag `item-id-generator-func-net.zip` onto the page.
 5. Wait until the log says the deployment succeeded.
-6. Back on the Function App, confirm the app settings above, especially `AzureWebJobsFeatureFlags`, then **Restart**.
+6. Restart the Function App.
 7. Open **Functions** and choose **Refresh**. You should see `spoWebhook`, `RegisterWebhook`, and `processRequestNumber`.
 
 ### URLs to copy
@@ -80,7 +81,7 @@ On a **Windows** app that already has other functions, set `WEBSITE_RUN_FROM_PAC
 3. Open `RegisterWebhook` → **Get function URL** and copy it. That is the URL you paste into **Request number settings** in SharePoint.
 4. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save.
 
-`publish-function.ps1` is an optional Azure CLI path that creates the app and uploads the same zip. The portal steps above are enough.
+`publish-function.ps1` creates a Node Function App and uploads the older Node zip. Use the portal steps above for the .NET package.
 
 ## 3. Register the webhook on the list
 

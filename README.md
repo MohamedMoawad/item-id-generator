@@ -11,7 +11,7 @@ Built packages are in [deploy/](deploy/README.md).
 | File | Use |
 | --- | --- |
 | [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | Upload to the app catalog, add the app to the site collection. That creates `RequestNumberConfig` and a **Request number settings** link on each list. |
-| [deploy/item-id-generator-func.zip](deploy/item-id-generator-func.zip) | Upload to the Function App from **Advanced Tools** → **Zip Push Deploy**. Steps are in [deploy/README.md](deploy/README.md). |
+| [deploy/item-id-generator-func-net.zip](deploy/item-id-generator-func-net.zip) | .NET 8 isolated webhook. Create a new Function App with stack **.NET 8 Isolated**, then Zip Push Deploy this file. Steps are in [deploy/README.md](deploy/README.md). |
 
 Saving an active row in the web part registers the list webhook. That subscription is what watches for new items. Details are in [deploy/README.md](deploy/README.md).
 
