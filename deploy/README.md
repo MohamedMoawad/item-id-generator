@@ -48,8 +48,13 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 | `SHAREPOINT_CLIENT_SECRET` | The client secret |
 | `SHAREPOINT_WEBHOOK_CLIENT_STATE` | The random string from above |
 | `WEBSITE_NODE_DEFAULT_VERSION` | `~22` |
+| `AzureWebJobsFeatureFlags` | `EnableWorkerIndexing` |
+| `FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR` | `true` |
+| `FUNCTIONS_WORKER_RUNTIME` | `node` |
 
-`FUNCTIONS_WORKER_RUNTIME` is already `node` on a Node Function App. Leave `WEBSITE_RUN_FROM_PACKAGE` unset. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built.
+`AzureWebJobsFeatureFlags=EnableWorkerIndexing` is what makes `spoWebhook`, `RegisterWebhook`, and `processRequestNumber` show on the **Functions** page. Without it the host finds no `function.json` files and the page stays empty after a successful zip deploy. If that setting already has another value, add `,EnableWorkerIndexing` on the end. Do not replace the other flags.
+
+Leave `WEBSITE_RUN_FROM_PACKAGE` unset. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. This zip is already built.
 
 `AzureWebJobsStorage` is created with the Function App. That connection is the queue and the numbering lock. Do not delete it.
 
@@ -62,8 +67,8 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 3. In that tab, **Tools** → **Zip Push Deploy**.
 4. Drag `item-id-generator-func.zip` onto the page.
 5. Wait until the log says the deployment succeeded.
-6. Back on the Function App, **Restart**.
-7. Open **Overview** → **Functions**. You should see `spoWebhook`, `RegisterWebhook`, and `processRequestNumber`.
+6. Back on the Function App, confirm the app settings above, especially `AzureWebJobsFeatureFlags`, then **Restart**.
+7. Open **Functions** and choose **Refresh**. You should see `spoWebhook`, `RegisterWebhook`, and `processRequestNumber`.
 
 ### URLs to copy
 

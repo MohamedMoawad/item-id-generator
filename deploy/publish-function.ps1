@@ -55,6 +55,8 @@ $settingsFile = Join-Path ([System.IO.Path]::GetTempPath()) ("item-id-settings-"
 $settings = @(
     @{ name = 'FUNCTIONS_WORKER_RUNTIME'; value = 'node' },
     @{ name = 'WEBSITE_NODE_DEFAULT_VERSION'; value = '~22' },
+    @{ name = 'AzureWebJobsFeatureFlags'; value = 'EnableWorkerIndexing' },
+    @{ name = 'FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR'; value = 'true' },
     @{ name = 'NUMBERING_CONFIG_SITE_URL'; value = $SharePointSiteUrl.TrimEnd('/') },
     @{ name = 'NUMBERING_CONFIG_LIST_TITLE'; value = 'RequestNumberConfig' },
     @{ name = 'SHAREPOINT_TENANT_ID'; value = $TenantId },
