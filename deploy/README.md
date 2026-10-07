@@ -11,12 +11,12 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.1.0.0** is a site app, not a tenant-wide package. If 1.0.0.0 is already in the catalog, remove that solution first, then upload this file. SharePoint cannot switch an existing solution from tenant-wide deployment to a site app.
+Package version **1.2.0.0** is named **Request number config**. The first upload was tenant-wide, so SharePoint does not show it under **New > App**. Remove the old **ItemIdGenerator** solution from the app catalog and from the catalog recycle bin, then upload this file. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
 3. Upload `item-id-generator.sppkg` and deploy it. Do not choose "add it to all sites".
-4. Open the site collection. **Site contents** > **New** > **App** > add **ItemIdGenerator**.
+4. Open the site collection and go to `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx`. Add **Request number config**. The modern **New > App** page hides some catalog apps; this classic page lists them.
 5. Adding the app creates the list **RequestNumberConfig** on that site collection and adds missing columns the first time an owner opens a page.
 6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `RequestNumberConfig`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
