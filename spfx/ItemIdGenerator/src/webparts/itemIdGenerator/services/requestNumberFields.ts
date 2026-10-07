@@ -61,14 +61,12 @@ export const CONFIG_FIELD_DEFINITIONS: IConfigFieldDefinition[] = [
 
 export function buildCreateFieldBody(schemaXml: string): {
   parameters: {
-    __metadata: { type: string };
     SchemaXml: string;
     Options: number;
   };
 } {
   return {
     parameters: {
-      __metadata: { type: 'SP.XmlSchemaFieldCreationInformation' },
       SchemaXml: schemaXml,
       Options: FIELD_CREATION_OPTIONS
     }

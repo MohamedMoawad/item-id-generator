@@ -119,7 +119,8 @@ describe('RequestNumberConfig contract', () => {
       expect(field.schemaXml).toContain(`Name="${field.internalName}"`);
       const body = buildCreateFieldBody(field.schemaXml);
       expect(body.parameters.Options).toBe(FIELD_CREATION_OPTIONS);
-      expect(body.parameters.__metadata.type).toBe('SP.XmlSchemaFieldCreationInformation');
+      expect(body.parameters.SchemaXml).toBe(field.schemaXml);
+      expect(Object.prototype.hasOwnProperty.call(body.parameters, '__metadata')).toBe(false);
     });
     expect(FIELD_CREATION_OPTIONS).toBe(25);
   });

@@ -49,9 +49,11 @@ const jsonHeaders: { [key: string]: string } = {
   'Content-Type': 'application/json;odata=nometadata'
 };
 
-const verboseHeaders: { [key: string]: string } = {
-  Accept: 'application/json;odata=verbose',
-  'Content-Type': 'application/json;odata=verbose'
+// SPHttpClient v1 sends OData-Version 4.0. CreateFieldAsXml rejects the v3
+// __metadata property on SP.XmlSchemaFieldCreationInformation (HTTP 400).
+const fieldHeaders: { [key: string]: string } = {
+  Accept: 'application/json;odata.metadata=none',
+  'Content-Type': 'application/json;charset=utf-8'
 };
 
 export async function loadConfigRows(
@@ -129,7 +131,7 @@ export async function ensureConfigList(
       buildCreateFieldUrl(siteAbsoluteUrl, listTitle),
       SPHttpClient.configurations.v1,
       {
-        headers: verboseHeaders,
+        headers: fieldHeaders,
         body: JSON.stringify(buildCreateFieldBody(field.schemaXml))
       }
     );
@@ -274,17 +276,15 @@ export async function saveRegisterWebhookUrl(
   siteAbsoluteUrl: string,
   registerWebhookUrl: string
 ): Promise<void> {
-  const body: { [key: string]: string | { type: string } } = {
-    __metadata: { type: 'SP.PropertyValues' }
-  };
+  const body: { [key: string]: string } = {};
   body[REGISTER_WEBHOOK_PROPERTY] = registerWebhookUrl.trim();
   const response = await spHttpClient.post(
     buildAllPropertiesUrl(siteAbsoluteUrl),
     SPHttpClient.configurations.v1,
     {
       headers: {
-        Accept: 'application/json;odata=verbose',
-        'Content-Type': 'application/json;odata=verbose',
+        Accept: 'application/json;odata.metadata=none',
+        'Content-Type': 'application/json;charset=utf-8',
         'IF-MATCH': '*',
         'X-HTTP-Method': 'MERGE'
       },
