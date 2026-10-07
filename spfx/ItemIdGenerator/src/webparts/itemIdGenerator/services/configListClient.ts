@@ -1,5 +1,6 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
+  buildAllPropertiesUrl,
   buildCreateBody,
   buildCreateFieldUrl,
   buildCreateItemUrl,
@@ -8,13 +9,17 @@ import {
   buildFieldsUrl,
   buildGetListUrl,
   buildListItemsUrl,
+  buildListPermissionsUrl,
   buildListUrl,
   buildRegisterWebhookBody,
   buildUpdateBody,
   buildUpdateItemUrl,
+  hasPermissionFlag,
   IConfigDraft,
   ISharePointConfigItem,
   mapConfigRow,
+  PERMISSION_EDIT_LIST_ITEMS,
+  REGISTER_WEBHOOK_PROPERTY,
   sharePointError
 } from './configContract';
 import { buildCreateFieldBody, CONFIG_FIELD_DEFINITIONS } from './requestNumberFields';
@@ -224,6 +229,74 @@ export async function callRegisterWebhook(
     subscriptionId: payload.subscriptionId,
     alreadyRegistered: payload.alreadyRegistered === true
   };
+}
+
+export async function canEditConfigList(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  listTitle: string
+): Promise<boolean> {
+  const response = await spHttpClient.get(
+    buildListPermissionsUrl(siteAbsoluteUrl, listTitle),
+    SPHttpClient.configurations.v1,
+    { headers: { Accept: 'application/json;odata=nometadata' } }
+  );
+  if (!response.ok) {
+    return false;
+  }
+  const payload = parseJson<{ Low?: string | number; d?: { Low?: string | number } }>(await response.text());
+  return hasPermissionFlag(payload.Low ?? (payload.d && payload.d.Low), PERMISSION_EDIT_LIST_ITEMS);
+}
+
+export async function readRegisterWebhookUrl(spHttpClient: SPHttpClient, siteAbsoluteUrl: string): Promise<string> {
+  const response = await spHttpClient.get(
+    buildAllPropertiesUrl(siteAbsoluteUrl),
+    SPHttpClient.configurations.v1,
+    { headers: { Accept: 'application/json;odata=nometadata' } }
+  );
+  if (!response.ok) {
+    return '';
+  }
+  const payload = parseJson<Record<string, unknown>>(await response.text());
+  const direct = payload[REGISTER_WEBHOOK_PROPERTY];
+  if (typeof direct === 'string') {
+    return direct;
+  }
+  const nested = payload.d;
+  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>)[REGISTER_WEBHOOK_PROPERTY] === 'string') {
+    return (nested as Record<string, unknown>)[REGISTER_WEBHOOK_PROPERTY] as string;
+  }
+  return '';
+}
+
+export async function saveRegisterWebhookUrl(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  registerWebhookUrl: string
+): Promise<void> {
+  const body: { [key: string]: string | { type: string } } = {
+    __metadata: { type: 'SP.PropertyValues' }
+  };
+  body[REGISTER_WEBHOOK_PROPERTY] = registerWebhookUrl.trim();
+  const response = await spHttpClient.post(
+    buildAllPropertiesUrl(siteAbsoluteUrl),
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata=verbose',
+        'Content-Type': 'application/json;odata=verbose',
+        'IF-MATCH': '*',
+        'X-HTTP-Method': 'MERGE'
+      },
+      body: JSON.stringify(body)
+    }
+  );
+  if (!response.ok) {
+    throw new ConfigListRequestError(
+      sharePointError(response.status, await response.text(), 'site properties'),
+      response.status
+    );
+  }
 }
 
 function readInternalNames(payload: { value?: { InternalName?: string }[]; d?: { results?: { InternalName?: string }[] } }): string[] {

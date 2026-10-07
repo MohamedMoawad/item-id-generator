@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Elements xmlns="http://schemas.microsoft.com/sharepoint/">
+  <ListInstance
+    FeatureId="00bfea71-de22-43b2-a848-c05709900100"
+    Title="RequestNumberConfig"
+    Description="Per-list request number rules. The Azure Function owns CurrentCount and LastResetDate."
+    TemplateType="100"
+    Url="Lists/RequestNumberConfig"
+    OnQuickLaunch="TRUE">
+  </ListInstance>
+</Elements>

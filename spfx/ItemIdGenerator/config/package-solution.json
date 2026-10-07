@@ -3,9 +3,9 @@
   "solution": {
     "name": "ItemIdGenerator",
     "id": "a4a4dfed-37c0-4073-bef5-80c771fc4050",
-    "version": "1.0.0.0",
+    "version": "1.1.0.0",
     "includeClientSideAssets": true,
-    "skipFeatureDeployment": true,
+    "skipFeatureDeployment": false,
     "isDomainIsolated": false,
     "developer": {
       "name": "",
@@ -19,7 +19,7 @@
         "default": "Configuration web part for RequestNumberConfig."
       },
       "longDescription": {
-        "default": "Provisions RequestNumberConfig, stores a target list URL and GUID, and registers the spoWebhook subscription."
+        "default": "Adds RequestNumberConfig to the site collection and a Request number settings link on each list."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -28,9 +28,15 @@
     "features": [
       {
         "title": "ItemIdGenerator",
-        "description": "Configuration web part for automatic request-number rules.",
+        "description": "Creates RequestNumberConfig and adds request number settings to each list.",
         "id": "9be73e47-2334-4e5f-8e5a-394e668e3520",
-        "version": "1.0.0.0"
+        "version": "1.1.0.0",
+        "assets": {
+          "elementManifests": [
+            "elements.xml",
+            "clientsideinstance.xml"
+          ]
+        }
       }
     ]
   },

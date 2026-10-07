@@ -11,15 +11,16 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-1. Download `item-id-generator.sppkg` from this folder.
-2. Open the tenant app catalog site. The address is usually `https://<tenant>.sharepoint.com/sites/appcatalog`.
-3. Go to **Apps for SharePoint**.
-4. Upload `item-id-generator.sppkg`.
-5. When SharePoint asks, choose **Enable this app and add it to all sites** (the package uses tenant-wide deployment). Check the box to deploy to all sites, then **Deploy**.
-6. Open the site collection where request numbers should live. **Site contents** > **New** > **App** > add **ItemIdGenerator** if it is not already available.
-7. Edit a page on that site collection and add the web part **Request number config**.
+Package version **1.1.0.0** is a site app, not a tenant-wide package. If 1.0.0.0 is already in the catalog, remove that solution first, then upload this file. SharePoint cannot switch an existing solution from tenant-wide deployment to a site app.
 
-Do this after the Function App is deployed, because the web part property pane needs the `RegisterWebhook` URL.
+1. Download `item-id-generator.sppkg` from this folder.
+2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
+3. Upload `item-id-generator.sppkg` and deploy it. Do not choose "add it to all sites".
+4. Open the site collection. **Site contents** > **New** > **App** > add **ItemIdGenerator**.
+5. Adding the app creates the list **RequestNumberConfig** on that site collection and adds missing columns the first time an owner opens a page.
+6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `RequestNumberConfig`. People who can edit the config list can change it. Other people can open the same link and see the settings.
+
+Paste the **RegisterWebhook** URL into that panel once. It is stored for the whole site collection. Each list keeps its own formula, column, and reset.
 
 ## 2. Publish the Azure Function
 

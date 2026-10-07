@@ -1,13 +1,19 @@
 import {
   buildCreateBody,
   buildGetListUrl,
+  buildListAbsoluteUrl,
   buildListItemsUrl,
   buildRegisterWebhookBody,
   buildUpdateBody,
   deriveWebFromListUrl,
+  draftForCurrentList,
   emptyDraft,
+  findConfigForList,
+  hasPermissionFlag,
+  isConfigList,
   isPlaceholderSetting,
   mapConfigRow,
+  PERMISSION_EDIT_LIST_ITEMS,
   validateDraft
 } from './configContract';
 import { buildCreateFieldBody, CONFIG_FIELD_DEFINITIONS, FIELD_CREATION_OPTIONS } from './requestNumberFields';
@@ -116,5 +122,22 @@ describe('RequestNumberConfig contract', () => {
       expect(body.parameters.__metadata.type).toBe('SP.XmlSchemaFieldCreationInformation');
     });
     expect(FIELD_CREATION_OPTIONS).toBe(25);
+  });
+
+  it('finds the row for the current list and hides the command on the config list', () => {
+    const current = draftForCurrentList(
+      'Requests',
+      'https://contoso.sharepoint.com/sites/ops/Lists/Requests',
+      '{AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE}'
+    );
+    expect(current.targetListGuid).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+    expect(findConfigForList([current, { ...emptyDraft(), targetListGuid: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee' }], current.targetListGuid)?.title).toBe('Requests');
+    expect(buildListAbsoluteUrl('https://contoso.sharepoint.com/sites/ops', '/sites/ops/Lists/Requests')).toBe(
+      'https://contoso.sharepoint.com/sites/ops/Lists/Requests'
+    );
+    expect(isConfigList('RequestNumberConfig', '/sites/ops/Lists/RequestNumberConfig', 'RequestNumberConfig')).toBe(true);
+    expect(isConfigList('Requests', '/sites/ops/Lists/Requests', 'RequestNumberConfig')).toBe(false);
+    expect(hasPermissionFlag('4', PERMISSION_EDIT_LIST_ITEMS)).toBe(true);
+    expect(hasPermissionFlag('1', PERMISSION_EDIT_LIST_ITEMS)).toBe(false);
   });
 });

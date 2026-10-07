@@ -159,6 +159,50 @@ export function buildUpdateBody(draft: IConfigDraft): Record<string, string | nu
   return body;
 }
 
+export const PERMISSION_EDIT_LIST_ITEMS = 4;
+
+export const REGISTER_WEBHOOK_PROPERTY = 'RequestNumberRegisterWebhookUrl';
+
+export function hasPermissionFlag(low: string | number | undefined, flag: number): boolean {
+  const value = typeof low === 'number' ? low : parseInt(String(low ?? ''), 10);
+  if (!Number.isFinite(value)) {
+    return false;
+  }
+  return (value & flag) === flag;
+}
+
+export function findConfigForList(rows: IConfigDraft[], listGuid: string): IConfigDraft | undefined {
+  const guid = normalizeGuid(listGuid);
+  for (let index = 0; index < rows.length; index += 1) {
+    if (normalizeGuid(rows[index].targetListGuid) === guid) {
+      return rows[index];
+    }
+  }
+  return undefined;
+}
+
+export function draftForCurrentList(listTitle: string, listUrl: string, listGuid: string): IConfigDraft {
+  return {
+    ...emptyDraft(),
+    title: listTitle,
+    targetListUrl: listUrl,
+    targetListGuid: normalizeGuid(listGuid)
+  };
+}
+
+export function buildListAbsoluteUrl(webAbsoluteUrl: string, serverRelativeUrl: string): string {
+  const origin = new URL(webAbsoluteUrl).origin;
+  const path = serverRelativeUrl.charAt(0) === '/' ? serverRelativeUrl : `/${serverRelativeUrl}`;
+  return `${origin}${path}`;
+}
+
+export function isConfigList(listTitle: string, serverRelativeUrl: string, configListTitle: string): boolean {
+  if (listTitle.trim().toLowerCase() === configListTitle.trim().toLowerCase()) {
+    return true;
+  }
+  return /\/lists\/requestnumberconfig$/i.test(serverRelativeUrl);
+}
+
 export function buildRegisterWebhookBody(configSiteUrl: string, configItemId: number): {
   configSiteUrl: string;
   configItemId: number;
@@ -204,6 +248,14 @@ export function buildUpdateItemUrl(siteAbsoluteUrl: string, listTitle: string, i
 
 export function buildListUrl(siteAbsoluteUrl: string, listTitle: string): string {
   return `${listApi(siteAbsoluteUrl, listTitle)}?$select=Id,Title`;
+}
+
+export function buildListPermissionsUrl(siteAbsoluteUrl: string, listTitle: string): string {
+  return `${listApi(siteAbsoluteUrl, listTitle)}/EffectiveBasePermissions`;
+}
+
+export function buildAllPropertiesUrl(siteAbsoluteUrl: string): string {
+  return `${trimSlash(siteAbsoluteUrl)}/_api/web/AllProperties`;
 }
 
 export function buildCreateListUrl(siteAbsoluteUrl: string): string {

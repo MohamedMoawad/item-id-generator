@@ -9,6 +9,22 @@
           "manifest": "./src/webparts/itemIdGenerator/ItemIdGeneratorWebPart.manifest.json"
         }
       ]
+    },
+    "request-number-settings-command-set": {
+      "components": [
+        {
+          "entrypoint": "./lib/extensions/requestNumberSettings/RequestNumberSettingsCommandSet.js",
+          "manifest": "./src/extensions/requestNumberSettings/RequestNumberSettingsCommandSet.manifest.json"
+        }
+      ]
+    },
+    "request-number-provisioner": {
+      "components": [
+        {
+          "entrypoint": "./lib/extensions/requestNumberProvisioner/RequestNumberProvisionerApplicationCustomizer.js",
+          "manifest": "./src/extensions/requestNumberProvisioner/RequestNumberProvisionerApplicationCustomizer.manifest.json"
+        }
+      ]
     }
   },
   "externals": {},

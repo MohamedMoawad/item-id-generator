@@ -1,0 +1,20 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+}
+
+.intro {
+  margin: 0 0 12px;
+}
+
+.status {
+  margin: 0 0 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}

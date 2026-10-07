@@ -1,0 +1,17 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/command-set-extension-manifest.schema.json",
+  "id": "7f3c2a91-4e18-4b6d-9a55-2d8e6c1b0f44",
+  "alias": "RequestNumberSettingsCommandSet",
+  "componentType": "Extension",
+  "extensionType": "ListViewCommandSet",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "items": {
+    "REQUEST_NUMBER_SETTINGS": {
+      "title": { "default": "Request number settings" },
+      "ariaLabel": { "default": "Open request number settings for this list" },
+      "type": "command"
+    }
+  }
+}
