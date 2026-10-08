@@ -194,12 +194,12 @@ public sealed class SharePointClient
         var clientState = settings.WebhookClientState.Trim();
         if (notificationUrl.Length == 0 || notificationUrl.Contains('<', StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Set SPO_WEBHOOK_NOTIFICATION_URL to the spoWebhook URL, including the function key.");
+            throw new InvalidOperationException("The function could not build the spoWebhook address. Call RegisterWebhook through its https function URL.");
         }
 
         if (clientState.Length == 0 || clientState.Contains('<', StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Set SHAREPOINT_WEBHOOK_CLIENT_STATE before registering a webhook.");
+            throw new InvalidOperationException("Set SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID, and SHAREPOINT_CLIENT_SECRET on the Function App.");
         }
 
         if (string.IsNullOrWhiteSpace(config.TargetListUrl) || string.IsNullOrWhiteSpace(config.TargetListGuid))
@@ -208,7 +208,7 @@ public sealed class SharePointClient
         }
 
         var location = SharePointUrls.DeriveWebFromListUrl(config.TargetListUrl);
-        var expiration = DateTimeOffset.UtcNow.AddDays(170).ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        var expiration = DateTimeOffset.UtcNow.AddDays(170).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss+00:00");
         var body = JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["resource"] = $"{location.WebAbsoluteUrl}/_api/web/lists('{config.TargetListGuid}')",
@@ -492,7 +492,10 @@ public sealed class SharePointClient
             detail = detail[..300];
         }
 
-        return new InvalidOperationException($"SharePoint {action} failed (HTTP {(int)response.StatusCode}). {detail}");
+        var hint = (int)response.StatusCode == 403
+            ? " Grant the Entra app SharePoint application permission Sites.Manage.All (not Microsoft Graph) and admin consent."
+            : string.Empty;
+        return new InvalidOperationException($"SharePoint {action} failed (HTTP {(int)response.StatusCode}). {detail}{hint}");
     }
 
     private sealed class ConfigStore : IConfigStore

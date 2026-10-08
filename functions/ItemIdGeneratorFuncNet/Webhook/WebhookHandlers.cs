@@ -162,7 +162,17 @@ public sealed class RegisterWebhookHandler
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public async Task<WebhookResult> HandleAsync(string? body, AppSettings settings, SharePointClient sharePoint)
+    public async Task<WebhookResult> HandleAsync(string? body, AppSettings settings, SharePointClient sharePoint, Uri? requestUrl = null)
+    {
+        settings = settings with
+        {
+            WebhookClientState = settings.ResolveClientState(),
+            NotificationUrl = settings.ResolveNotificationUrl(requestUrl)
+        };
+        return await HandleResolvedAsync(body, settings, sharePoint);
+    }
+
+    private async Task<WebhookResult> HandleResolvedAsync(string? body, AppSettings settings, SharePointClient sharePoint)
     {
         if (!TryReadRequest(body, out var itemId, out var configSiteUrl, out var error))
         {

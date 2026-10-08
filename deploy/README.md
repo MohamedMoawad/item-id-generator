@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.4.0.0** is named **Request number config**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.4.1.0** is named **Request number config**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
@@ -50,8 +50,9 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 | `SHAREPOINT_TENANT_ID` | Directory (tenant) id |
 | `SHAREPOINT_CLIENT_ID` | Application (client) id |
 | `SHAREPOINT_CLIENT_SECRET` | The client secret |
-| `SHAREPOINT_WEBHOOK_CLIENT_STATE` | The random string from above |
 | `FUNCTIONS_WORKER_RUNTIME` | `dotnet-isolated` |
+
+`SHAREPOINT_WEBHOOK_CLIENT_STATE` and `SPO_WEBHOOK_NOTIFICATION_URL` are optional. Leave them empty. The function builds the spoWebhook address from the RegisterWebhook call and creates its own client state from the client secret. Do not paste the RegisterWebhook URL into `SPO_WEBHOOK_NOTIFICATION_URL`.
 
 The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app. On **Windows**, set `WEBSITE_RUN_FROM_PACKAGE` to `1` and save **before** the zip upload. Leave `SCM_DO_BUILD_DURING_DEPLOYMENT` unset. The zip is already built. Do not set `WEBSITE_RUN_FROM_PACKAGE` on a Linux Consumption app.
 
@@ -69,15 +70,13 @@ The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app
 6. Restart the Function App.
 7. Open **Functions** and choose **Refresh**. You should see `spoWebhook`, `RegisterWebhook`, and `processRequestNumber`.
 
-### URLs to copy
+### The one link to copy
 
-1. Open `spoWebhook` → **Function keys** → copy the **default** key.
-2. Add this app setting, then apply and restart again:
+1. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save. Without this, the list panel cannot call the function.
+2. Open `RegisterWebhook` → **Get function URL** and copy the whole URL, including `?code=`.
+3. In SharePoint, open the list → **Request number settings**. Paste that URL into **One-time service address**. Leave **Active** checked. Save.
 
-   `SPO_WEBHOOK_NOTIFICATION_URL` = `https://<function-app>.azurewebsites.net/api/spoWebhook?code=<that-key>`
-
-3. Open `RegisterWebhook` → **Get function URL** and copy it. A SharePoint administrator pastes that address once in **Request number settings**, in the box labeled **One-time service address**. After it saves, that box is gone and every list uses the stored address. Do not add a site collection URL to the Function App.
-4. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save.
+Save creates the number column if it is missing, stores the address, and subscribes the list. The success line is **Saved. New items on this list will get the next request number.** Add a new item after that. The number column fills in a few seconds later.
 
 `publish-function.ps1` creates a Node Function App and uploads the older Node zip. Use the portal steps above for the .NET package.
 

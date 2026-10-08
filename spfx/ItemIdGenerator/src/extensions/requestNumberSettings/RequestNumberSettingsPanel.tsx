@@ -29,6 +29,7 @@ import {
   callRegisterWebhook,
   canEditConfigList,
   ensureConfigList,
+  ensureTargetNumberColumn,
   loadConfigRows,
   readRegisterWebhookUrl,
   saveConfigRow,
@@ -271,6 +272,12 @@ export default class RequestNumberSettingsPanel
     }
     const listTitle = this.props.configListTitle.trim() || DEFAULT_CONFIG_LIST_TITLE;
     this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '' });
+    await ensureTargetNumberColumn(
+      this.props.spHttpClient,
+      this.state.draft.targetListUrl,
+      this.state.draft.targetListGuid,
+      this.state.draft.numberColumnInternalName
+    );
     const itemId = await saveConfigRow(
       this.props.spHttpClient,
       this.props.siteAbsoluteUrl,
@@ -285,12 +292,14 @@ export default class RequestNumberSettingsPanel
       webhookUrl = '';
     }
     const typedUrl = this.state.registerWebhookUrl.trim();
-    if (isPlaceholderSetting(webhookUrl) && !isPlaceholderSetting(typedUrl)) {
+    if (isPlaceholderSetting(webhookUrl)) {
+      webhookUrl = typedUrl;
+    }
+    if (!isPlaceholderSetting(typedUrl)) {
       try {
         await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, typedUrl);
-        webhookUrl = typedUrl;
       } catch (error) {
-        warnings.push(`Saved the list settings. The one-time service address was not stored. ${messageOf(error)}`);
+        warnings.push(`The list can still be numbered. The service address was not stored for other sites. ${messageOf(error)}`);
       }
     }
     const registration = await this._registerIfActive(this.state.draft, itemId, webhookUrl);

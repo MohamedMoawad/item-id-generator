@@ -92,6 +92,18 @@ public class SharePointClientTests
     }
 
     [Fact]
+    public void Register_call_supplies_the_spoWebhook_address_and_client_state()
+    {
+        var settings = SampleSettings() with { NotificationUrl = string.Empty, WebhookClientState = string.Empty };
+        Assert.Equal(
+            "https://numbers.azurewebsites.net/api/spoWebhook",
+            settings.ResolveNotificationUrl(new Uri("https://numbers.azurewebsites.net/api/RegisterWebhook?code=abc")));
+        Assert.Equal(string.Empty, settings.ResolveNotificationUrl(new Uri("http://localhost:7071/api/RegisterWebhook")));
+        Assert.Equal(32, settings.ResolveClientState().Length);
+        Assert.Equal(settings.ResolveClientState(), settings.ResolveClientState());
+    }
+
+    [Fact]
     public async Task Register_rejects_a_body_without_a_config_item_id()
     {
         var handler = new RegisterWebhookHandler();

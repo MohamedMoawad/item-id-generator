@@ -21,12 +21,12 @@ public sealed class SpoWebhookFunction
 
     [Function("spoWebhook")]
     public async Task<SpoWebhookResponse> Run(
-        [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData request,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequestData request,
         FunctionContext context)
     {
         var token = QueryValue(request.Url, "validationtoken");
         var body = string.IsNullOrEmpty(token) ? await request.ReadAsStringAsync() : null;
-        var result = _handler.Handle(token, body, Environment.GetEnvironmentVariable("SHAREPOINT_WEBHOOK_CLIENT_STATE"));
+        var result = _handler.Handle(token, body, AppSettings.FromEnvironment().ResolveClientState());
         if (result.Status == 200 && result.QueueMessages.Count > 0)
         {
             context.GetLogger("spoWebhook").LogInformation("Accepted {Count} SharePoint webhook notification(s).", result.QueueMessages.Count);
@@ -96,7 +96,7 @@ public sealed class RegisterWebhookFunction
         FunctionContext context)
     {
         var body = await request.ReadAsStringAsync();
-        var result = await _handler.HandleAsync(body, AppSettings.FromEnvironment(), _sharePoint);
+        var result = await _handler.HandleAsync(body, AppSettings.FromEnvironment(), _sharePoint, request.Url);
         if (result.Status == 200)
         {
             context.GetLogger("RegisterWebhook").LogInformation("Registered a SharePoint list webhook.");

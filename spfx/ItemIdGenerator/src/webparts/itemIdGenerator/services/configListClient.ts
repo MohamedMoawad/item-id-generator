@@ -18,6 +18,7 @@ import {
   buildRegisterWebhookBody,
   buildUpdateBody,
   buildUpdateItemUrl,
+  deriveWebFromListUrl,
   findConfigForList,
   hasPermissionFlag,
   isPlaceholderSetting,
@@ -212,6 +213,47 @@ export async function saveConfigRow(
   return createdId;
 }
 
+export async function ensureTargetNumberColumn(
+  spHttpClient: SPHttpClient,
+  listUrl: string,
+  listGuid: string,
+  internalName: string
+): Promise<void> {
+  const name = internalName.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error('Number column internal name must look like RequestNumber.');
+  }
+  const web = deriveWebFromListUrl(listUrl).webAbsoluteUrl;
+  const guid = listGuid.replace(/[{}]/g, '');
+  const fieldUrl = `${web}/_api/web/lists(guid'${guid}')/fields/getbyinternalnameorstaticname('${name}')`;
+  const existing = await spHttpClient.get(fieldUrl, SPHttpClient.configurations.v1, {
+    headers: { Accept: 'application/json;odata=nometadata' }
+  });
+  if (existing.ok) {
+    return;
+  }
+  const schema = `<Field Type="Text" Name="${name}" StaticName="${name}" DisplayName="${name}" />`;
+  const response = await spHttpClient.post(
+    `${web}/_api/web/lists(guid'${guid}')/fields/CreateFieldAsXml`,
+    SPHttpClient.configurations.v1,
+    {
+      headers: fieldHeaders,
+      body: JSON.stringify(buildCreateFieldBody(schema))
+    }
+  );
+  if (response.ok) {
+    return;
+  }
+  const detail = await response.text();
+  if (response.status === 400 && /already exists|duplicate/i.test(detail)) {
+    return;
+  }
+  throw new ConfigListRequestError(
+    sharePointError(response.status, detail, name),
+    response.status
+  );
+}
+
 export async function connectConfiguredList(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
@@ -239,20 +281,29 @@ export async function callRegisterWebhook(
   configSiteUrl: string,
   configItemId: number
 ): Promise<{ subscriptionId: string; alreadyRegistered: boolean }> {
-  const response = await fetch(registerWebhookUrl, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(buildRegisterWebhookBody(configSiteUrl, configItemId))
-  });
+  let response: Response;
+  try {
+    response = await fetch(registerWebhookUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildRegisterWebhookBody(configSiteUrl, configItemId))
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'network error';
+    throw new Error(`The browser could not reach the function (${detail}). On the Function App open CORS and add the SharePoint origin, then save again.`);
+  }
   const text = await response.text();
   const payload = text
     ? parseJson<{ subscriptionId?: string; alreadyRegistered?: boolean; error?: string }>(text)
     : {};
   if (!response.ok) {
-    throw new Error(payload.error || `RegisterWebhook returned HTTP ${response.status}.`);
+    const fallback = response.status === 401
+      ? 'The function rejected the key. Copy RegisterWebhook → Get function URL, including ?code=.'
+      : `RegisterWebhook returned HTTP ${response.status}.`;
+    throw new Error(payload.error || fallback);
   }
   if (!payload.subscriptionId) {
     throw new Error('RegisterWebhook did not return a subscription id.');
