@@ -14,7 +14,7 @@ const {
   readSiteCollectionUrl
 } = require('./sharePointUrls');
 
-const DEFAULT_CONFIG_LIST_TITLE = 'RequestNumberConfig';
+const DEFAULT_CONFIG_LIST_TITLE = 'AutoGenFeatureConfiguration';
 
 function configListTitle(env) {
   const title = (env.NUMBERING_CONFIG_LIST_TITLE || DEFAULT_CONFIG_LIST_TITLE).trim();

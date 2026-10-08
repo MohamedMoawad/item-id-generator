@@ -7,7 +7,7 @@ const { handleRegisterWebhook } = require('./handleRegisterWebhook');
 const LIST_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const ENV = {
   NUMBERING_CONFIG_SITE_URL: 'https://contoso.sharepoint.com/sites/config',
-  NUMBERING_CONFIG_LIST_TITLE: 'RequestNumberConfig',
+  NUMBERING_CONFIG_LIST_TITLE: 'AutoGenFeatureConfiguration',
   SHAREPOINT_TENANT_ID: '11111111-2222-4333-8444-555555555555',
   SHAREPOINT_CLIENT_ID: '66666666-7777-4888-8999-aaaaaaaaaaaa',
   SHAREPOINT_CLIENT_SECRET: 'not-a-real-secret',

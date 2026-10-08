@@ -1,6 +1,6 @@
 'use strict';
 
-const CONFIG_LIST_TITLE = 'RequestNumberConfig';
+const CONFIG_LIST_TITLE = 'AutoGenFeatureConfiguration';
 
 const CONFIG_FIELDS = [
   'Id',

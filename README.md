@@ -23,7 +23,7 @@ A web part runs in one browser, for one person, on one page. It never sees an it
 
 ```text
 SPFx configuration web part
-  ensure RequestNumberConfig on the site collection
+  ensure AutoGenFeatureConfiguration on the site collection
   paste list URL -> GetList -> save row
   POST RegisterWebhook
         |
@@ -44,13 +44,13 @@ queue request-numbers
         v
 processRequestNumber
   blob lease for that list
-  ETag compare-and-swap on RequestNumberConfig
+  ETag compare-and-swap on AutoGenFeatureConfiguration
   PATCH the item when the number column is still blank
 ```
 
 | Path | Role |
 | --- | --- |
-| `schema/` | `RequestNumberConfig` columns, a sample row, and a PnP script. |
+| `schema/` | `AutoGenFeatureConfiguration` columns, a sample row, and a PnP script. |
 | `functions/ItemIdGeneratorFunc` | `spoWebhook`, `processRequestNumber`, and `RegisterWebhook`. |
 | `spfx/ItemIdGenerator` | Configuration web part. It provisions the list, resolves a list URL, and calls `RegisterWebhook`. |
 
@@ -77,7 +77,7 @@ This is not an npm workspace. SPFx Heft breaks when dependencies are hoisted.
 
 ## Local development
 
-1. Create `RequestNumberConfig` with the web part or `schema/provision-numbering-config.ps1`. Add a single-line text column such as `RequestNumber` on each target list.
+1. Create `AutoGenFeatureConfiguration` with the web part or `schema/provision-numbering-config.ps1`. Add a single-line text column such as `RequestNumber` on each target list.
 2. Register an Entra application with SharePoint application permission **Sites.Manage.All** and admin-consent it once. That principal can number lists on every site collection. Copy `functions/ItemIdGeneratorFunc/local.settings.json.example` to `local.settings.json` and fill the placeholders locally. Do not commit that file. Do not set a site collection URL.
 3. Start Azurite so the queue and the lease container have a storage account (`UseDevelopmentStorage=true`).
 4. From `functions/ItemIdGeneratorFunc`: `npm install`, `npm test`, then `npm start`.

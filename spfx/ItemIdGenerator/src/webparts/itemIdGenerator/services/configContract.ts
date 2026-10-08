@@ -1,6 +1,6 @@
 import { CONFIG_FIELD_DEFINITIONS } from './requestNumberFields';
 
-export const DEFAULT_CONFIG_LIST_TITLE = 'RequestNumberConfig';
+export const DEFAULT_CONFIG_LIST_TITLE = 'AutoGenFeatureConfiguration';
 
 export type ResetPeriod = 'None' | 'Day' | 'Month' | 'Year';
 
@@ -197,10 +197,11 @@ export function buildListAbsoluteUrl(webAbsoluteUrl: string, serverRelativeUrl: 
 }
 
 export function isConfigList(listTitle: string, serverRelativeUrl: string, configListTitle: string): boolean {
-  if (listTitle.trim().toLowerCase() === configListTitle.trim().toLowerCase()) {
+  const title = listTitle.trim().toLowerCase();
+  if (title === configListTitle.trim().toLowerCase() || title === 'autogenfeatureconfiguration' || title === 'requestnumberconfig') {
     return true;
   }
-  return /\/lists\/requestnumberconfig$/i.test(serverRelativeUrl);
+  return /\/lists\/(autogenfeatureconfiguration|requestnumberconfig)$/i.test(serverRelativeUrl);
 }
 
 export function buildRegisterWebhookBody(configSiteUrl: string, configItemId: number): {

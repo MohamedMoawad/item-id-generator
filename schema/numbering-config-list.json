@@ -1,6 +1,6 @@
 {
   "list": {
-    "title": "RequestNumberConfig",
+    "title": "AutoGenFeatureConfiguration",
     "description": "One row per SharePoint list or library that should receive an auto-generated request number. Create it on the site collection root. The configuration web part can create this list.",
     "template": "genericList",
     "baseTemplate": 100
@@ -87,7 +87,7 @@
     }
   ],
   "fieldCreation": {
-    "endpoint": "{site}/_api/web/lists/getbytitle('RequestNumberConfig')/fields/CreateFieldAsXml",
+    "endpoint": "{site}/_api/web/lists/getbytitle('AutoGenFeatureConfiguration')/fields/CreateFieldAsXml",
     "options": 25,
     "optionsMeaning": "AddToDefaultContentType (1) + AddFieldInternalNameHint (8) + AddFieldToDefaultView (16)"
   }

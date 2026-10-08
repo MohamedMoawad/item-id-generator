@@ -56,7 +56,7 @@ $settings = @(
     @{ name = 'WEBSITE_NODE_DEFAULT_VERSION'; value = '~22' },
     @{ name = 'AzureWebJobsFeatureFlags'; value = 'EnableWorkerIndexing' },
     @{ name = 'FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR'; value = 'true' },
-    @{ name = 'NUMBERING_CONFIG_LIST_TITLE'; value = 'RequestNumberConfig' },
+    @{ name = 'NUMBERING_CONFIG_LIST_TITLE'; value = 'AutoGenFeatureConfiguration' },
     @{ name = 'SHAREPOINT_TENANT_ID'; value = $TenantId },
     @{ name = 'SHAREPOINT_CLIENT_ID'; value = $ClientId },
     @{ name = 'SHAREPOINT_CLIENT_SECRET'; value = $ClientSecret },
@@ -104,4 +104,4 @@ Write-Host "  $webhookUrl"
 Write-Host "RegisterWebhook (paste this into the web part property pane):"
 Write-Host "  $registerUrl"
 Write-Host ''
-Write-Host 'Next: upload deploy/item-id-generator.sppkg to the SharePoint app catalog, add Request number config to the site collection, and save an active row. That registers the list webhook.'
+Write-Host 'Next: upload deploy/item-id-generator.sppkg to the SharePoint app catalog, add AutoGen Feature to the site collection, and save an active row. That registers the list webhook.'

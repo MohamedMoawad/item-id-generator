@@ -18,11 +18,11 @@
   "preconfiguredEntries": [{
     "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
     "group": { "default": "Advanced" },
-    "title": { "default": "Request number config" },
-    "description": { "default": "Provision RequestNumberConfig, resolve a list URL, and register the numbering webhook." },
+    "title": { "default": "AutoGen Feature" },
+    "description": { "default": "Provision AutoGenFeatureConfiguration, resolve a list URL, and register the numbering webhook." },
     "officeFabricIconFontName": "Settings",
     "properties": {
-      "configListTitle": "RequestNumberConfig",
+      "configListTitle": "AutoGenFeatureConfiguration",
       "registerWebhookUrl": "https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>"
     }
   }]

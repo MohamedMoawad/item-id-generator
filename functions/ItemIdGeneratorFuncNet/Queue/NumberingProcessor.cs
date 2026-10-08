@@ -71,7 +71,7 @@ public sealed class NumberingProcessor
         {
             if (string.IsNullOrWhiteSpace(work.SiteUrl))
             {
-                throw new InvalidOperationException("Queue message siteUrl is required so RequestNumberConfig can be read on that site collection.");
+                throw new InvalidOperationException("Queue message siteUrl is required so AutoGenFeatureConfiguration can be read on that site collection.");
             }
 
             var config = await gateway.GetEnabledConfigAsync(work.SiteUrl, work.ListId);

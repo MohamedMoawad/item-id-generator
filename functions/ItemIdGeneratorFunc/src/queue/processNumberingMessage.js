@@ -22,7 +22,7 @@ async function processNumberingMessage(message, context, dependencies) {
 
   try {
     if (!work.siteUrl) {
-      throw new Error('Queue message siteUrl is required so RequestNumberConfig can be read on that site collection.');
+      throw new Error('Queue message siteUrl is required so AutoGenFeatureConfiguration can be read on that site collection.');
     }
     const config = await dependencies.gateway.getEnabledConfig(work.siteUrl, work.listId);
     if (!config) {

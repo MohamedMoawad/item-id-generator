@@ -412,7 +412,7 @@ public sealed class SharePointClient
         var siteUrl = settings.ConfigSiteUrl.Trim();
         if (siteUrl.Length == 0 || siteUrl.Contains('<', StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("The site collection URL is missing. RequestNumberConfig is read on the site collection that owns the list.");
+            throw new InvalidOperationException("The site collection URL is missing. AutoGenFeatureConfiguration is read on the site collection that owns the list.");
         }
 
         return SharePointUrls.SiteRoot(siteUrl);

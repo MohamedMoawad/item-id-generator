@@ -1,4 +1,4 @@
-# RequestNumberConfig
+# AutoGenFeatureConfiguration
 
 One row per list or library that should receive an automatic request number. Create the list on the **site collection root**. The configuration web part button does this, and `provision-numbering-config.ps1` is the PnP alternative.
 

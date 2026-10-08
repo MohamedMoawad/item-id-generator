@@ -5,7 +5,7 @@ Azure Functions v4 (Node.js) worker for request numbers.
 | Function | Trigger | Job |
 | --- | --- | --- |
 | `spoWebhook` | HTTP POST, auth level `function` | Echo `validationtoken` as `text/plain`, or check `clientState` and enqueue the list. |
-| `processRequestNumber` | Queue `request-numbers` | Lease the list, increment `RequestNumberConfig`, PATCH a blank number column. |
+| `processRequestNumber` | Queue `request-numbers` | Lease the list, increment `AutoGenFeatureConfiguration`, PATCH a blank number column. |
 | `RegisterWebhook` | HTTP POST, auth level `function` | App-only. Subscribe the target list to `spoWebhook` and store the subscription id. |
 
 `src/index.js` loads those three modules. Do not add a second numbering flow.
@@ -17,8 +17,8 @@ Copy `local.settings.json.example` to `local.settings.json`. Placeholders only. 
 | Name | Purpose |
 | --- | --- |
 | `AzureWebJobsStorage` | Queue and blob leases. Local value `UseDevelopmentStorage=true` needs Azurite. |
-| `configSiteUrl` | Sent by the SharePoint panel. The worker reads `RequestNumberConfig` on that site collection. There is no Function App setting for a site URL. |
-| `NUMBERING_CONFIG_LIST_TITLE` | Default `RequestNumberConfig`. |
+| `configSiteUrl` | Sent by the SharePoint panel. The worker reads `AutoGenFeatureConfiguration` on that site collection. There is no Function App setting for a site URL. |
+| `NUMBERING_CONFIG_LIST_TITLE` | Default `AutoGenFeatureConfiguration`. |
 | `SHAREPOINT_TENANT_ID` | Directory (tenant) id. |
 | `SHAREPOINT_CLIENT_ID` | Application (client) id. |
 | `SHAREPOINT_CLIENT_SECRET` | Client secret. Not committed. Certificate auth is not implemented. |
@@ -45,7 +45,7 @@ A change notification has `value[]` with `resource`, `siteUrl`, `clientState`, a
 ## processRequestNumber
 
 1. Acquire blob lease `list-{guid}` in `numbering-locks` for 60 seconds. A 409 throws so the message retries.
-2. Resolve the site collection from the webhook `siteUrl`, then load the one active `RequestNumberConfig` row whose `TargetListGuid` matches. Zero rows is an ack. Two rows is an error.
+2. Resolve the site collection from the webhook `siteUrl`, then load the one active `AutoGenFeatureConfiguration` row whose `TargetListGuid` matches. Zero rows is an ack. Two rows is an error.
 3. Read the latest 200 items. Number those whose number column is blank, lowest id first. A message that includes `itemId` numbers only that item.
 4. MERGE `CurrentCount` and `LastResetDate` with `If-Match`. HTTP 412 retries, up to 200 attempts.
 5. MERGE the number onto the item with its own ETag. If the column is already filled, skip it. A crash between steps 4 and 5 leaves a gap.

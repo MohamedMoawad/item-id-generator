@@ -1,9 +1,9 @@
-# Creates RequestNumberConfig on the connected site.
+# Creates AutoGenFeatureConfiguration on the connected site.
 # The configuration web part can do the same thing. This script is the PnP alternative.
 # Connect first. Do not put secrets in this file.
 #   Connect-PnPOnline -Url 'https://<tenant>.sharepoint.com/sites/<site>' -Interactive
 
-$ListTitle = 'RequestNumberConfig'
+$ListTitle = 'AutoGenFeatureConfiguration'
 New-PnPList -Title $ListTitle -Template GenericList -ErrorAction SilentlyContinue | Out-Null
 
 function Add-ConfigField {
@@ -22,4 +22,4 @@ Add-ConfigField '<Field Type="Boolean" Name="IsActive" StaticName="IsActive" Dis
 Add-ConfigField '<Field Type="Number" Name="PadLength" StaticName="PadLength" DisplayName="Pad length" Decimals="0" Min="0" Max="12"><Default>4</Default></Field>'
 Add-ConfigField '<Field Type="Text" Name="WebhookSubscriptionId" StaticName="WebhookSubscriptionId" DisplayName="Webhook subscription ID" />'
 
-Write-Host 'RequestNumberConfig columns are in place. Add a single-line text column such as RequestNumber on each target list, then add one config row per list.'
+Write-Host 'AutoGenFeatureConfiguration columns are in place. Add a single-line text column such as RequestNumber on each target list, then add one config row per list.'

@@ -73,7 +73,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
 
     return (
       <section className={styles.itemIdGenerator}>
-        <h2 className={styles.header}>Request number config</h2>
+        <h2 className={styles.header}>AutoGen Feature</h2>
         <p className={styles.lede}>
           {listTitle} lives on this site collection. Add one row per list. Saving an active row
           registers a SharePoint webhook. After that, a new item from the form, the grid, or

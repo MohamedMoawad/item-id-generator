@@ -13,7 +13,7 @@ public sealed record AppSettings(
     string WebhookClientState,
     string NotificationUrl)
 {
-    public const string DefaultListTitle = "RequestNumberConfig";
+    public const string DefaultListTitle = "AutoGenFeatureConfiguration";
 
     public static AppSettings FromEnvironment()
     {

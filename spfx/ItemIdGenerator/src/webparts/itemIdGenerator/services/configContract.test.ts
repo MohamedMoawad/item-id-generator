@@ -23,7 +23,7 @@ import {
 } from './configContract';
 import { buildCreateFieldBody, CONFIG_FIELD_DEFINITIONS, FIELD_CREATION_OPTIONS } from './requestNumberFields';
 
-describe('RequestNumberConfig contract', () => {
+describe('AutoGenFeatureConfiguration contract', () => {
   const draft = {
     ...emptyDraft(),
     title: 'Operations requests',
@@ -106,7 +106,7 @@ describe('RequestNumberConfig contract', () => {
     expect(isPlaceholderSetting('https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc')).toBe(false);
   });
 
-  it('describes every RequestNumberConfig column in field XML', () => {
+  it('describes every AutoGenFeatureConfiguration column in field XML', () => {
     const names = CONFIG_FIELD_DEFINITIONS.map((field) => field.internalName);
     expect(names).toEqual([
       'TargetListUrl',
@@ -141,8 +141,9 @@ describe('RequestNumberConfig contract', () => {
     expect(buildListAbsoluteUrl('https://contoso.sharepoint.com/sites/ops', '/sites/ops/Lists/Requests')).toBe(
       'https://contoso.sharepoint.com/sites/ops/Lists/Requests'
     );
-    expect(isConfigList('RequestNumberConfig', '/sites/ops/Lists/RequestNumberConfig', 'RequestNumberConfig')).toBe(true);
-    expect(isConfigList('Requests', '/sites/ops/Lists/Requests', 'RequestNumberConfig')).toBe(false);
+    expect(isConfigList('AutoGenFeatureConfiguration', '/sites/ops/Lists/AutoGenFeatureConfiguration', 'AutoGenFeatureConfiguration')).toBe(true);
+    expect(isConfigList('RequestNumberConfig', '/sites/ops/Lists/RequestNumberConfig', 'AutoGenFeatureConfiguration')).toBe(true);
+    expect(isConfigList('Requests', '/sites/ops/Lists/Requests', 'AutoGenFeatureConfiguration')).toBe(false);
     expect(hasPermissionFlag('4', PERMISSION_EDIT_LIST_ITEMS)).toBe(true);
     expect(hasPermissionFlag('1', PERMISSION_EDIT_LIST_ITEMS)).toBe(false);
   });

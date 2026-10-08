@@ -120,7 +120,7 @@ public class SharePointClientTests
         return new AppSettings(
             "UseDevelopmentStorage=true",
             "https://contoso.sharepoint.com/sites/config",
-            "RequestNumberConfig",
+            "AutoGenFeatureConfiguration",
             "11111111-2222-4333-8444-555555555555",
             "66666666-7777-4888-8999-aaaaaaaaaaaa",
             "not-a-real-secret",

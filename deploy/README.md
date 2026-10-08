@@ -12,14 +12,14 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.4.1.0** is named **Request number config**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.5.0.0** is named **AutoGen Feature**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
 3. Upload `item-id-generator.sppkg` and deploy it. Do not choose "add it to all sites".
-4. Open the site collection and go to `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx`. Add **Request number config**. The modern **New > App** page hides some catalog apps; this classic page lists them.
-5. Adding the app creates the list **RequestNumberConfig** on that site collection and adds missing columns the first time an owner opens a page.
-6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `RequestNumberConfig`. People who can edit the config list can change it. Other people can open the same link and see the settings.
+4. Open the site collection and go to `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx`. Add **AutoGen Feature**. The modern **New > App** page hides some catalog apps; this classic page lists them.
+5. Adding the app creates the list **AutoGenFeatureConfiguration** on that site collection and adds missing columns the first time an owner opens a page.
+6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
 List owners set the formula, the number column, and the reset. They do not see or copy a webhook address. The first time the address is missing, **Request number settings** shows **One-time service address** to someone who can edit. After that save, the box disappears. Opening a list that already has an active rule connects numbering in the background.
 
@@ -45,7 +45,9 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 
 | Name | Value |
 | --- | --- |
-| `NUMBERING_CONFIG_LIST_TITLE` | `RequestNumberConfig` |
+| `NUMBERING_CONFIG_LIST_TITLE` | `AutoGenFeatureConfiguration` |
+
+If this setting is still `RequestNumberConfig`, change it. The function reads **AutoGenFeatureConfiguration**.
 | `SHAREPOINT_TENANT_ID` | Directory (tenant) id |
 | `SHAREPOINT_CLIENT_ID` | Application (client) id |
 | `SHAREPOINT_CLIENT_SECRET` | The client secret |

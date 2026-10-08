@@ -7,7 +7,7 @@ namespace ItemIdGenerator.SharePoint;
 
 public static class SharePointUrls
 {
-    public const string ConfigListTitle = "RequestNumberConfig";
+    public const string ConfigListTitle = "AutoGenFeatureConfiguration";
 
     private static readonly Regex GuidPattern = new(@"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex GuidSearch = new(@"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
