@@ -17,24 +17,22 @@ import { SPHttpClient } from '@microsoft/sp-http';
 import styles from './RequestNumberSettingsPanel.module.scss';
 import {
   DEFAULT_CONFIG_LIST_TITLE,
+  deriveWebFromListUrl,
   draftForCurrentList,
   findConfigForList,
   IConfigDraft,
-  isPlaceholderSetting,
   RESET_PERIODS,
   ResetPeriod,
   validateDraft
 } from '../../webparts/itemIdGenerator/services/configContract';
 import {
-  callRegisterWebhook,
   canEditConfigList,
   ensureConfigList,
   ensureTargetNumberColumn,
   loadConfigRows,
-  readRegisterWebhookUrl,
-  saveConfigRow,
-  saveRegisterWebhookUrl
+  saveConfigRow
 } from '../../webparts/itemIdGenerator/services/configListClient';
+import { numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 
 export interface IRequestNumberSettingsPanelProps {
   siteAbsoluteUrl: string;
@@ -51,8 +49,6 @@ interface IRequestNumberSettingsPanelState {
   saving: boolean;
   canEdit: boolean;
   draft?: IConfigDraft;
-  serviceConfigured: boolean;
-  registerWebhookUrl: string;
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
@@ -67,8 +63,6 @@ export default class RequestNumberSettingsPanel
       loading: true,
       saving: false,
       canEdit: false,
-      serviceConfigured: false,
-      registerWebhookUrl: '',
       errorMessage: '',
       warningMessage: '',
       statusMessage: ''
@@ -91,7 +85,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          Set the formula for this list. New items receive the next number. The numbering service is already stored for the organization, so you do not paste an address on each list.
+          Set the formula and save. Add an item on this list. The next number is written into the number column. Refresh the list if it is still blank.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -160,22 +154,6 @@ export default class RequestNumberSettingsPanel
           disabled={busy}
         />
         <Checkbox label="Active" checked={draft.isActive} onChange={this._onActiveChange} disabled={busy} />
-        {this.state.canEdit && !this.state.serviceConfigured && (
-          <TextField
-            label="One-time service address"
-            value={this.state.registerWebhookUrl}
-            onChange={this._onWebhookChange}
-            disabled={this.state.saving}
-            description="A SharePoint administrator enters this once. After it is saved, this box disappears and every list uses it automatically."
-          />
-        )}
-        {this.state.serviceConfigured && (
-          <div className={styles.status}>
-            <MessageBar messageBarType={MessageBarType.info}>
-              Numbering is connected for the organization. Saving these settings turns it on for this list.
-            </MessageBar>
-          </div>
-        )}
         {draft.id !== undefined && (
           <TextField label="Current count" value={String(draft.currentCount || 0)} disabled={true} />
         )}
@@ -216,10 +194,6 @@ export default class RequestNumberSettingsPanel
     this._patch({ isActive: !!checked });
   };
 
-  private _onWebhookChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
-    this.setState({ registerWebhookUrl: value || '' });
-  };
-
   private _onSave = (): void => {
     this._save().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error) });
@@ -241,23 +215,15 @@ export default class RequestNumberSettingsPanel
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
     let canEdit = false;
-    let registerWebhookUrl = '';
     try {
       canEdit = await canEditConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     } catch {
       canEdit = false;
     }
-    try {
-      registerWebhookUrl = await readRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl);
-    } catch {
-      registerWebhookUrl = '';
-    }
     this.setState({
       loading: false,
       draft,
-      canEdit,
-      serviceConfigured: !isPlaceholderSetting(registerWebhookUrl),
-      registerWebhookUrl: isPlaceholderSetting(registerWebhookUrl) ? '' : registerWebhookUrl
+      canEdit
     });
   }
 
@@ -278,68 +244,39 @@ export default class RequestNumberSettingsPanel
       this.state.draft.targetListGuid,
       this.state.draft.numberColumnInternalName
     );
-    const itemId = await saveConfigRow(
+    await saveConfigRow(
       this.props.spHttpClient,
       this.props.siteAbsoluteUrl,
       listTitle,
       this.state.draft
     );
-    const warnings: string[] = [];
-    let webhookUrl = '';
-    try {
-      webhookUrl = (await readRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl)).trim();
-    } catch {
-      webhookUrl = '';
-    }
-    const typedUrl = this.state.registerWebhookUrl.trim();
-    if (isPlaceholderSetting(webhookUrl)) {
-      webhookUrl = typedUrl;
-    }
-    if (!isPlaceholderSetting(typedUrl)) {
+    let statusMessage = this.state.draft.isActive
+      ? 'Saved. Add an item, then refresh this list. The number appears in the number column.'
+      : 'Saved the settings for this list. Numbering is turned off.';
+    let warningMessage = '';
+    if (this.state.draft.isActive) {
       try {
-        await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, typedUrl);
+        const webUrl = deriveWebFromListUrl(this.state.draft.targetListUrl).webAbsoluteUrl;
+        const written = await numberBlankItems(
+          this.props.spHttpClient,
+          this.props.siteAbsoluteUrl,
+          listTitle,
+          webUrl,
+          this.state.draft.targetListGuid
+        );
+        if (written > 0) {
+          statusMessage = `Saved. ${written} item${written === 1 ? '' : 's'} received a number. Refresh the list to see them.`;
+        }
       } catch (error) {
-        warnings.push(`The list can still be numbered. The service address was not stored for other sites. ${messageOf(error)}`);
+        warningMessage = messageOf(error);
       }
-    }
-    const registration = await this._registerIfActive(this.state.draft, itemId, webhookUrl);
-    if (registration.warningMessage) {
-      warnings.push(registration.warningMessage);
     }
     this.setState({
       saving: false,
-      statusMessage: registration.statusMessage,
-      warningMessage: warnings.join(' ')
+      statusMessage,
+      warningMessage
     });
     await this._load();
-  }
-
-  private async _registerIfActive(
-    draft: IConfigDraft,
-    itemId: number,
-    webhookUrl: string
-  ): Promise<{ statusMessage: string; warningMessage: string }> {
-    if (!draft.isActive) {
-      return { statusMessage: 'Saved the settings for this list. Numbering is turned off.', warningMessage: '' };
-    }
-    if (isPlaceholderSetting(webhookUrl)) {
-      return {
-        statusMessage: 'Saved the settings for this list.',
-        warningMessage: 'Numbering is not connected yet. A SharePoint administrator saves the one-time service address, and then every list uses it automatically.'
-      };
-    }
-    try {
-      await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
-      return {
-        statusMessage: 'Saved. New items on this list will get the next request number.',
-        warningMessage: ''
-      };
-    } catch (error) {
-      return {
-        statusMessage: 'Saved the settings for this list.',
-        warningMessage: `Numbering could not be turned on for this list. ${messageOf(error)}`
-      };
-    }
   }
 }
 

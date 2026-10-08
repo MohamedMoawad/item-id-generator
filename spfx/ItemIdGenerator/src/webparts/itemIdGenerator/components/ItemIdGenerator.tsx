@@ -210,7 +210,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
             label="Current count"
             value={String(draft.currentCount || 0)}
             disabled={true}
-            description="The Azure Function owns this counter and Last reset date. Saving does not change them."
+            description="This count increases each time a blank item on the list receives a number."
           />
         )}
         {editing && (
@@ -405,24 +405,17 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
         webhookUrl = '';
       }
     }
-    if (isPlaceholderSetting(webhookUrl)) {
-      return {
-        statusMessage: 'Saved the rule.',
-        warningMessage: 'Numbering is not connected yet. Save the one-time service address, and then every list uses it automatically.'
-      };
+    if (!isPlaceholderSetting(webhookUrl)) {
+      try {
+        await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
+      } catch {
+        // The list still numbers items while it is open.
+      }
     }
-    try {
-      await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
-      return {
-        statusMessage: 'Saved the rule. New items on this list will get the next request number.',
-        warningMessage: ''
-      };
-    } catch (error) {
-      return {
-        statusMessage: 'Saved the rule.',
-        warningMessage: `Numbering could not be turned on for this list. ${messageOf(error)}`
-      };
-    }
+    return {
+      statusMessage: 'Saved the rule. Open the list and add an item. Refresh the list to see the number.',
+      warningMessage: ''
+    };
   }
 }
 

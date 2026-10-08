@@ -3,7 +3,7 @@
   <ListInstance
     FeatureId="00bfea71-de22-43b2-a848-c05709900100"
     Title="AutoGenFeatureConfiguration"
-    Description="Per-list request number rules. The Azure Function owns CurrentCount and LastResetDate."
+    Description="Per-list request number rules. The list command writes the next number."
     TemplateType="100"
     Url="Lists/AutoGenFeatureConfiguration"
     OnQuickLaunch="TRUE">

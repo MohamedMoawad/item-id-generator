@@ -12,7 +12,16 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.5.0.0** is named **AutoGen Feature**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.6.0.0** is named **AutoGen Feature**. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
+
+1. Upload the package to the app catalog and add **AutoGen Feature** to the site.
+2. Open the list and choose **Request number settings**.
+3. Set the formula, leave **Active** checked, and save.
+4. Add a new item, then refresh the list. The number shows in the number column.
+
+The number is written while someone has that list open. Items created while the list is closed receive a number the next time the list is opened. The Azure Function section below is optional and is only for numbering when nobody has the list open.
+
+If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
@@ -21,7 +30,7 @@ Package version **1.5.0.0** is named **AutoGen Feature**. The file you upload to
 5. Adding the app creates the list **AutoGenFeatureConfiguration** on that site collection and adds missing columns the first time an owner opens a page.
 6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
-List owners set the formula, the number column, and the reset. They do not see or copy a webhook address. The first time the address is missing, **Request number settings** shows **One-time service address** to someone who can edit. After that save, the box disappears. Opening a list that already has an active rule connects numbering in the background.
+List owners set the formula, the number column, and the reset. They do not see a webhook address. Saving an active rule is enough. Opening the list fills blank number columns.
 
 ## 2. Create a .NET Function App and upload the zip
 

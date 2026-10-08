@@ -346,7 +346,7 @@ export function buildCreateListBody(listTitle: string): { BaseTemplate: number; 
   return {
     BaseTemplate: 100,
     Title: listTitle,
-    Description: 'Per-list request number rules. The Azure Function owns CurrentCount and LastResetDate.'
+    Description: 'Per-list request number rules. The list command writes the next number.'
   };
 }
 

@@ -1,8 +1,8 @@
 # Request numbers for SharePoint Online
 
-When someone creates a list item, this repo assigns the next request number. The create can come from the list form, quick edit, or Power Automate. A SharePoint webhook is the trigger. The SPFx web part only configures the rule.
+When someone creates a list item, this repo assigns the next request number. Upload the SharePoint package, open the list, choose **Request number settings**, and save the formula. The list writes the number while it is open. No Azure Function is required for that.
 
-Do not also run a Power Automate flow that writes the same number column. Two writers will race.
+Do not also run a Power Automate flow that writes the same number column. Two writers will race. An optional Azure Function can number items that are created while nobody has the list open. Those steps are in [deploy/README.md](deploy/README.md).
 
 ## Upload files
 
@@ -13,11 +13,11 @@ Built packages are in [deploy/](deploy/README.md).
 | [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | The only file you upload to SharePoint. Add the app to each site collection. List owners set the formula. They do not paste a service address. |
 | [deploy/item-id-generator-func-net.zip](deploy/item-id-generator-func-net.zip) | .NET 8 isolated webhook. Create a new Function App with stack **.NET 8 Isolated**, then Zip Push Deploy this file. Steps are in [deploy/README.md](deploy/README.md). |
 
-Saving an active row in the web part registers the list webhook. That subscription is what watches for new items. Details are in [deploy/README.md](deploy/README.md).
+Saving an active rule is enough. The list command numbers blank items while the list is open. The function package is optional.
 
-## Why a web part cannot do this
+## How a number is chosen
 
-A web part runs in one browser, for one person, on one page. It never sees an item created by Power Automate, a grid edit on another machine, or a second tab. Two browsers that both read `CurrentCount` will write the same number. The counter has to live in one worker that can lose the race and retry.
+The list command reads `AutoGenFeatureConfiguration`, reserves the next count with the row etag, and writes the number column. Two people editing at the same time get different numbers because a lost etag is retried. An item created while the list is closed stays blank until the next person opens the list, unless the optional Azure Function is running.
 
 ## Flow
 
