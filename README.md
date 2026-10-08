@@ -10,7 +10,7 @@ Built packages are in [deploy/](deploy/README.md).
 
 | File | Use |
 | --- | --- |
-| [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | Upload to the app catalog, then add the app to each site collection. That creates `RequestNumberConfig` and a **Request number settings** link on each list. One Function App covers the organization. |
+| [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | The only file you upload to SharePoint. Add the app to each site collection. List owners set the formula. They do not paste a service address. |
 | [deploy/item-id-generator-func-net.zip](deploy/item-id-generator-func-net.zip) | .NET 8 isolated webhook. Create a new Function App with stack **.NET 8 Isolated**, then Zip Push Deploy this file. Steps are in [deploy/README.md](deploy/README.md). |
 
 Saving an active row in the web part registers the list webhook. That subscription is what watches for new items. Details are in [deploy/README.md](deploy/README.md).

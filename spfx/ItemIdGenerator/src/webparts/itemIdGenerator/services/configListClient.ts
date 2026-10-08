@@ -18,6 +18,7 @@ import {
   buildRegisterWebhookBody,
   buildUpdateBody,
   buildUpdateItemUrl,
+  findConfigForList,
   hasPermissionFlag,
   isPlaceholderSetting,
   IConfigDraft,
@@ -209,6 +210,28 @@ export async function saveConfigRow(
     throw new Error('SharePoint did not return the new config item id.');
   }
   return createdId;
+}
+
+export async function connectConfiguredList(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  listTitle: string,
+  listGuid: string
+): Promise<boolean> {
+  const webhookUrl = await readRegisterWebhookUrl(spHttpClient, siteAbsoluteUrl);
+  if (isPlaceholderSetting(webhookUrl)) {
+    return false;
+  }
+  const rows = await loadConfigRows(spHttpClient, siteAbsoluteUrl, listTitle);
+  const row = findConfigForList(rows, listGuid);
+  if (!row || !row.isActive || row.id === undefined) {
+    return false;
+  }
+  if (row.webhookSubscriptionId) {
+    return true;
+  }
+  await callRegisterWebhook(webhookUrl, siteAbsoluteUrl, row.id);
+  return true;
 }
 
 export async function callRegisterWebhook(

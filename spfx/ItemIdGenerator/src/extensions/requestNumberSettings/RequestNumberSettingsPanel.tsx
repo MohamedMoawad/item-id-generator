@@ -50,6 +50,7 @@ interface IRequestNumberSettingsPanelState {
   saving: boolean;
   canEdit: boolean;
   draft?: IConfigDraft;
+  serviceConfigured: boolean;
   registerWebhookUrl: string;
   errorMessage: string;
   warningMessage: string;
@@ -65,6 +66,7 @@ export default class RequestNumberSettingsPanel
       loading: true,
       saving: false,
       canEdit: false,
+      serviceConfigured: false,
       registerWebhookUrl: '',
       errorMessage: '',
       warningMessage: '',
@@ -79,7 +81,6 @@ export default class RequestNumberSettingsPanel
   }
 
   public render(): React.ReactElement {
-    const listTitle = this.props.configListTitle.trim() || DEFAULT_CONFIG_LIST_TITLE;
     return (
       <Panel
         isOpen={true}
@@ -89,7 +90,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          These settings are stored on {listTitle} for this list only. The same app numbers every site collection where it is added. You do not enter a site name.
+          Set the formula for this list. New items receive the next number. The numbering service is already stored for the organization, so you do not paste an address on each list.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -158,18 +159,24 @@ export default class RequestNumberSettingsPanel
           disabled={busy}
         />
         <Checkbox label="Active" checked={draft.isActive} onChange={this._onActiveChange} disabled={busy} />
-        <TextField
-          label="RegisterWebhook URL"
-          value={this.state.registerWebhookUrl}
-          onChange={this._onWebhookChange}
-          disabled={busy}
-          description="Paste this once for the organization. Include the function key. A SharePoint administrator save stores it for every site collection."
-        />
+        {this.state.canEdit && !this.state.serviceConfigured && (
+          <TextField
+            label="One-time service address"
+            value={this.state.registerWebhookUrl}
+            onChange={this._onWebhookChange}
+            disabled={this.state.saving}
+            description="A SharePoint administrator enters this once. After it is saved, this box disappears and every list uses it automatically."
+          />
+        )}
+        {this.state.serviceConfigured && (
+          <div className={styles.status}>
+            <MessageBar messageBarType={MessageBarType.info}>
+              Numbering is connected for the organization. Saving these settings turns it on for this list.
+            </MessageBar>
+          </div>
+        )}
         {draft.id !== undefined && (
           <TextField label="Current count" value={String(draft.currentCount || 0)} disabled={true} />
-        )}
-        {draft.webhookSubscriptionId && (
-          <TextField label="Webhook subscription ID" value={draft.webhookSubscriptionId} disabled={true} />
         )}
         {this.state.canEdit && (
           <div className={styles.actions}>
@@ -244,7 +251,13 @@ export default class RequestNumberSettingsPanel
     } catch {
       registerWebhookUrl = '';
     }
-    this.setState({ loading: false, draft, canEdit, registerWebhookUrl });
+    this.setState({
+      loading: false,
+      draft,
+      canEdit,
+      serviceConfigured: !isPlaceholderSetting(registerWebhookUrl),
+      registerWebhookUrl: isPlaceholderSetting(registerWebhookUrl) ? '' : registerWebhookUrl
+    });
   }
 
   private async _save(): Promise<void> {
@@ -265,15 +278,19 @@ export default class RequestNumberSettingsPanel
       this.state.draft
     );
     const warnings: string[] = [];
-    const webhookUrl = this.state.registerWebhookUrl.trim();
-    if (!isPlaceholderSetting(webhookUrl)) {
+    let webhookUrl = '';
+    try {
+      webhookUrl = (await readRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl)).trim();
+    } catch {
+      webhookUrl = '';
+    }
+    const typedUrl = this.state.registerWebhookUrl.trim();
+    if (isPlaceholderSetting(webhookUrl) && !isPlaceholderSetting(typedUrl)) {
       try {
-        const saved = await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, webhookUrl);
-        if (!saved.organization) {
-          warnings.push('The URL is saved on this site collection. A SharePoint administrator should save it once so every site collection uses the same RegisterWebhook URL.');
-        }
+        await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, typedUrl);
+        webhookUrl = typedUrl;
       } catch (error) {
-        warnings.push(`Saved the list settings. The RegisterWebhook URL was not stored. ${messageOf(error)}`);
+        warnings.push(`Saved the list settings. The one-time service address was not stored. ${messageOf(error)}`);
       }
     }
     const registration = await this._registerIfActive(this.state.draft, itemId, webhookUrl);
@@ -294,26 +311,24 @@ export default class RequestNumberSettingsPanel
     webhookUrl: string
   ): Promise<{ statusMessage: string; warningMessage: string }> {
     if (!draft.isActive) {
-      return { statusMessage: 'Saved the settings for this list. The rule is inactive.', warningMessage: '' };
+      return { statusMessage: 'Saved the settings for this list. Numbering is turned off.', warningMessage: '' };
     }
     if (isPlaceholderSetting(webhookUrl)) {
       return {
         statusMessage: 'Saved the settings for this list.',
-        warningMessage: 'Add the RegisterWebhook URL to register the list webhook.'
+        warningMessage: 'Numbering is not connected yet. A SharePoint administrator saves the one-time service address, and then every list uses it automatically.'
       };
     }
     try {
-      const result = await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
+      await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
       return {
-        statusMessage: result.alreadyRegistered
-          ? `Saved. Webhook ${result.subscriptionId} was already registered.`
-          : `Saved and registered webhook ${result.subscriptionId}.`,
+        statusMessage: 'Saved. New items on this list will get the next request number.',
         warningMessage: ''
       };
     } catch (error) {
       return {
         statusMessage: 'Saved the settings for this list.',
-        warningMessage: `Webhook registration failed. ${messageOf(error)}`
+        warningMessage: `Numbering could not be turned on for this list. ${messageOf(error)}`
       };
     }
   }

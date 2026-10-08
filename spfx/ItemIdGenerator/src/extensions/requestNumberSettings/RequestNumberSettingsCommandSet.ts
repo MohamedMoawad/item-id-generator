@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { BaseListViewCommandSet, IListViewCommandSetExecuteEventParameters } from '@microsoft/sp-listview-extensibility';
 import { DEFAULT_CONFIG_LIST_TITLE, buildListAbsoluteUrl, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
+import { connectConfiguredList } from '../../webparts/itemIdGenerator/services/configListClient';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
 export interface IRequestNumberSettingsCommandSetProperties {
@@ -17,6 +18,7 @@ export default class RequestNumberSettingsCommandSet
     this._panelHost = document.body.appendChild(document.createElement('div'));
     this.context.listView.listViewStateChangedEvent.add(this, this._onListViewStateChanged);
     this._setCommandVisibility();
+    this._connectList().catch(() => undefined);
     return Promise.resolve();
   }
 
@@ -50,6 +52,39 @@ export default class RequestNumberSettingsCommandSet
     const url = list ? list.serverRelativeUrl : '';
     const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
     command.visible = !!list && !isConfigList(title, url, configTitle);
+  }
+
+  private async _connectList(): Promise<void> {
+    const list = this.context.pageContext.list;
+    if (!list) {
+      return;
+    }
+    const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
+    if (isConfigList(list.title, list.serverRelativeUrl, configTitle)) {
+      return;
+    }
+    const key = `requestNumberConnected:${list.id.toString()}`;
+    try {
+      if (window.sessionStorage.getItem(key) === '1') {
+        return;
+      }
+    } catch {
+      // Session storage can be blocked. Still try to connect.
+    }
+    const connected = await connectConfiguredList(
+      this.context.spHttpClient,
+      this.context.pageContext.site.absoluteUrl,
+      configTitle,
+      list.id.toString()
+    );
+    if (!connected) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(key, '1');
+    } catch {
+      // The connection itself succeeded.
+    }
   }
 
   private _openPanel(): void {

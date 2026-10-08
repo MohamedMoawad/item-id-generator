@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.3.0.0** is named **Request number config**. Upload this file over the previous package in the app catalog and choose to replace it. One Function App serves every site collection. You do not put a site collection name in Azure. Add the app to each site collection that should number lists, then set the formula in **Request number settings**. Version 1.3.0 stores the RegisterWebhook URL once for the organization. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.4.0.0** is named **Request number config**. The file you upload to SharePoint is `item-id-generator.sppkg` only. People who set a formula never paste a service address. An administrator saves that address once, SharePoint stores it, and every list that has **Request number settings** uses it automatically. SharePoint cannot create the Azure Function from that package, so the function zip remains a one-time setup for the person who runs Azure. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
@@ -21,7 +21,7 @@ Package version **1.3.0.0** is named **Request number config**. Upload this file
 5. Adding the app creates the list **RequestNumberConfig** on that site collection and adds missing columns the first time an owner opens a page.
 6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `RequestNumberConfig`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
-Paste the **RegisterWebhook** URL into that panel once. A SharePoint administrator save stores it for every site collection. Each list keeps its own formula, column, and reset. Other site collections load that same URL. You do not repeat a site name.
+List owners set the formula, the number column, and the reset. They do not see or copy a webhook address. The first time the address is missing, **Request number settings** shows **One-time service address** to someone who can edit. After that save, the box disappears. Opening a list that already has an active rule connects numbering in the background.
 
 ## 2. Create a .NET Function App and upload the zip
 
@@ -76,18 +76,17 @@ The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app
 
    `SPO_WEBHOOK_NOTIFICATION_URL` = `https://<function-app>.azurewebsites.net/api/spoWebhook?code=<that-key>`
 
-3. Open `RegisterWebhook` → **Get function URL** and copy it. Paste that URL once in **Request number settings**. A SharePoint administrator save stores it for every site collection. Do not add a site collection URL to the Function App.
+3. Open `RegisterWebhook` → **Get function URL** and copy it. A SharePoint administrator pastes that address once in **Request number settings**, in the box labeled **One-time service address**. After it saves, that box is gone and every list uses the stored address. Do not add a site collection URL to the Function App.
 4. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save.
 
 `publish-function.ps1` creates a Node Function App and uploads the older Node zip. Use the portal steps above for the .NET package.
 
-## 3. Register the webhook on the list
+## 3. Turn numbering on for a list
 
 1. Add a single-line text column on the target list, for example internal name `RequestNumber`.
 2. Open that list and choose **Request number settings**.
-3. Paste the **RegisterWebhook** URL, including `?code=`. People who can edit the page can see that URL.
-4. Set the formula, the number column, and the reset, leave **Active** checked, and save.
+3. Set the formula, the number column, and the reset. Leave **Active** checked and save.
 
-Save calls `RegisterWebhook`. That function subscribes the target list to `spoWebhook` and stores the subscription id on the row. From then on, a new item from the form, the grid, or Power Automate is queued and numbered.
+You do not paste an address on this list. Save uses the address stored for the organization and subscribes the list. The same thing happens when someone opens a list that already has an active rule. From then on, a new item from the form, the grid, or Power Automate is queued and numbered.
 
 There is no separate classic event receiver to attach. Do not also add a Power Automate flow that writes the same number column.

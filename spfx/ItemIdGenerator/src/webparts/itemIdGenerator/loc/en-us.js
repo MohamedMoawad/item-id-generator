@@ -1,10 +1,10 @@
 define([], function () {
   return {
-    PropertyPaneDescription: 'Create RequestNumberConfig on this site collection and point active rows at RegisterWebhook.',
+    PropertyPaneDescription: 'Create RequestNumberConfig on this site collection. The one-time service address is reused on every list.',
     BasicGroupName: 'Configuration',
     ConfigListTitleFieldLabel: 'Config list title',
     ConfigListTitleFieldDescription: 'List title on the site collection. Default is RequestNumberConfig.',
-    RegisterWebhookUrlFieldLabel: 'RegisterWebhook URL',
-    RegisterWebhookUrlFieldDescription: 'One RegisterWebhook URL for the organization, including the function key. Page editors can see this value.'
+    RegisterWebhookUrlFieldLabel: 'One-time service address',
+    RegisterWebhookUrlFieldDescription: 'Optional here. When the organization address is already saved, leave this empty and every list uses that saved address.'
   };
 });

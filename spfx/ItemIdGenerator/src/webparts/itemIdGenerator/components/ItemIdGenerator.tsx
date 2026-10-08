@@ -15,6 +15,7 @@ import styles from './ItemIdGenerator.module.scss';
 import type { IItemIdGeneratorProps } from './IItemIdGeneratorProps';
 import {
   callRegisterWebhook,
+  readRegisterWebhookUrl,
   ConfigListRequestError,
   ensureConfigList,
   loadConfigRows,
@@ -392,28 +393,34 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
   private async _registerIfActive(draft: IConfigDraft, itemId: number): Promise<{ statusMessage: string; warningMessage: string }> {
     if (!draft.isActive) {
       return {
-        statusMessage: 'Saved the rule. It is inactive, so no webhook was registered.',
+        statusMessage: 'Saved the rule. Numbering is turned off.',
         warningMessage: ''
       };
     }
-    if (isPlaceholderSetting(this.props.registerWebhookUrl)) {
+    let webhookUrl = this.props.registerWebhookUrl.trim();
+    if (isPlaceholderSetting(webhookUrl)) {
+      try {
+        webhookUrl = (await readRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl)).trim();
+      } catch {
+        webhookUrl = '';
+      }
+    }
+    if (isPlaceholderSetting(webhookUrl)) {
       return {
         statusMessage: 'Saved the rule.',
-        warningMessage: 'Set the RegisterWebhook URL in the property pane to register the list webhook. The row was saved.'
+        warningMessage: 'Numbering is not connected yet. Save the one-time service address, and then every list uses it automatically.'
       };
     }
     try {
-      const result = await callRegisterWebhook(this.props.registerWebhookUrl, this.props.siteAbsoluteUrl, itemId);
+      await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
       return {
-        statusMessage: result.alreadyRegistered
-          ? `Saved the rule. Webhook ${result.subscriptionId} was already registered.`
-          : `Saved the rule and registered webhook ${result.subscriptionId}.`,
+        statusMessage: 'Saved the rule. New items on this list will get the next request number.',
         warningMessage: ''
       };
     } catch (error) {
       return {
         statusMessage: 'Saved the rule.',
-        warningMessage: `Webhook registration failed. ${messageOf(error)}`
+        warningMessage: `Numbering could not be turned on for this list. ${messageOf(error)}`
       };
     }
   }
