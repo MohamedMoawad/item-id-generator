@@ -37,8 +37,7 @@ Download [item-id-generator-func-net.zip](item-id-generator-func-net.zip) and ke
 In Microsoft Entra, before the webhook can write numbers:
 
 1. App registration with SharePoint application permission **Sites.Manage.All**, and admin consent. That one consent covers every site collection. Do not use **Sites.Selected** when the app must number lists across the organization.
-2. Create a client secret. Keep it out of git.
-3. Pick a long random string. That string is `SHAREPOINT_WEBHOOK_CLIENT_STATE`.
+2. Create a client secret. Keep it out of git. Put that secret in `SHAREPOINT_CLIENT_SECRET`.
 
 ### App settings
 
