@@ -22,10 +22,13 @@ async function handleRegisterWebhook(request, context, dependencies = {}) {
     return { status: 400, jsonBody: { error: 'configItemId must be a positive integer.' } };
   }
 
-  const env = { ...(dependencies.env || process.env) };
-  if (typeof parsed.value.configSiteUrl === 'string' && parsed.value.configSiteUrl.trim()) {
-    env.NUMBERING_CONFIG_SITE_URL = parsed.value.configSiteUrl.trim();
+  const configSiteUrl = typeof parsed.value.configSiteUrl === 'string' ? parsed.value.configSiteUrl.trim() : '';
+  if (!configSiteUrl || configSiteUrl.indexOf('<') >= 0) {
+    return { status: 400, jsonBody: { error: 'configSiteUrl must be the https URL of the site collection.' } };
   }
+
+  const env = { ...(dependencies.env || process.env) };
+  env.NUMBERING_CONFIG_SITE_URL = configSiteUrl;
 
   try {
     const deps = dependencies.sharePointDeps || createSharePointDeps(env, dependencies.fetchImpl || globalThis.fetch);

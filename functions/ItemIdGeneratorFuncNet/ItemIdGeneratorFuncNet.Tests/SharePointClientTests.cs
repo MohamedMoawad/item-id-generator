@@ -46,10 +46,49 @@ public class SharePointClientTests
             """);
         });
         var client = new SharePointClient(new HttpClient(script));
-        var created = await handler.HandleAsync("""{"configItemId":7}""", settings, client);
+        var created = await handler.HandleAsync("""{"configItemId":7,"configSiteUrl":"https://contoso.sharepoint.com/sites/ops"}""", settings, client);
         Assert.Equal(200, created.Status);
         Assert.Contains("sub-from-handler", created.Body, StringComparison.Ordinal);
         Assert.Contains("\"alreadyRegistered\":false", created.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Enabled_config_is_read_from_the_site_collection_of_the_webhook()
+    {
+        var requested = new List<string>();
+        var client = new SharePointClient(new HttpClient(new ScriptedHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            requested.Add(url);
+            if (url.Contains("oauth2", StringComparison.Ordinal))
+            {
+                return Response(HttpStatusCode.OK, """{"access_token":"token","expires_in":3600}""");
+            }
+
+            if (url.Contains("/_api/site?", StringComparison.Ordinal))
+            {
+                return Response(HttpStatusCode.OK, """{"Url":"https://contoso.sharepoint.com/sites/ops"}""");
+            }
+
+            if (url.Contains("https://contoso.sharepoint.com/sites/ops/_api/web/lists/getbytitle", StringComparison.Ordinal))
+            {
+                return Response(HttpStatusCode.OK, $$"""
+                {"value":[{"Id":7,"TargetListUrl":"https://contoso.sharepoint.com/sites/ops/team/Lists/Requests","TargetListGuid":"{{ListId}}","IsActive":true,"Formula":"REQ-{seq}","NumberColumnInternalName":"RequestNumber","odata.etag":"\"1\""}]}
+                """);
+            }
+
+            return Response(HttpStatusCode.NotFound, "");
+        })));
+
+        var config = await client.GetEnabledConfigAsync(
+            SampleSettings() with { ConfigSiteUrl = string.Empty },
+            "https://contoso.sharepoint.com/sites/ops/team",
+            ListId);
+        Assert.NotNull(config);
+        Assert.Equal("https://contoso.sharepoint.com/sites/ops", config!.ConfigSiteUrl);
+        Assert.Contains(requested, url => url.Contains("/sites/ops/team/_api/site?", StringComparison.Ordinal));
+        Assert.Contains(requested, url => url.Contains("https://contoso.sharepoint.com/sites/ops/_api/web/lists/getbytitle", StringComparison.Ordinal));
+        Assert.Equal("https://contoso.sharepoint.com/sites/hr", SharePointUrls.ReadSiteCollectionUrl("""{"d":{"Url":"https://contoso.sharepoint.com/sites/hr/"}}""", "https://contoso.sharepoint.com/sites/hr/team"));
     }
 
     [Fact]
@@ -58,6 +97,10 @@ public class SharePointClientTests
         var handler = new RegisterWebhookHandler();
         var result = await handler.HandleAsync("""{"configItemId":0}""", SampleSettings(), new SharePointClient(new HttpClient()));
         Assert.Equal(400, result.Status);
+
+        var missingSite = await handler.HandleAsync("""{"configItemId":7}""", SampleSettings(), new SharePointClient(new HttpClient()));
+        Assert.Equal(400, missingSite.Status);
+        Assert.Contains("configSiteUrl", missingSite.Body, StringComparison.Ordinal);
     }
 
     private static AppSettings SampleSettings()

@@ -100,7 +100,7 @@ describe('handleRegisterWebhook', () => {
       });
     };
     const response = await handleRegisterWebhook(
-      requestWith({ configItemId: 7 }),
+      requestWith({ configItemId: 7, configSiteUrl: 'https://contoso.sharepoint.com/sites/config' }),
       { log() {} },
       { env: ENV, fetchImpl }
     );

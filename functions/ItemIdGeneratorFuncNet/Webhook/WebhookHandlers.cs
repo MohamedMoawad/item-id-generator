@@ -169,10 +169,12 @@ public sealed class RegisterWebhookHandler
             return JsonResult(400, new { error });
         }
 
-        if (!string.IsNullOrWhiteSpace(configSiteUrl))
+        if (string.IsNullOrWhiteSpace(configSiteUrl) || configSiteUrl.Contains('<', StringComparison.Ordinal))
         {
-            settings = settings with { ConfigSiteUrl = configSiteUrl.Trim() };
+            return JsonResult(400, new { error = "configSiteUrl must be the https URL of the site collection." });
         }
+
+        settings = settings with { ConfigSiteUrl = configSiteUrl.Trim() };
 
         try
         {

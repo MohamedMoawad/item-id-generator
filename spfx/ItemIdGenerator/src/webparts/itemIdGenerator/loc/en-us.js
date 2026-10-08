@@ -5,6 +5,6 @@ define([], function () {
     ConfigListTitleFieldLabel: 'Config list title',
     ConfigListTitleFieldDescription: 'List title on the site collection. Default is RequestNumberConfig.',
     RegisterWebhookUrlFieldLabel: 'RegisterWebhook URL',
-    RegisterWebhookUrlFieldDescription: 'Full Azure Function URL including the function key. Page editors can see this value.'
+    RegisterWebhookUrlFieldDescription: 'One RegisterWebhook URL for the organization, including the function key. Page editors can see this value.'
   };
 });

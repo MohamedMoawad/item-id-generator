@@ -17,7 +17,7 @@ public sealed record AppSettings(
         var title = Environment.GetEnvironmentVariable("NUMBERING_CONFIG_LIST_TITLE");
         return new AppSettings(
             Environment.GetEnvironmentVariable("AzureWebJobsStorage") ?? string.Empty,
-            Environment.GetEnvironmentVariable("NUMBERING_CONFIG_SITE_URL") ?? string.Empty,
+            string.Empty,
             string.IsNullOrWhiteSpace(title) ? DefaultListTitle : title.Trim(),
             Environment.GetEnvironmentVariable("SHAREPOINT_TENANT_ID") ?? string.Empty,
             Environment.GetEnvironmentVariable("SHAREPOINT_CLIENT_ID") ?? string.Empty,

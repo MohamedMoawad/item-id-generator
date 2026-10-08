@@ -25,7 +25,7 @@ public sealed class SharePointClient
         _http = http;
     }
 
-    public async Task<NumberingConfig?> GetEnabledConfigAsync(AppSettings settings, string listId)
+    public async Task<NumberingConfig?> GetEnabledConfigAsync(AppSettings settings, string webOrSiteUrl, string listId)
     {
         var guid = SharePointUrls.NormalizeGuid(listId);
         if (guid.Length == 0)
@@ -33,7 +33,7 @@ public sealed class SharePointClient
             throw new InvalidOperationException("Target list id must be a GUID.");
         }
 
-        var siteUrl = ConfigSiteUrl(settings);
+        var siteUrl = await ResolveConfigSiteAsync(settings, webOrSiteUrl);
         var url = SharePointUrls.BuildConfigItemsUrl(siteUrl, ConfigListTitle(settings));
         using var response = await SendAsync(settings, HttpMethod.Get, url, siteUrl, null, null, false);
         var text = await response.Content.ReadAsStringAsync();
@@ -53,7 +53,21 @@ public sealed class SharePointClient
             throw new InvalidOperationException($"More than one active numbering config targets list {guid}.");
         }
 
-        return matches.FirstOrDefault();
+        return matches.FirstOrDefault()?.WithConfigSite(siteUrl);
+    }
+
+    public async Task<string> ResolveConfigSiteAsync(AppSettings settings, string webOrSiteUrl)
+    {
+        var web = SharePointUrls.SiteRoot(webOrSiteUrl);
+        var url = $"{web}/_api/site?$select=Url";
+        using var response = await SendAsync(settings, HttpMethod.Get, url, web, null, null, false);
+        var text = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw HttpError(response, text, "site collection lookup");
+        }
+
+        return SharePointUrls.ReadSiteCollectionUrl(text, web);
     }
 
     public async Task<NumberingConfig?> GetConfigItemByIdAsync(AppSettings settings, int itemId)
@@ -73,7 +87,7 @@ public sealed class SharePointClient
         }
 
         using var document = JsonDocument.Parse(text);
-        return SharePointUrls.NormalizeConfigItem(document.RootElement);
+        return SharePointUrls.NormalizeConfigItem(document.RootElement)?.WithConfigSite(siteUrl);
     }
 
     public async Task<IReadOnlyList<int>> ListUnnumberedItemsAsync(AppSettings settings, NumberingConfig config, int? explicitItemId)
@@ -158,7 +172,10 @@ public sealed class SharePointClient
 
     public IConfigStore CreateConfigStore(AppSettings settings, NumberingConfig config)
     {
-        return new ConfigStore(this, settings, config.Id);
+        var scoped = string.IsNullOrWhiteSpace(config.ConfigSiteUrl)
+            ? settings
+            : settings with { ConfigSiteUrl = config.ConfigSiteUrl };
+        return new ConfigStore(this, scoped, config.Id);
     }
 
     public async Task<RegisteredWebhook> RegisterListWebhookAsync(AppSettings settings, NumberingConfig config)
@@ -395,10 +412,10 @@ public sealed class SharePointClient
         var siteUrl = settings.ConfigSiteUrl.Trim();
         if (siteUrl.Length == 0 || siteUrl.Contains('<', StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Set NUMBERING_CONFIG_SITE_URL to the site collection that contains RequestNumberConfig.");
+            throw new InvalidOperationException("The site collection URL is missing. RequestNumberConfig is read on the site collection that owns the list.");
         }
 
-        return SharePointUrls.AssertHttpsUrl(siteUrl, "NUMBERING_CONFIG_SITE_URL").GetLeftPart(UriPartial.Path).TrimEnd('/');
+        return SharePointUrls.SiteRoot(siteUrl);
     }
 
     private static string ConfigListTitle(AppSettings settings)

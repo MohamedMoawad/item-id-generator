@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.2.2.0** is named **Request number config**. Upload this file over the previous package in the app catalog and choose to replace it. Version 1.2.1 fixes column creation. Version 1.2.2 stores the RegisterWebhook URL with an OData 3 MERGE, because `SP.PropertyValues` rejects PATCH. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+Package version **1.3.0.0** is named **Request number config**. Upload this file over the previous package in the app catalog and choose to replace it. One Function App serves every site collection. You do not put a site collection name in Azure. Add the app to each site collection that should number lists, then set the formula in **Request number settings**. Version 1.3.0 stores the RegisterWebhook URL once for the organization. If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
@@ -21,7 +21,7 @@ Package version **1.2.2.0** is named **Request number config**. Upload this file
 5. Adding the app creates the list **RequestNumberConfig** on that site collection and adds missing columns the first time an owner opens a page.
 6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `RequestNumberConfig`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
-Paste the **RegisterWebhook** URL into that panel once. It is stored for the whole site collection. Each list keeps its own formula, column, and reset.
+Paste the **RegisterWebhook** URL into that panel once. A SharePoint administrator save stores it for every site collection. Each list keeps its own formula, column, and reset. Other site collections load that same URL. You do not repeat a site name.
 
 ## 2. Create a .NET Function App and upload the zip
 
@@ -36,10 +36,9 @@ Download [item-id-generator-func-net.zip](item-id-generator-func-net.zip) and ke
 
 In Microsoft Entra, before the webhook can write numbers:
 
-1. App registration with application permission **Sites.Selected**, and admin consent.
-2. Grant that app access to the site collection that holds `RequestNumberConfig` and to each target web.
-3. Create a client secret. Keep it out of git.
-4. Pick a long random string. That string is `SHAREPOINT_WEBHOOK_CLIENT_STATE`.
+1. App registration with SharePoint application permission **Sites.Manage.All**, and admin consent. That one consent covers every site collection. Do not use **Sites.Selected** when the app must number lists across the organization.
+2. Create a client secret. Keep it out of git.
+3. Pick a long random string. That string is `SHAREPOINT_WEBHOOK_CLIENT_STATE`.
 
 ### App settings
 
@@ -47,7 +46,6 @@ On the Function App, open **Settings** → **Environment variables** → **App s
 
 | Name | Value |
 | --- | --- |
-| `NUMBERING_CONFIG_SITE_URL` | `https://<tenant>.sharepoint.com/sites/<site>` |
 | `NUMBERING_CONFIG_LIST_TITLE` | `RequestNumberConfig` |
 | `SHAREPOINT_TENANT_ID` | Directory (tenant) id |
 | `SHAREPOINT_CLIENT_ID` | Application (client) id |
@@ -78,7 +76,7 @@ The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app
 
    `SPO_WEBHOOK_NOTIFICATION_URL` = `https://<function-app>.azurewebsites.net/api/spoWebhook?code=<that-key>`
 
-3. Open `RegisterWebhook` → **Get function URL** and copy it. That is the URL you paste into **Request number settings** in SharePoint.
+3. Open `RegisterWebhook` → **Get function URL** and copy it. Paste that URL once in **Request number settings**. A SharePoint administrator save stores it for every site collection. Do not add a site collection URL to the Function App.
 4. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save.
 
 `publish-function.ps1` creates a Node Function App and uploads the older Node zip. Use the portal steps above for the .NET package.

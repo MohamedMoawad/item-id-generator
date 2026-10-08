@@ -6,14 +6,16 @@ const {
   createSharePointDeps,
   getEnabledConfig,
   listUnnumberedItems,
+  resolveSiteCollectionUrl,
   writeNumberIfBlank
 } = require('./sharePointClient');
 
 function createNumberingGateway(env, fetchImpl = globalThis.fetch) {
   const deps = createSharePointDeps(env, fetchImpl);
   return {
-    async getEnabledConfig(listId) {
-      return getEnabledConfig(deps, listId);
+    async getEnabledConfig(siteUrl, listId) {
+      const siteCollection = await resolveSiteCollectionUrl(deps, siteUrl);
+      return getEnabledConfig(deps, listId, siteCollection);
     },
     async listUnnumbered(config, itemId) {
       return listUnnumberedItems(deps, config, itemId);

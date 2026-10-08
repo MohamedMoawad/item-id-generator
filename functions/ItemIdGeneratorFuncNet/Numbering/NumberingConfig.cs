@@ -7,6 +7,7 @@ public sealed class NumberingConfig
     public string Title { get; init; } = string.Empty;
     public string TargetListUrl { get; init; } = string.Empty;
     public string TargetSiteUrl { get; init; } = string.Empty;
+    public string ConfigSiteUrl { get; init; } = string.Empty;
     public string TargetListGuid { get; init; } = string.Empty;
     public string NumberColumnInternalName { get; init; } = string.Empty;
     public long CurrentCount { get; init; }
@@ -26,6 +27,29 @@ public sealed class NumberingConfig
             Title = Title,
             TargetListUrl = TargetListUrl,
             TargetSiteUrl = siteUrl,
+            ConfigSiteUrl = ConfigSiteUrl,
+            TargetListGuid = TargetListGuid,
+            NumberColumnInternalName = NumberColumnInternalName,
+            CurrentCount = CurrentCount,
+            Formula = Formula,
+            ResetPeriod = ResetPeriod,
+            LastResetDate = LastResetDate,
+            IsActive = IsActive,
+            PadLength = PadLength,
+            WebhookSubscriptionId = WebhookSubscriptionId
+        };
+    }
+
+    public NumberingConfig WithConfigSite(string siteUrl)
+    {
+        return new NumberingConfig
+        {
+            Id = Id,
+            Etag = Etag,
+            Title = Title,
+            TargetListUrl = TargetListUrl,
+            TargetSiteUrl = TargetSiteUrl,
+            ConfigSiteUrl = siteUrl,
             TargetListGuid = TargetListGuid,
             NumberColumnInternalName = NumberColumnInternalName,
             CurrentCount = CurrentCount,

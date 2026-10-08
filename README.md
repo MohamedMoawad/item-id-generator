@@ -10,7 +10,7 @@ Built packages are in [deploy/](deploy/README.md).
 
 | File | Use |
 | --- | --- |
-| [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | Upload to the app catalog, add the app to the site collection. That creates `RequestNumberConfig` and a **Request number settings** link on each list. |
+| [deploy/item-id-generator.sppkg](deploy/item-id-generator.sppkg) | Upload to the app catalog, then add the app to each site collection. That creates `RequestNumberConfig` and a **Request number settings** link on each list. One Function App covers the organization. |
 | [deploy/item-id-generator-func-net.zip](deploy/item-id-generator-func-net.zip) | .NET 8 isolated webhook. Create a new Function App with stack **.NET 8 Isolated**, then Zip Push Deploy this file. Steps are in [deploy/README.md](deploy/README.md). |
 
 Saving an active row in the web part registers the list webhook. That subscription is what watches for new items. Details are in [deploy/README.md](deploy/README.md).
@@ -78,7 +78,7 @@ This is not an npm workspace. SPFx Heft breaks when dependencies are hoisted.
 ## Local development
 
 1. Create `RequestNumberConfig` with the web part or `schema/provision-numbering-config.ps1`. Add a single-line text column such as `RequestNumber` on each target list.
-2. Register an Entra application with application permission **Sites.Selected**, admin-consent it, and grant that app access to the site collection and to each target web. Copy `functions/ItemIdGeneratorFunc/local.settings.json.example` to `local.settings.json` and fill the placeholders locally. Do not commit that file.
+2. Register an Entra application with SharePoint application permission **Sites.Manage.All** and admin-consent it once. That principal can number lists on every site collection. Copy `functions/ItemIdGeneratorFunc/local.settings.json.example` to `local.settings.json` and fill the placeholders locally. Do not commit that file. Do not set a site collection URL.
 3. Start Azurite so the queue and the lease container have a storage account (`UseDevelopmentStorage=true`).
 4. From `functions/ItemIdGeneratorFunc`: `npm install`, `npm test`, then `npm start`.
 5. Put the `spoWebhook` URL, including `?code=<function-key>`, in `SPO_WEBHOOK_NOTIFICATION_URL`. Put the same style of URL for `RegisterWebhook` in the web part property pane. Allow the SharePoint origin in Function CORS. The example `local.settings.json` sets `Host.CORS` for local runs.

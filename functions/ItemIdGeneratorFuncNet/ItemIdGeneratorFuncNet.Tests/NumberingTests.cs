@@ -118,6 +118,7 @@ public class NumberingTests
             null);
         Assert.Equal(new[] { 3, 8 }, issued.Select(item => item.ItemId).ToArray());
         Assert.Equal(new long[] { 1, 2 }, issued.Select(item => item.Sequence).ToArray());
+        Assert.Equal("https://contoso.sharepoint.com/sites/ops", gateway.RequestedSite);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(
             $$"""{"listId":"{{ListId}}"}""",
@@ -128,7 +129,7 @@ public class NumberingTests
 
         var idle = new FakeGateway { Config = null };
         var none = await processor.ProcessAsync(
-            $$"""{"listId":"{{ListId}}"}""",
+            $$"""{"siteUrl":"https://contoso.sharepoint.com/sites/hr","listId":"{{ListId}}"}""",
             idle,
             new FakeLease(true),
             () => October,
@@ -226,6 +227,7 @@ public class NumberingTests
 
     private sealed class FakeGateway : INumberingGateway
     {
+        public string RequestedSite { get; private set; } = string.Empty;
         public NumberingConfig? Config { get; set; } = new NumberingConfig
         {
             Id = 7,
@@ -247,7 +249,11 @@ public class NumberingTests
             _store = new MemoryStore(Config!);
         }
 
-        public Task<NumberingConfig?> GetEnabledConfigAsync(string listId) => Task.FromResult(Config);
+        public Task<NumberingConfig?> GetEnabledConfigAsync(string siteUrl, string listId)
+        {
+            RequestedSite = siteUrl;
+            return Task.FromResult(Config);
+        }
 
         public Task<IReadOnlyList<int>> ListUnnumberedAsync(NumberingConfig config, int? itemId)
         {

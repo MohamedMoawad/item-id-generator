@@ -60,6 +60,42 @@ public static class SharePointUrls
         return AssertHttpsUrl(siteUrl, "SharePoint site URL").GetLeftPart(UriPartial.Path).TrimEnd('/');
     }
 
+    public static string ReadSiteCollectionUrl(string? json, string fallbackWebUrl)
+    {
+        var fallback = SiteRoot(fallbackWebUrl);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return fallback;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var url = SiteUrlValue(document.RootElement);
+            return url.Length == 0 ? fallback : SiteRoot(url);
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
+    }
+
+    private static string SiteUrlValue(JsonElement item)
+    {
+        var direct = FirstString(item, "Url", "url");
+        if (direct.Length > 0)
+        {
+            return direct;
+        }
+
+        if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("d", out var nested))
+        {
+            return FirstString(nested, "Url", "url");
+        }
+
+        return string.Empty;
+    }
+
     public static string EscapeODataString(string value)
     {
         return value.Replace("'", "''", StringComparison.Ordinal);

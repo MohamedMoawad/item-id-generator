@@ -10,7 +10,8 @@ const {
   deriveWebFromListUrl,
   isBlankNumber,
   normalizeConfigItem,
-  normalizeGuid
+  normalizeGuid,
+  readSiteCollectionUrl
 } = require('./sharePointUrls');
 
 const DEFAULT_CONFIG_LIST_TITLE = 'RequestNumberConfig';
@@ -23,12 +24,16 @@ function configListTitle(env) {
   return title;
 }
 
-function configSiteUrl(env) {
-  const siteUrl = (env.NUMBERING_CONFIG_SITE_URL || '').trim();
-  if (!siteUrl || siteUrl.indexOf('<') >= 0) {
-    throw new Error('Set NUMBERING_CONFIG_SITE_URL to the site collection that contains RequestNumberConfig.');
+function requireHttpsSite(siteUrl) {
+  const value = (siteUrl || '').trim();
+  if (!value || value.indexOf('<') >= 0) {
+    throw new Error('The site collection URL is required. It comes from the list webhook, not from a Function App setting.');
   }
-  return assertHttpsUrl(siteUrl, 'NUMBERING_CONFIG_SITE_URL').toString().replace(/\/+$/, '');
+  return assertHttpsUrl(value, 'SharePoint site URL').toString().replace(/\/+$/, '');
+}
+
+function configSiteUrl(env, explicit) {
+  return requireHttpsSite(explicit || env.NUMBERING_CONFIG_SITE_URL);
 }
 
 function assertAppIdentity(env) {
@@ -113,16 +118,29 @@ function collectionItems(payload) {
   return [];
 }
 
-async function getEnabledConfig(deps, listId) {
+async function resolveSiteCollectionUrl(deps, webOrSiteUrl) {
+  const web = requireHttpsSite(webOrSiteUrl);
+  const response = await deps.fetchImpl(`${web}/_api/site?$select=Url`, {
+    method: 'GET',
+    headers: await sharePointHeaders(deps, web)
+  });
+  const text = await readBody(response);
+  if (!response.ok) {
+    throw httpError(response, text, 'site collection lookup');
+  }
+  return readSiteCollectionUrl(text ? JSON.parse(text) : {}, web);
+}
+
+async function getEnabledConfig(deps, listId, siteUrl) {
   const guid = normalizeGuid(listId);
   if (!guid) {
     throw new Error('Target list id must be a GUID.');
   }
-  const siteUrl = configSiteUrl(deps.env);
-  const url = buildConfigItemsUrl(siteUrl, configListTitle(deps.env));
+  const resolved = configSiteUrl(deps.env, siteUrl);
+  const url = buildConfigItemsUrl(resolved, configListTitle(deps.env));
   const response = await deps.fetchImpl(url, {
     method: 'GET',
-    headers: await sharePointHeaders(deps, siteUrl)
+    headers: await sharePointHeaders(deps, resolved)
   });
   const text = await readBody(response);
   if (!response.ok) {
@@ -134,15 +152,19 @@ async function getEnabledConfig(deps, listId) {
   if (matches.length > 1) {
     throw new Error(`More than one active numbering config targets list ${guid}.`);
   }
-  return matches[0];
+  const match = matches[0];
+  if (match) {
+    match.configSiteUrl = resolved;
+  }
+  return match;
 }
 
-async function getConfigItemById(deps, itemId) {
-  const siteUrl = configSiteUrl(deps.env);
-  const url = buildConfigItemUrl(siteUrl, configListTitle(deps.env), itemId);
+async function getConfigItemById(deps, itemId, siteUrl) {
+  const resolved = configSiteUrl(deps.env, siteUrl);
+  const url = buildConfigItemUrl(resolved, configListTitle(deps.env), itemId);
   const response = await deps.fetchImpl(url, {
     method: 'GET',
-    headers: await sharePointHeaders(deps, siteUrl)
+    headers: await sharePointHeaders(deps, resolved)
   });
   const text = await readBody(response);
   if (response.status === 404) {
@@ -151,15 +173,19 @@ async function getConfigItemById(deps, itemId) {
   if (!response.ok) {
     throw httpError(response, text, 'config item read');
   }
-  return normalizeConfigItem(JSON.parse(text));
+  const item = normalizeConfigItem(JSON.parse(text));
+  if (item) {
+    item.configSiteUrl = resolved;
+  }
+  return item;
 }
 
-async function mergeConfigItem(deps, itemId, etag, patch) {
-  const siteUrl = configSiteUrl(deps.env);
-  const url = buildConfigItemUrl(siteUrl, configListTitle(deps.env), itemId);
+async function mergeConfigItem(deps, itemId, etag, patch, siteUrl) {
+  const resolved = configSiteUrl(deps.env, siteUrl);
+  const url = buildConfigItemUrl(resolved, configListTitle(deps.env), itemId);
   const response = await deps.fetchImpl(url, {
     method: 'POST',
-    headers: await sharePointHeaders(deps, siteUrl, {
+    headers: await sharePointHeaders(deps, resolved, {
       'Content-Type': 'application/json;odata=nometadata',
       'IF-MATCH': etag,
       'X-HTTP-Method': 'MERGE'
@@ -179,12 +205,13 @@ async function mergeConfigItem(deps, itemId, etag, patch) {
 }
 
 function createConfigStore(deps, config) {
+  const siteUrl = config && config.configSiteUrl;
   return {
     async read() {
-      return getConfigItemById(deps, config.id);
+      return getConfigItemById(deps, config.id, siteUrl);
     },
     async compareAndSwap(etag, patch) {
-      return mergeConfigItem(deps, config.id, etag, patch);
+      return mergeConfigItem(deps, config.id, etag, patch, siteUrl);
     }
   };
 }
@@ -273,12 +300,12 @@ async function writeNumberIfBlank(deps, config, itemId, code) {
   throw new Error(`Could not write the request number on item ${itemId}.`);
 }
 
-async function mergeConfigFields(deps, itemId, etag, fields) {
-  const siteUrl = configSiteUrl(deps.env);
-  const url = buildConfigItemUrl(siteUrl, configListTitle(deps.env), itemId);
+async function mergeConfigFields(deps, itemId, etag, fields, siteUrl) {
+  const resolved = configSiteUrl(deps.env, siteUrl || undefined);
+  const url = buildConfigItemUrl(resolved, configListTitle(deps.env), itemId);
   const response = await deps.fetchImpl(url, {
     method: 'POST',
-    headers: await sharePointHeaders(deps, siteUrl, {
+    headers: await sharePointHeaders(deps, resolved, {
       'Content-Type': 'application/json;odata=nometadata',
       'IF-MATCH': etag || '*',
       'X-HTTP-Method': 'MERGE'
@@ -341,7 +368,7 @@ async function registerListWebhook(deps, config) {
   }
   const saved = await mergeConfigFields(deps, config.id, config.etag, {
     WebhookSubscriptionId: String(subscriptionId)
-  });
+  }, config.configSiteUrl);
   if (!saved.ok) {
     throw new Error('The webhook was created but the config row changed. Register it again.');
   }
@@ -362,6 +389,7 @@ module.exports = {
   createSharePointDeps,
   getConfigItemById,
   getEnabledConfig,
+  resolveSiteCollectionUrl,
   listUnnumberedItems,
   mergeConfigFields,
   mergeConfigItem,

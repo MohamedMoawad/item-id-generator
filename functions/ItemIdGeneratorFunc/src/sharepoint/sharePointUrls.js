@@ -57,6 +57,17 @@ function siteRoot(siteUrl) {
   return assertHttpsUrl(siteUrl, 'SharePoint site URL').toString().replace(/\/+$/, '');
 }
 
+function readSiteCollectionUrl(payload, fallbackWebUrl) {
+  const fallback = siteRoot(fallbackWebUrl);
+  const record = payload && typeof payload === 'object' ? payload : {};
+  const nested = record.d && typeof record.d === 'object' ? record.d : {};
+  const url = record.Url || record.url || nested.Url || nested.url || '';
+  if (typeof url === 'string' && url.trim()) {
+    return siteRoot(url);
+  }
+  return fallback;
+}
+
 function escapeODataString(value) {
   return String(value).replace(/'/g, "''");
 }
@@ -164,5 +175,6 @@ module.exports = {
   listIdFromResource,
   normalizeConfigItem,
   normalizeGuid,
-  readEtag
+  readEtag,
+  readSiteCollectionUrl
 };

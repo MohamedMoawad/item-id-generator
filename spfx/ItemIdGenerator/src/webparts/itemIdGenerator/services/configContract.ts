@@ -258,6 +258,66 @@ export function buildAllPropertiesUrl(siteAbsoluteUrl: string): string {
   return `${trimSlash(siteAbsoluteUrl)}/_api/web/AllProperties`;
 }
 
+export function buildStorageEntityUrl(siteAbsoluteUrl: string): string {
+  return `${trimSlash(siteAbsoluteUrl)}/_api/web/GetStorageEntity('${REGISTER_WEBHOOK_PROPERTY}')`;
+}
+
+export function buildTenantSettingsUrl(siteAbsoluteUrl: string): string {
+  return `${trimSlash(siteAbsoluteUrl)}/_api/SP_TenantSettings_Current`;
+}
+
+export function readStorageEntityValue(payload: unknown): string {
+  const record = asRecord(payload);
+  if (record['odata.null'] === true) {
+    return '';
+  }
+  const direct = textValue(record.Value);
+  if (direct) {
+    return direct;
+  }
+  const nested = asRecord(record.d);
+  const method = asRecord(nested.GetStorageEntity);
+  return textValue(method.Value) || textValue(nested.Value);
+}
+
+export function readCorporateCatalogUrl(payload: unknown): string {
+  const record = asRecord(payload);
+  const nested = asRecord(record.d);
+  const url = textValue(record.CorporateCatalogUrl) || textValue(nested.CorporateCatalogUrl);
+  if (!url || url.indexOf('https://') !== 0) {
+    return '';
+  }
+  return trimSlash(url);
+}
+
+export function buildSetStorageEntity(catalogSiteUrl: string, value: string): { url: string; headers: { [key: string]: string }; body: string } {
+  return {
+    url: `${trimSlash(catalogSiteUrl)}/_api/web/SetStorageEntity`,
+    headers: {
+      Accept: 'application/json;odata=verbose',
+      'Content-Type': 'application/json;odata=verbose',
+      'OData-Version': '3.0'
+    },
+    body: JSON.stringify({
+      entity: {
+        __metadata: { type: 'SP.AppKeyValue' },
+        Key: REGISTER_WEBHOOK_PROPERTY,
+        Value: value,
+        Description: 'Organization RegisterWebhook URL for request numbers',
+        Comment: 'Used by every site collection where the app is added'
+      }
+    })
+  };
+}
+
+function asRecord(value: unknown): { [key: string]: unknown } {
+  return value && typeof value === 'object' ? value as { [key: string]: unknown } : {};
+}
+
+function textValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 // SP.PropertyValues accepts MERGE only under OData 3. SPHttpClient v1 defaults to
 // OData 4, which turns MERGE into PATCH and SharePoint returns HTTP 400.
 export function buildPropertyBagMerge(propertyName: string, value: string): { headers: { [key: string]: string }; body: string } {

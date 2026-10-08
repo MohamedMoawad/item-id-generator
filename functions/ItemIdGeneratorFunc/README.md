@@ -17,7 +17,7 @@ Copy `local.settings.json.example` to `local.settings.json`. Placeholders only. 
 | Name | Purpose |
 | --- | --- |
 | `AzureWebJobsStorage` | Queue and blob leases. Local value `UseDevelopmentStorage=true` needs Azurite. |
-| `NUMBERING_CONFIG_SITE_URL` | Fallback site collection for `RequestNumberConfig`. `RegisterWebhook` can override it with `configSiteUrl`. |
+| `configSiteUrl` | Sent by the SharePoint panel. The worker reads `RequestNumberConfig` on that site collection. There is no Function App setting for a site URL. |
 | `NUMBERING_CONFIG_LIST_TITLE` | Default `RequestNumberConfig`. |
 | `SHAREPOINT_TENANT_ID` | Directory (tenant) id. |
 | `SHAREPOINT_CLIENT_ID` | Application (client) id. |
@@ -28,7 +28,7 @@ Copy `local.settings.json.example` to `local.settings.json`. Placeholders only. 
 
 `Host.CORS` in the example allows the SharePoint origin so the browser can call `RegisterWebhook`. `spoWebhook` is called by SharePoint, not by the browser, so it does not need CORS. Set the same origin on the Function App in Azure (`az functionapp cors add`).
 
-The app needs application permission **Sites.Selected**, admin consent, and site permission on the config site collection and on each target web.
+The app needs SharePoint application permission **Sites.Manage.All** and admin consent once. That covers every site collection. Do not set a site collection URL on the Function App.
 
 ## spoWebhook
 
@@ -45,7 +45,7 @@ A change notification has `value[]` with `resource`, `siteUrl`, `clientState`, a
 ## processRequestNumber
 
 1. Acquire blob lease `list-{guid}` in `numbering-locks` for 60 seconds. A 409 throws so the message retries.
-2. Load the one active `RequestNumberConfig` row whose `TargetListGuid` matches. Zero rows is an ack. Two rows is an error.
+2. Resolve the site collection from the webhook `siteUrl`, then load the one active `RequestNumberConfig` row whose `TargetListGuid` matches. Zero rows is an ack. Two rows is an error.
 3. Read the latest 200 items. Number those whose number column is blank, lowest id first. A message that includes `itemId` numbers only that item.
 4. MERGE `CurrentCount` and `LastResetDate` with `If-Match`. HTTP 412 retries, up to 200 attempts.
 5. MERGE the number onto the item with its own ETag. If the column is already filled, skip it. A crash between steps 4 and 5 leaves a gap.

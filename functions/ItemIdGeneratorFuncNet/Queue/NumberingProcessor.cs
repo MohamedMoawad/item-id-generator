@@ -10,7 +10,7 @@ namespace ItemIdGenerator.Queue;
 
 public interface INumberingGateway
 {
-    Task<NumberingConfig?> GetEnabledConfigAsync(string listId);
+    Task<NumberingConfig?> GetEnabledConfigAsync(string siteUrl, string listId);
     Task<IReadOnlyList<int>> ListUnnumberedAsync(NumberingConfig config, int? itemId);
     Task<IssuedCode> ReserveNextCodeAsync(NumberingConfig config, DateTimeOffset now);
     Task<bool> WriteNumberIfBlankAsync(NumberingConfig config, int itemId, string code);
@@ -27,9 +27,9 @@ public sealed class SharePointNumberingGateway : INumberingGateway
         _settings = settings;
     }
 
-    public Task<NumberingConfig?> GetEnabledConfigAsync(string listId)
+    public Task<NumberingConfig?> GetEnabledConfigAsync(string siteUrl, string listId)
     {
-        return _sharePoint.GetEnabledConfigAsync(_settings, listId);
+        return _sharePoint.GetEnabledConfigAsync(_settings, siteUrl, listId);
     }
 
     public Task<IReadOnlyList<int>> ListUnnumberedAsync(NumberingConfig config, int? itemId)
@@ -39,7 +39,10 @@ public sealed class SharePointNumberingGateway : INumberingGateway
 
     public Task<IssuedCode> ReserveNextCodeAsync(NumberingConfig config, DateTimeOffset now)
     {
-        return IssueNextCode.ReserveAsync(_sharePoint.CreateConfigStore(_settings, config), now);
+        var scoped = string.IsNullOrWhiteSpace(config.ConfigSiteUrl)
+            ? _settings
+            : _settings with { ConfigSiteUrl = config.ConfigSiteUrl };
+        return IssueNextCode.ReserveAsync(_sharePoint.CreateConfigStore(scoped, config), now);
     }
 
     public Task<bool> WriteNumberIfBlankAsync(NumberingConfig config, int itemId, string code)
@@ -66,7 +69,12 @@ public sealed class NumberingProcessor
 
         try
         {
-            var config = await gateway.GetEnabledConfigAsync(work.ListId);
+            if (string.IsNullOrWhiteSpace(work.SiteUrl))
+            {
+                throw new InvalidOperationException("Queue message siteUrl is required so RequestNumberConfig can be read on that site collection.");
+            }
+
+            var config = await gateway.GetEnabledConfigAsync(work.SiteUrl, work.ListId);
             if (config is null)
             {
                 logger?.LogInformation("No active numbering config for list {ListId}.", work.ListId);

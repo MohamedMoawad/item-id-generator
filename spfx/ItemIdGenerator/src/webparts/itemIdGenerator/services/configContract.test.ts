@@ -2,7 +2,11 @@ import {
   buildCreateBody,
   buildGetListUrl,
   buildPropertyBagMerge,
+  buildSetStorageEntity,
+  buildStorageEntityUrl,
   buildListAbsoluteUrl,
+  readCorporateCatalogUrl,
+  readStorageEntityValue,
   buildListItemsUrl,
   buildRegisterWebhookBody,
   buildUpdateBody,
@@ -151,5 +155,22 @@ describe('RequestNumberConfig contract', () => {
     expect(merge.headers['Content-Type']).toContain('odata=verbose');
     expect(body.__metadata.type).toBe('SP.PropertyValues');
     expect(body.RequestNumberRegisterWebhookUrl).toContain('/api/RegisterWebhook');
+  });
+
+  it('reads the organization webhook URL from the app catalog', () => {
+    const webhook = 'https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc';
+    expect(readStorageEntityValue({ Value: webhook })).toBe(webhook);
+    expect(readStorageEntityValue({ d: { GetStorageEntity: { Value: webhook } } })).toBe(webhook);
+    expect(readStorageEntityValue({ 'odata.null': true })).toBe('');
+    expect(readCorporateCatalogUrl({ CorporateCatalogUrl: 'https://contoso.sharepoint.com/sites/appcatalog/' })).toBe(
+      'https://contoso.sharepoint.com/sites/appcatalog'
+    );
+    expect(readCorporateCatalogUrl({ d: { CorporateCatalogUrl: 'http://contoso.sharepoint.com/sites/appcatalog' } })).toBe('');
+    const stored = buildSetStorageEntity('https://contoso.sharepoint.com/sites/appcatalog', webhook);
+    const entity = JSON.parse(stored.body) as { entity: { __metadata: { type: string }; Key: string; Value: string } };
+    expect(stored.url).toContain('/sites/appcatalog/_api/web/SetStorageEntity');
+    expect(entity.entity.__metadata.type).toBe('SP.AppKeyValue');
+    expect(entity.entity.Key).toBe('RequestNumberRegisterWebhookUrl');
+    expect(buildStorageEntityUrl('https://contoso.sharepoint.com/sites/ops')).toContain("GetStorageEntity('RequestNumberRegisterWebhookUrl')");
   });
 });

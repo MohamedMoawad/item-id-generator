@@ -21,7 +21,10 @@ async function processNumberingMessage(message, context, dependencies) {
   }
 
   try {
-    const config = await dependencies.gateway.getEnabledConfig(work.listId);
+    if (!work.siteUrl) {
+      throw new Error('Queue message siteUrl is required so RequestNumberConfig can be read on that site collection.');
+    }
+    const config = await dependencies.gateway.getEnabledConfig(work.siteUrl, work.listId);
     if (!config) {
       log(`No active numbering config for list ${work.listId}.`);
       return { issued: [] };

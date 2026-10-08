@@ -2,6 +2,9 @@ import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
   buildAllPropertiesUrl,
   buildPropertyBagMerge,
+  buildSetStorageEntity,
+  buildStorageEntityUrl,
+  buildTenantSettingsUrl,
   buildCreateBody,
   buildCreateFieldUrl,
   buildCreateItemUrl,
@@ -16,9 +19,12 @@ import {
   buildUpdateBody,
   buildUpdateItemUrl,
   hasPermissionFlag,
+  isPlaceholderSetting,
   IConfigDraft,
   ISharePointConfigItem,
   mapConfigRow,
+  readCorporateCatalogUrl,
+  readStorageEntityValue,
   PERMISSION_EDIT_LIST_ITEMS,
   REGISTER_WEBHOOK_PROPERTY,
   sharePointError
@@ -252,6 +258,10 @@ export async function canEditConfigList(
 }
 
 export async function readRegisterWebhookUrl(spHttpClient: SPHttpClient, siteAbsoluteUrl: string): Promise<string> {
+  const organization = await readOrganizationWebhookUrl(spHttpClient, siteAbsoluteUrl);
+  if (organization) {
+    return organization;
+  }
   const response = await spHttpClient.get(
     buildAllPropertiesUrl(siteAbsoluteUrl),
     SPHttpClient.configurations.v1,
@@ -276,7 +286,8 @@ export async function saveRegisterWebhookUrl(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
   registerWebhookUrl: string
-): Promise<void> {
+): Promise<{ organization: boolean }> {
+  const organization = await trySaveOrganizationWebhookUrl(spHttpClient, siteAbsoluteUrl, registerWebhookUrl.trim());
   const merge = buildPropertyBagMerge(REGISTER_WEBHOOK_PROPERTY, registerWebhookUrl.trim());
   const response = await spHttpClient.post(
     buildAllPropertiesUrl(siteAbsoluteUrl),
@@ -291,6 +302,53 @@ export async function saveRegisterWebhookUrl(
       sharePointError(response.status, await response.text(), 'site properties'),
       response.status
     );
+  }
+  return { organization };
+}
+
+async function readOrganizationWebhookUrl(spHttpClient: SPHttpClient, siteAbsoluteUrl: string): Promise<string> {
+  try {
+    const response = await spHttpClient.get(
+      buildStorageEntityUrl(siteAbsoluteUrl),
+      SPHttpClient.configurations.v1,
+      { headers: { Accept: 'application/json;odata=verbose' } }
+    );
+    if (!response.ok) {
+      return '';
+    }
+    const value = readStorageEntityValue(parseJson<unknown>(await response.text()));
+    return value && !isPlaceholderSetting(value) ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+async function trySaveOrganizationWebhookUrl(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  registerWebhookUrl: string
+): Promise<boolean> {
+  try {
+    const settings = await spHttpClient.get(
+      buildTenantSettingsUrl(siteAbsoluteUrl),
+      SPHttpClient.configurations.v1,
+      { headers: { Accept: 'application/json;odata=verbose' } }
+    );
+    if (!settings.ok) {
+      return false;
+    }
+    const catalog = readCorporateCatalogUrl(parseJson<unknown>(await settings.text()));
+    if (!catalog) {
+      return false;
+    }
+    const request = buildSetStorageEntity(catalog, registerWebhookUrl);
+    const response = await spHttpClient.post(request.url, SPHttpClient.configurations.v1, {
+      headers: request.headers,
+      body: request.body
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 

@@ -89,7 +89,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          These settings are stored on {listTitle} in this site collection. Open this link again from the list to change them.
+          These settings are stored on {listTitle} for this list only. The same app numbers every site collection where it is added. You do not enter a site name.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -163,7 +163,7 @@ export default class RequestNumberSettingsPanel
           value={this.state.registerWebhookUrl}
           onChange={this._onWebhookChange}
           disabled={busy}
-          description="One URL for this site collection. Include the function key. Saved with the list settings."
+          description="Paste this once for the organization. Include the function key. A SharePoint administrator save stores it for every site collection."
         />
         {draft.id !== undefined && (
           <TextField label="Current count" value={String(draft.currentCount || 0)} disabled={true} />
@@ -264,20 +264,26 @@ export default class RequestNumberSettingsPanel
       listTitle,
       this.state.draft
     );
-    let warningMessage = '';
+    const warnings: string[] = [];
     const webhookUrl = this.state.registerWebhookUrl.trim();
     if (!isPlaceholderSetting(webhookUrl)) {
       try {
-        await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, webhookUrl);
+        const saved = await saveRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl, webhookUrl);
+        if (!saved.organization) {
+          warnings.push('The URL is saved on this site collection. A SharePoint administrator should save it once so every site collection uses the same RegisterWebhook URL.');
+        }
       } catch (error) {
-        warningMessage = `Saved the list settings. The RegisterWebhook URL was not stored. ${messageOf(error)}`;
+        warnings.push(`Saved the list settings. The RegisterWebhook URL was not stored. ${messageOf(error)}`);
       }
     }
     const registration = await this._registerIfActive(this.state.draft, itemId, webhookUrl);
+    if (registration.warningMessage) {
+      warnings.push(registration.warningMessage);
+    }
     this.setState({
       saving: false,
       statusMessage: registration.statusMessage,
-      warningMessage: warningMessage || registration.warningMessage
+      warningMessage: warnings.join(' ')
     });
     await this._load();
   }
