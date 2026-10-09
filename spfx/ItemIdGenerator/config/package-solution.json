@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Feature",
     "id": "a4a4dfed-37c0-4073-bef5-80c771fc4050",
-    "version": "1.10.0.0",
+    "version": "1.11.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -30,7 +30,7 @@
         "title": "AutoGen Feature",
         "description": "Creates AutoGenFeatureConfiguration and adds Autogen Setting to each list.",
         "id": "9be73e47-2334-4e5f-8e5a-394e668e3520",
-        "version": "1.10.0.0",
+        "version": "1.11.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

@@ -10,7 +10,7 @@
         }
       ]
     },
-    "request-number-settings-command-set": {
+    "autogen-setting-command-set": {
       "components": [
         {
           "entrypoint": "./lib/extensions/requestNumberSettings/RequestNumberSettingsCommandSet.js",
