@@ -413,7 +413,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
       }
     }
     return {
-      statusMessage: 'Saved the rule. Open the list and add an item. Refresh the list to see the number.',
+      statusMessage: 'Saved the rule. Open the list and add an item. The number appears by itself.',
       warningMessage: ''
     };
   }

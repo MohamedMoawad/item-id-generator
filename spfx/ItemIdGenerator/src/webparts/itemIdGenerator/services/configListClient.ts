@@ -229,29 +229,44 @@ export async function ensureTargetNumberColumn(
   const existing = await spHttpClient.get(fieldUrl, SPHttpClient.configurations.v1, {
     headers: { Accept: 'application/json;odata=nometadata' }
   });
-  if (existing.ok) {
-    return;
-  }
-  const schema = `<Field Type="Text" Name="${name}" StaticName="${name}" DisplayName="${name}" />`;
-  const response = await spHttpClient.post(
-    `${web}/_api/web/lists(guid'${guid}')/fields/CreateFieldAsXml`,
-    SPHttpClient.configurations.v1,
-    {
-      headers: fieldHeaders,
-      body: JSON.stringify(buildCreateFieldBody(schema))
+  if (!existing.ok) {
+    const schema = `<Field Type="Text" Name="${name}" StaticName="${name}" DisplayName="${name}" />`;
+    const response = await spHttpClient.post(
+      `${web}/_api/web/lists(guid'${guid}')/fields/CreateFieldAsXml`,
+      SPHttpClient.configurations.v1,
+      {
+        headers: fieldHeaders,
+        body: JSON.stringify(buildCreateFieldBody(schema))
+      }
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      if (!(response.status === 400 && /already exists|duplicate/i.test(detail))) {
+        throw new ConfigListRequestError(
+          sharePointError(response.status, detail, name),
+          response.status
+        );
+      }
     }
+  }
+  await addFieldToDefaultView(spHttpClient, web, guid, name);
+}
+
+async function addFieldToDefaultView(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  internalName: string
+): Promise<void> {
+  const response = await spHttpClient.post(
+    `${webAbsoluteUrl}/_api/web/lists(guid'${listGuid}')/DefaultView/ViewFields/AddViewField('${internalName}')`,
+    SPHttpClient.configurations.v1,
+    { headers: { Accept: 'application/json;odata=verbose' } }
   );
   if (response.ok) {
     return;
   }
-  const detail = await response.text();
-  if (response.status === 400 && /already exists|duplicate/i.test(detail)) {
-    return;
-  }
-  throw new ConfigListRequestError(
-    sharePointError(response.status, detail, name),
-    response.status
-  );
+  await response.text();
 }
 
 export async function connectConfiguredList(

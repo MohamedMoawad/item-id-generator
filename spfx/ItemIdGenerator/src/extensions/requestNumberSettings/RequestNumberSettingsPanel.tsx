@@ -85,7 +85,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          Set the formula and save. Add an item on this list. The next number is written into the number column. Refresh the list if it is still blank.
+          Set the formula and save. The next time someone adds an item, the number appears on the list by itself.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -251,7 +251,7 @@ export default class RequestNumberSettingsPanel
       this.state.draft
     );
     let statusMessage = this.state.draft.isActive
-      ? 'Saved. Add an item, then refresh this list. The number appears in the number column.'
+      ? 'Saved. Add an item. The number appears on the list by itself.'
       : 'Saved the settings for this list. Numbering is turned off.';
     let warningMessage = '';
     if (this.state.draft.isActive) {
@@ -264,8 +264,8 @@ export default class RequestNumberSettingsPanel
           webUrl,
           this.state.draft.targetListGuid
         );
-        if (written > 0) {
-          statusMessage = `Saved. ${written} item${written === 1 ? '' : 's'} received a number. Refresh the list to see them.`;
+        if (written.length > 0) {
+          statusMessage = `Saved. ${written.length} item${written.length === 1 ? '' : 's'} received a number.`;
         }
       } catch (error) {
         warningMessage = messageOf(error);

@@ -36,29 +36,35 @@ interface IListItemRow {
   [key: string]: unknown;
 }
 
+export interface IAssignedNumber {
+  itemId: number;
+  fieldName: string;
+  code: string;
+}
+
 export async function numberBlankItems(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
   configListTitle: string,
   webAbsoluteUrl: string,
   listGuid: string
-): Promise<number> {
+): Promise<IAssignedNumber[]> {
   const guid = normalizeGuid(listGuid);
   if (!guid) {
-    return 0;
+    return [];
   }
   const rows = await loadRows(spHttpClient, siteAbsoluteUrl, configListTitle);
   const config = findConfigForList(rows, guid);
   if (!config || !config.isActive || config.id === undefined) {
-    return 0;
+    return [];
   }
   const fieldName = config.numberColumnInternalName.trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldName)) {
-    return 0;
+    return [];
   }
   const items = await readRecentItems(spHttpClient, webAbsoluteUrl, guid, fieldName);
   const blanks = items.filter((item) => item.Id !== undefined && isBlankNumber(item[fieldName])).slice(0, 20);
-  let written = 0;
+  const assigned: IAssignedNumber[] = [];
   for (const item of blanks) {
     const code = await reserveAndWrite(
       spHttpClient,
@@ -73,9 +79,9 @@ export async function numberBlankItems(
     if (!code) {
       break;
     }
-    written += 1;
+    assigned.push({ itemId: item.Id as number, fieldName, code });
   }
-  return written;
+  return assigned;
 }
 
 async function reserveAndWrite(
@@ -88,6 +94,10 @@ async function reserveAndWrite(
   fieldName: string,
   itemId: number
 ): Promise<string | undefined> {
+  const currentValue = await readItemValue(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName);
+  if (currentValue === undefined || !isBlankNumber(currentValue)) {
+    return undefined;
+  }
   for (let attempt = 1; attempt <= 8; attempt += 1) {
     const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, configItemId);
     if (!current || !isActiveValue(current.IsActive) || !current.Formula) {
@@ -144,6 +154,22 @@ async function readRecentItems(
   }
   const payload = await response.json() as { value?: IListItemRow[] };
   return payload.value || [];
+}
+
+async function readItemValue(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  itemId: number,
+  fieldName: string
+): Promise<unknown> {
+  const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})?$select=${fieldName}`;
+  const response = await spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: metadataHeaders });
+  if (!response.ok) {
+    return undefined;
+  }
+  const payload = await response.json() as IListItemRow;
+  return payload[fieldName];
 }
 
 async function readCounter(

@@ -1,9 +1,10 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { BaseListViewCommandSet, IListViewCommandSetExecuteEventParameters } from '@microsoft/sp-listview-extensibility';
-import { DEFAULT_CONFIG_LIST_TITLE, buildListAbsoluteUrl, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
-import { connectConfiguredList } from '../../webparts/itemIdGenerator/services/configListClient';
-import { numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
+import { DEFAULT_CONFIG_LIST_TITLE, buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
+import { connectConfiguredList, ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
+import { clickListRefresh, gridEditIsOpen, paintNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
 export interface IRequestNumberSettingsCommandSetProperties {
@@ -15,17 +16,28 @@ export default class RequestNumberSettingsCommandSet
 
   private _panelHost: HTMLDivElement | undefined;
   private _numbering = false;
+  private _again = false;
   private _timer: number | undefined;
+  private _stopWatch: (() => void) | undefined;
 
   public onInit(): Promise<void> {
     this._panelHost = document.body.appendChild(document.createElement('div'));
     this.context.listView.listViewStateChangedEvent.add(this, this._onListViewStateChanged);
     this._setCommandVisibility();
+    const list = this.context.pageContext.list;
+    if (list) {
+      this._stopWatch = watchNewListItems(
+        list.id.toString(),
+        list.serverRelativeUrl,
+        () => this._numberList()
+      );
+    }
+    this._showNumberColumn().catch(() => undefined);
     this._connectList().catch(() => undefined);
     this._numberList().catch(() => undefined);
     this._timer = window.setInterval(() => {
       this._numberList().catch(() => undefined);
-    }, 8000);
+    }, 2000);
     return Promise.resolve();
   }
 
@@ -37,6 +49,9 @@ export default class RequestNumberSettingsCommandSet
   }
 
   public onDispose(): void {
+    if (this._stopWatch) {
+      this._stopWatch();
+    }
     if (this._timer !== undefined) {
       window.clearInterval(this._timer);
     }
@@ -67,6 +82,7 @@ export default class RequestNumberSettingsCommandSet
 
   private async _numberList(): Promise<void> {
     if (this._numbering) {
+      this._again = true;
       return;
     }
     const list = this.context.pageContext.list;
@@ -79,19 +95,48 @@ export default class RequestNumberSettingsCommandSet
     }
     this._numbering = true;
     try {
-      const written = await numberBlankItems(
-        this.context.spHttpClient,
-        this.context.pageContext.site.absoluteUrl,
-        configTitle,
-        this.context.pageContext.web.absoluteUrl,
-        list.id.toString()
-      );
-      if (written > 0) {
-        refreshListView();
-      }
+      do {
+        this._again = false;
+        const assigned = await numberBlankItems(
+          this.context.spHttpClient,
+          this.context.pageContext.site.absoluteUrl,
+          configTitle,
+          this.context.pageContext.web.absoluteUrl,
+          list.id.toString()
+        );
+        if (assigned.length > 0) {
+          showAssignedNumbers(assigned);
+        }
+      } while (this._again);
     } finally {
       this._numbering = false;
     }
+  }
+
+  private async _showNumberColumn(): Promise<void> {
+    const list = this.context.pageContext.list;
+    if (!list) {
+      return;
+    }
+    const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
+    if (isConfigList(list.title, list.serverRelativeUrl, configTitle)) {
+      return;
+    }
+    const rows = await loadConfigRows(
+      this.context.spHttpClient,
+      this.context.pageContext.site.absoluteUrl,
+      configTitle
+    );
+    const config = findConfigForList(rows, list.id.toString());
+    if (!config || !config.isActive) {
+      return;
+    }
+    await ensureTargetNumberColumn(
+      this.context.spHttpClient,
+      buildListAbsoluteUrl(this.context.pageContext.web.absoluteUrl, list.serverRelativeUrl),
+      list.id.toString(),
+      config.numberColumnInternalName
+    );
   }
 
   private async _connectList(): Promise<void> {
@@ -151,9 +196,10 @@ export default class RequestNumberSettingsCommandSet
   };
 }
 
-function refreshListView(): void {
-  const button = document.querySelector('[data-automationid="refreshCommand"], button[name="Refresh"]');
-  if (button instanceof HTMLButtonElement) {
-    button.click();
+function showAssignedNumbers(assigned: IAssignedNumber[]): void {
+  paintNumbers(assigned);
+  if (gridEditIsOpen()) {
+    return;
   }
+  window.setTimeout(clickListRefresh, 400);
 }
