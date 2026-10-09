@@ -86,6 +86,11 @@ describe('AutoGenFeatureConfiguration contract', () => {
     }).currentCount).toBe(12);
     expect(mapConfigRow({ Id: 4, IsActive: 'Yes' }).isActive).toBe(true);
     expect(mapConfigRow({ Id: 5 }).isActive).toBe(false);
+    expect(mapConfigRow({
+      Id: 6,
+      Modified: '2026-10-09T11:00:00Z',
+      Editor: { Title: 'Ada' }
+    }).modifiedBy).toBe('Ada');
   });
 
   it('derives the web and builds a GetList URL', () => {

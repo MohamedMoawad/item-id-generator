@@ -1,6 +1,6 @@
 import { BaseApplicationCustomizer } from '@microsoft/sp-application-base';
 import { DEFAULT_CONFIG_LIST_TITLE } from '../../webparts/itemIdGenerator/services/configContract';
-import { ensureConfigList } from '../../webparts/itemIdGenerator/services/configListClient';
+import { ensureConfigList, hideConfigList } from '../../webparts/itemIdGenerator/services/configListClient';
 
 export interface IRequestNumberProvisionerProperties {
   configListTitle?: string;
@@ -27,6 +27,11 @@ export default class RequestNumberProvisionerApplicationCustomizer
     const listTitle = (this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE).trim() || DEFAULT_CONFIG_LIST_TITLE;
     try {
       await ensureConfigList(
+        this.context.spHttpClient,
+        this.context.pageContext.site.absoluteUrl,
+        listTitle
+      );
+      await hideConfigList(
         this.context.spHttpClient,
         this.context.pageContext.site.absoluteUrl,
         listTitle

@@ -3,7 +3,7 @@ import * as ReactDom from 'react-dom';
 import { BaseListViewCommandSet, IListViewCommandSetExecuteEventParameters } from '@microsoft/sp-listview-extensibility';
 import { DEFAULT_CONFIG_LIST_TITLE, buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
 import { connectConfiguredList, ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
-import { clickListRefresh, gridEditIsOpen, paintNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { paintNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
 import { IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
@@ -198,8 +198,5 @@ export default class RequestNumberSettingsCommandSet
 
 function showAssignedNumbers(assigned: IAssignedNumber[]): void {
   paintNumbers(assigned);
-  if (gridEditIsOpen()) {
-    return;
-  }
-  window.setTimeout(clickListRefresh, 400);
+  revealAssignedNumbers(assigned.map((item) => item.itemId));
 }

@@ -22,6 +22,8 @@ export interface IConfigDraft {
   currentCount?: number;
   lastResetDate?: string;
   webhookSubscriptionId?: string;
+  modified?: string;
+  modifiedBy?: string;
 }
 
 export interface ISharePointConfigItem {
@@ -37,6 +39,8 @@ export interface ISharePointConfigItem {
   IsActive?: boolean | string | number;
   PadLength?: number | string;
   WebhookSubscriptionId?: string;
+  Modified?: string;
+  Editor?: { Title?: string };
   'odata.etag'?: string;
   '@odata.etag'?: string;
 }
@@ -123,7 +127,9 @@ export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
     padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
     currentCount: Number(item.CurrentCount) || 0,
     lastResetDate: item.LastResetDate || '',
-    webhookSubscriptionId: item.WebhookSubscriptionId || ''
+    webhookSubscriptionId: item.WebhookSubscriptionId || '',
+    modified: item.Modified || '',
+    modifiedBy: item.Editor && item.Editor.Title ? item.Editor.Title : ''
   };
 }
 
@@ -236,7 +242,7 @@ export function deriveWebFromListUrl(listUrl: string): IListLocation {
 }
 
 export function buildListItemsUrl(siteAbsoluteUrl: string, listTitle: string): string {
-  return `${listApi(siteAbsoluteUrl, listTitle)}/items?$select=${SELECT_FIELDS.join(',')}&$top=200`;
+  return `${listApi(siteAbsoluteUrl, listTitle)}/items?$select=${SELECT_FIELDS.join(',')},Modified,Editor/Title&$expand=Editor&$top=200`;
 }
 
 export function buildCreateItemUrl(siteAbsoluteUrl: string, listTitle: string): string {
@@ -342,11 +348,12 @@ export function buildCreateListUrl(siteAbsoluteUrl: string): string {
   return `${trimSlash(siteAbsoluteUrl)}/_api/web/lists`;
 }
 
-export function buildCreateListBody(listTitle: string): { BaseTemplate: number; Title: string; Description: string } {
+export function buildCreateListBody(listTitle: string): { BaseTemplate: number; Title: string; Description: string; Hidden: boolean } {
   return {
     BaseTemplate: 100,
     Title: listTitle,
-    Description: 'Per-list request number rules. The list command writes the next number.'
+    Description: 'Hidden per-list Autogen settings. Open Autogen Setting on a list to view or edit them.',
+    Hidden: true
   };
 }
 

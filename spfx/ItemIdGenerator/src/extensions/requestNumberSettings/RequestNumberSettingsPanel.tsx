@@ -29,6 +29,7 @@ import {
   canEditConfigList,
   ensureConfigList,
   ensureTargetNumberColumn,
+  hideConfigList,
   loadConfigRows,
   loadFormulaColumns,
   saveConfigRow
@@ -50,6 +51,7 @@ interface IRequestNumberSettingsPanelState {
   loading: boolean;
   saving: boolean;
   canEdit: boolean;
+  editing: boolean;
   draft?: IConfigDraft;
   columns: IFormulaColumn[];
   errorMessage: string;
@@ -66,6 +68,7 @@ export default class RequestNumberSettingsPanel
       loading: true,
       saving: false,
       canEdit: false,
+      editing: false,
       columns: [],
       errorMessage: '',
       warningMessage: '',
@@ -89,7 +92,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          Set the formula and save. Use {'{counter}'} for the next number. Add a list column, such as {'{Title}'} or {'{Department.title}'} for a lookup. The number appears on the list by itself.
+          Choose the column that receives the number, set the formula, and save. {'{counter}'} is the next number. A lookup column uses {'{Department.title}'}.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -113,26 +116,26 @@ export default class RequestNumberSettingsPanel
   }
 
   private _renderForm(draft: IConfigDraft): React.ReactElement {
-    const busy = this.state.saving || !this.state.canEdit;
+    const editing = this.state.editing && this.state.canEdit;
+    const busy = this.state.saving || !editing;
     const padText = Number.isInteger(draft.padLength) ? String(draft.padLength) : '';
     return (
       <div className={styles.panel}>
+        <TextField label="Last modified" value={formatModified(draft.modified)} readOnly={true} />
+        <TextField label="Modified by" value={draft.modifiedBy || 'Not saved yet'} readOnly={true} />
         {!this.state.canEdit && (
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.info}>
-              You can view these settings. Edit permission on the config list is required to change them.
+              You can view these settings. Permission to edit this list is required to change them.
             </MessageBar>
           </div>
         )}
-        <TextField label="Title" required={true} value={draft.title} onChange={this._onTitleChange} disabled={busy} />
-        <TextField label="This list" value={this.props.listUrl} readOnly={true} />
-        <TextField label="List GUID" value={draft.targetListGuid} readOnly={true} />
-        <TextField
-          label="Number column internal name"
+        <Dropdown
+          label="Number column"
           required={true}
-          description="Single-line text column on this list. Example: RequestNumber."
-          value={draft.numberColumnInternalName}
-          onChange={this._onFieldChange}
+          selectedKey={draft.numberColumnInternalName}
+          options={this._numberColumnOptions(draft)}
+          onChange={this._onNumberColumnChange}
           disabled={busy}
         />
         <TextField
@@ -144,7 +147,7 @@ export default class RequestNumberSettingsPanel
           disabled={busy}
         />
         <Dropdown
-          label="Add a column"
+          label="Add a column to the formula"
           placeholder="Insert a column from this list"
           options={this.state.columns
             .filter((column) => column.internalName !== draft.numberColumnInternalName.trim())
@@ -168,24 +171,52 @@ export default class RequestNumberSettingsPanel
         />
         <Checkbox label="Active" checked={draft.isActive} onChange={this._onActiveChange} disabled={busy} />
         {draft.id !== undefined && (
-          <TextField label="Current counter" value={String(draft.currentCount || 0)} disabled={true} />
+          <TextField label="Current counter" value={String(draft.currentCount || 0)} readOnly={true} />
         )}
-        {this.state.canEdit && (
-          <div className={styles.actions}>
+        <div className={styles.actions}>
+          {editing && (
             <PrimaryButton text={this.state.saving ? 'Saving...' : 'Save settings'} onClick={this._onSave} disabled={this.state.saving} />
-            <DefaultButton text="Close" onClick={this.props.onDismiss} disabled={this.state.saving} />
-          </div>
-        )}
+          )}
+          {this.state.canEdit && !editing && (
+            <PrimaryButton text="Edit" onClick={this._onEdit} disabled={this.state.saving} />
+          )}
+          {this.state.canEdit && editing && draft.id !== undefined && (
+            <DefaultButton text="View" onClick={this._onView} disabled={this.state.saving} />
+          )}
+          <DefaultButton text="Close" onClick={this.props.onDismiss} disabled={this.state.saving} />
+        </div>
       </div>
     );
   }
 
-  private _onTitleChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
-    this._patch({ title: value || '' });
+  private _numberColumnOptions(draft: IConfigDraft): IDropdownOption[] {
+    const options: IDropdownOption[] = this.state.columns
+      .filter((column) => column.type === 'Text' || column.internalName === draft.numberColumnInternalName)
+      .map((column) => ({ key: column.internalName, text: column.title }));
+    if (!options.some((option) => option.key === draft.numberColumnInternalName) && draft.numberColumnInternalName) {
+      options.unshift({ key: draft.numberColumnInternalName, text: draft.numberColumnInternalName });
+    }
+    if (!options.some((option) => option.key === 'RequestNumber')) {
+      options.unshift({ key: 'RequestNumber', text: 'RequestNumber (create column)' });
+    }
+    return options;
+  }
+
+  private _onNumberColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
+      return;
+    }
+    this._patch({ numberColumnInternalName: String(option.key) });
   };
 
-  private _onFieldChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
-    this._patch({ numberColumnInternalName: value || '' });
+  private _onEdit = (): void => {
+    this.setState({ editing: true, statusMessage: '', errorMessage: '' });
+  };
+
+  private _onView = (): void => {
+    this._load().catch((error: unknown) => {
+      this.setState({ loading: false, errorMessage: messageOf(error) });
+    });
   };
 
   private _onFormulaChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
@@ -233,6 +264,7 @@ export default class RequestNumberSettingsPanel
     const listTitle = this.props.configListTitle.trim() || DEFAULT_CONFIG_LIST_TITLE;
     this.setState({ loading: true, errorMessage: '' });
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
+    await hideConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const rows = await loadConfigRows(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
@@ -256,6 +288,7 @@ export default class RequestNumberSettingsPanel
       loading: false,
       draft,
       canEdit,
+      editing: !existing && canEdit,
       columns
     });
   }
@@ -314,5 +347,16 @@ export default class RequestNumberSettingsPanel
 }
 
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : 'The request number settings could not be saved.';
+  return error instanceof Error ? error.message : 'The Autogen settings could not be saved.';
+}
+
+function formatModified(value?: string): string {
+  if (!value) {
+    return 'Not saved yet';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
 }

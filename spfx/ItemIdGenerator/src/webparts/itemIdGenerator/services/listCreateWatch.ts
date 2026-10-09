@@ -120,19 +120,50 @@ export function paintNumbers(updates: { itemId: number; fieldName: string; code:
   });
 }
 
-export function clickListRefresh(): void {
+export function clickListRefresh(): boolean {
   const named = document.querySelector(
     'button[data-automationid="refreshCommand"], button[name="Refresh"], button[aria-label="Refresh"], button[title="Refresh"]'
   );
   if (named instanceof HTMLButtonElement) {
     named.click();
-    return;
+    return true;
+  }
+  const buttons = document.querySelectorAll('button');
+  for (let index = 0; index < buttons.length; index += 1) {
+    const label = `${buttons[index].getAttribute('aria-label') || ''} ${buttons[index].getAttribute('title') || ''} ${buttons[index].getAttribute('name') || ''}`.toLowerCase();
+    if (label.indexOf('refresh') >= 0) {
+      buttons[index].click();
+      return true;
+    }
   }
   const icon = document.querySelector('[data-icon-name="Refresh"]');
   const button = icon ? icon.closest('button') : null;
   if (button instanceof HTMLButtonElement) {
     button.click();
+    return true;
   }
+  return false;
+}
+
+export function revealAssignedNumbers(itemIds: number[]): void {
+  if (gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
+    clickListRefresh();
+    return;
+  }
+  const key = `autogenReload:${itemIds.join(',')}`;
+  try {
+    if (window.sessionStorage.getItem(key) === '1') {
+      clickListRefresh();
+      return;
+    }
+    window.sessionStorage.setItem(key, '1');
+  } catch {
+    clickListRefresh();
+    return;
+  }
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 400);
 }
 
 export function gridEditIsOpen(): boolean {
