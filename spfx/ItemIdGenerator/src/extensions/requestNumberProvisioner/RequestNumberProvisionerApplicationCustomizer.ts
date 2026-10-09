@@ -3,7 +3,7 @@ import { SPHttpClient } from '@microsoft/sp-http';
 import { buildGetListUrl, DEFAULT_CONFIG_LIST_TITLE } from '../../webparts/itemIdGenerator/services/configContract';
 import { ensureConfigList, hideConfigList } from '../../webparts/itemIdGenerator/services/configListClient';
 import { syncAutogenFromCustomizer } from '../requestNumberSettings/autogenListRuntime';
-import { listServerRelativeUrlFromPath } from '../requestNumberSettings/commandVisibility';
+import { ILegacyPageContextInfo, listServerRelativeUrlFromPath, readLegacyListContext } from '../requestNumberSettings/commandVisibility';
 
 export interface IRequestNumberProvisionerProperties {
   configListTitle?: string;
@@ -45,6 +45,22 @@ export default class RequestNumberProvisionerApplicationCustomizer
         listId: list.id.toString(),
         listTitle: list.title,
         listServerRelativeUrl: list.serverRelativeUrl
+      });
+      return;
+    }
+    const legacy = readLegacyListContext(
+      (window as unknown as { _spPageContextInfo?: ILegacyPageContextInfo })._spPageContextInfo
+    );
+    if (legacy) {
+      this._resolvedPath = legacy.listServerRelativeUrl;
+      syncAutogenFromCustomizer({
+        spHttpClient: this.context.spHttpClient,
+        siteAbsoluteUrl: this.context.pageContext.site.absoluteUrl,
+        webAbsoluteUrl: this.context.pageContext.web.absoluteUrl,
+        configListTitle,
+        listId: legacy.listId,
+        listTitle: legacy.listTitle,
+        listServerRelativeUrl: legacy.listServerRelativeUrl
       });
       return;
     }

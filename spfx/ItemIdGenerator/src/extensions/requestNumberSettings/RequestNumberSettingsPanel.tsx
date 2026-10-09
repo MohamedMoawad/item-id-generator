@@ -87,7 +87,7 @@ export default class RequestNumberSettingsPanel
       <Panel
         isOpen={true}
         type={PanelType.medium}
-        headerText={`Autogen Setting 1.14 for ${this.props.listTitle}`}
+        headerText={`Autogen Feature 1.15 for ${this.props.listTitle}`}
         onDismiss={this.props.onDismiss}
         isBlocking={false}
       >

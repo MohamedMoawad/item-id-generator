@@ -7,7 +7,7 @@ import { paintNumbers, revealAssignedNumbers, watchNewListItems } from '../../we
 import { IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
-export const AUTOGEN_COMMAND_LABEL = 'Autogen Setting';
+export const AUTOGEN_COMMAND_LABEL = 'Autogen Feature';
 const BUTTON_ID = 'autogen-setting-command';
 const STYLE_ID = 'autogen-setting-command-style';
 
@@ -191,49 +191,12 @@ async function connectList(next: IAutogenListTarget): Promise<void> {
 }
 
 function ensureButton(): void {
+  // SharePoint rebuilds the list command bar and deletes buttons placed inside it.
   ensureStyles();
-  const host = findCommandBarHost();
-  let button = document.getElementById(BUTTON_ID);
-  if (!button) {
-    button = createButton();
-  }
-  if (host) {
-    button.classList.remove('autogen-setting-floating');
-    if (button.parentElement !== host) {
-      host.insertBefore(button, host.firstChild);
-    }
+  if (document.getElementById(BUTTON_ID)) {
     return;
   }
-  button.classList.add('autogen-setting-floating');
-  if (button.parentElement !== document.body) {
-    document.body.appendChild(button);
-  }
-}
-
-function findCommandBarHost(): HTMLElement | undefined {
-  const selectors = [
-    '[data-automationid="ListCommandBar"]',
-    '[data-automationid="commandBarWrapper"]',
-    '[data-automationid="ListViewCommandBar"]',
-    '[data-automationid="commandBar"]',
-    '[class*="commandBarWrapper"]',
-    '[role="toolbar"]'
-  ];
-  for (let index = 0; index < selectors.length; index++) {
-    const nodes = document.querySelectorAll(selectors[index]);
-    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
-      const node = nodes[nodeIndex] as HTMLElement;
-      if (node.id === BUTTON_ID || node.closest(`#${BUTTON_ID}`) || node.getClientRects().length === 0) {
-        continue;
-      }
-      const automationId = node.getAttribute('data-automationid') || '';
-      const text = node.textContent || '';
-      if (automationId || text.indexOf('New') >= 0 || text.indexOf('Edit') >= 0) {
-        return node;
-      }
-    }
-  }
-  return undefined;
+  document.body.appendChild(createButton());
 }
 
 function createButton(): HTMLButtonElement {
@@ -266,11 +229,10 @@ function ensureStyles(): void {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = [
-    `#${BUTTON_ID}{display:inline-flex;align-items:center;height:32px;margin:4px 8px 4px 0;padding:0 12px;`,
-    'border:1px solid #038387;border-radius:2px;background:#038387;color:#fff;cursor:pointer;flex:0 0 auto;',
-    'font:600 14px/32px "Segoe UI","Segoe UI Web (West European)",sans-serif;}',
-    `#${BUTTON_ID}:hover{background:#026d70;}`,
-    `#${BUTTON_ID}.autogen-setting-floating{position:fixed;top:96px;right:24px;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.24);}`
+    `#${BUTTON_ID}{position:fixed;right:24px;bottom:24px;z-index:1000000;display:inline-flex;align-items:center;`,
+    'height:40px;padding:0 16px;border:0;border-radius:20px;background:#038387;color:#fff;cursor:pointer;',
+    'box-shadow:0 4px 16px rgba(0,0,0,.28);font:600 14px/40px "Segoe UI","Segoe UI Web (West European)",sans-serif;}',
+    `#${BUTTON_ID}:hover{background:#026d70;}`
   ].join('');
   document.head.appendChild(style);
 }

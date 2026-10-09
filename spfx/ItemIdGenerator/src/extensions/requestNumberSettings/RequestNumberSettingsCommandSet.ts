@@ -7,10 +7,6 @@ export interface IRequestNumberSettingsCommandSetProperties {
   configListTitle?: string;
 }
 
-const AUTOGEN_ICON = 'data:image/svg+xml,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="2" fill="#038387"/><text x="8" y="12" text-anchor="middle" font-size="11" font-family="Segoe UI" fill="#ffffff">#</text></svg>'
-);
-
 export default class RequestNumberSettingsCommandSet
   extends BaseListViewCommandSet<IRequestNumberSettingsCommandSetProperties> {
 
@@ -55,9 +51,6 @@ export default class RequestNumberSettingsCommandSet
     );
     command.disabled = false;
     command.title = AUTOGEN_COMMAND_LABEL;
-    if (!command.iconImageUrl) {
-      command.iconImageUrl = AUTOGEN_ICON;
-    }
   }
 
   private _syncRuntime(): void {
