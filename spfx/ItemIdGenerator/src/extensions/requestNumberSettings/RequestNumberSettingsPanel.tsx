@@ -92,7 +92,7 @@ export default class RequestNumberSettingsPanel
         isBlocking={false}
       >
         <p className={styles.intro}>
-          Choose the column that receives the number, set the formula, and save. {'{counter}'} is the next number. A lookup column uses {'{Department.title}'}.
+          Choose an existing single line of text column. Create that column in the list first if it is not listed. {'{counter}'} is the next number.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -130,13 +130,21 @@ export default class RequestNumberSettingsPanel
             </MessageBar>
           </div>
         )}
+        {this._textColumns().length === 0 && (
+          <div className={styles.status}>
+            <MessageBar messageBarType={MessageBarType.warning}>
+              This list has no single line of text column. Create one in list settings, then open Autogen Setting again.
+            </MessageBar>
+          </div>
+        )}
         <Dropdown
           label="Number column"
           required={true}
-          selectedKey={draft.numberColumnInternalName}
-          options={this._numberColumnOptions(draft)}
+          placeholder="Select a single line of text column"
+          selectedKey={draft.numberColumnInternalName || undefined}
+          options={this._numberColumnOptions()}
           onChange={this._onNumberColumnChange}
-          disabled={busy}
+          disabled={busy || this._textColumns().length === 0}
         />
         <TextField
           label="Formula"
@@ -189,17 +197,12 @@ export default class RequestNumberSettingsPanel
     );
   }
 
-  private _numberColumnOptions(draft: IConfigDraft): IDropdownOption[] {
-    const options: IDropdownOption[] = this.state.columns
-      .filter((column) => column.type === 'Text' || column.internalName === draft.numberColumnInternalName)
-      .map((column) => ({ key: column.internalName, text: column.title }));
-    if (!options.some((option) => option.key === draft.numberColumnInternalName) && draft.numberColumnInternalName) {
-      options.unshift({ key: draft.numberColumnInternalName, text: draft.numberColumnInternalName });
-    }
-    if (!options.some((option) => option.key === 'RequestNumber')) {
-      options.unshift({ key: 'RequestNumber', text: 'RequestNumber (create column)' });
-    }
-    return options;
+  private _textColumns(): IFormulaColumn[] {
+    return this.state.columns.filter((column) => column.type === 'Text');
+  }
+
+  private _numberColumnOptions(): IDropdownOption[] {
+    return this._textColumns().map((column) => ({ key: column.internalName, text: column.title }));
   }
 
   private _onNumberColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
@@ -283,6 +286,10 @@ export default class RequestNumberSettingsPanel
       );
     } catch {
       columns = [];
+    }
+    const selectedIsText = columns.some((column) => column.type === 'Text' && column.internalName === draft.numberColumnInternalName);
+    if (!selectedIsText) {
+      draft.numberColumnInternalName = '';
     }
     this.setState({
       loading: false,

@@ -64,7 +64,7 @@ export function emptyDraft(): IConfigDraft {
     title: '',
     targetListUrl: '',
     targetListGuid: '',
-    numberColumnInternalName: 'RequestNumber',
+    numberColumnInternalName: '',
     formula: 'REQ-{yyyy}{MM}-{counter}',
     resetPeriod: 'Month',
     isActive: true,
@@ -95,8 +95,11 @@ export function validateDraft(draft: IConfigDraft): string | undefined {
   if (!GUID_PATTERN.test(normalizeGuid(draft.targetListGuid))) {
     return 'Paste the list URL and choose Resolve list before saving.';
   }
+  if (!draft.numberColumnInternalName.trim()) {
+    return 'Choose a single line of text column.';
+  }
   if (!FIELD_PATTERN.test(draft.numberColumnInternalName.trim())) {
-    return 'Number column internal name must look like RequestNumber.';
+    return 'Choose a single line of text column.';
   }
   if (!/\{(counter|seq)(?::\d+)?\}/i.test(draft.formula)) {
     return 'Formula must include {counter} or {counter:n}.';

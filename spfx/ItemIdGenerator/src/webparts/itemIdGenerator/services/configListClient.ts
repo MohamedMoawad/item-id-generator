@@ -299,24 +299,7 @@ export async function ensureTargetNumberColumn(
     headers: { Accept: 'application/json;odata=nometadata' }
   });
   if (!existing.ok) {
-    const schema = `<Field Type="Text" Name="${name}" StaticName="${name}" DisplayName="${name}" />`;
-    const response = await spHttpClient.post(
-      `${web}/_api/web/lists(guid'${guid}')/fields/CreateFieldAsXml`,
-      SPHttpClient.configurations.v1,
-      {
-        headers: fieldHeaders,
-        body: JSON.stringify(buildCreateFieldBody(schema))
-      }
-    );
-    if (!response.ok) {
-      const detail = await response.text();
-      if (!(response.status === 400 && /already exists|duplicate/i.test(detail))) {
-        throw new ConfigListRequestError(
-          sharePointError(response.status, detail, name),
-          response.status
-        );
-      }
-    }
+    throw new Error('Choose a single line of text column that already exists on this list.');
   }
   await addFieldToDefaultView(spHttpClient, web, guid, name);
 }

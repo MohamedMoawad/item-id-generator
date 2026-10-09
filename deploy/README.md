@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.9.0.0** is named **AutoGen Feature**. Settings open from **Autogen Setting** on the list. The configuration list stays hidden. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
+Package version **1.10.0.0** is named **AutoGen Feature**. Settings open from **Autogen Setting** on the list. The configuration list stays hidden. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
 
 1. Upload the package to the app catalog and add **AutoGen Feature** to the site.
 2. Open the list and choose **Autogen Setting**.
