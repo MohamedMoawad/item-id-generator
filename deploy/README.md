@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.13.0.0** is named **AutoGen Feature**. Deploy it in the app catalog, then add **AutoGen Feature** on the site from the classic Add an app page. The panel title must say **Autogen Setting 1.13**.
+Package version **1.14.0.0** is named **AutoGen Feature**. Deploy it in the app catalog, then add **AutoGen Feature** on the site from the classic Add an app page. On a list, the teal **Autogen Setting** button is on the command bar. The panel title must say **Autogen Setting 1.14**.
 
 1. Upload `item-id-generator.sppkg` in the app catalog and deploy it. Do not check “add it to all sites”.
 2. On the site, open `/_layouts/15/addanapp.aspx` and add **AutoGen Feature**.
@@ -28,7 +28,7 @@ If an older **AutoGen Feature** or **ItemIdGenerator** package is still installe
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
 3. Upload `item-id-generator.sppkg`, replace the existing app, and deploy it. Do not check “add it to all sites”.
 4. On the site, open `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx` and add **AutoGen Feature**.
-5. Open any list. **Autogen Setting** is on the command bar. The panel title must say **Autogen Setting 1.13**.
+5. Open any list in the site (the list address contains `/Lists/`). Hard-refresh the page. The teal **Autogen Setting** button is on the command bar. The panel title must say **Autogen Setting 1.14**.
 6. Open any list. In the command bar, choose **Autogen Setting**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
 List owners set the formula, the number column, and the reset. They do not see a webhook address. Saving an active rule is enough. Opening the list fills blank number columns.

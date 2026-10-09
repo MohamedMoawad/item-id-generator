@@ -11,6 +11,7 @@
     "REQUEST_NUMBER_SETTINGS": {
       "title": { "default": "Autogen Setting" },
       "ariaLabel": { "default": "Open Autogen Setting for this list" },
+      "iconImageUrl": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%23038387'/%3E%3C/svg%3E",
       "type": "command"
     }
   }
