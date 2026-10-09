@@ -1,6 +1,6 @@
 # Request numbers for SharePoint Online
 
-When someone creates a list item, this repo assigns the next request number. Upload the SharePoint package, open the list, choose **Request number settings**, and save the formula. The list writes the number while it is open. No Azure Function is required for that.
+When someone creates a list item, this repo assigns the next request number. Upload the SharePoint package, open the list, choose **Autogen Setting**, and save the formula. The list writes the number while it is open. No Azure Function is required for that.
 
 Do not also run a Power Automate flow that writes the same number column. Two writers will race. An optional Azure Function can number items that are created while nobody has the list open. Those steps are in [deploy/README.md](deploy/README.md).
 

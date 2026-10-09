@@ -184,7 +184,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
         <TextField
           label="Formula"
           required={true}
-          description="UTC tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {seq} {seq:n}. Must include {seq}."
+          description="Use {counter} or {counter:n}. Dates: {yyyy} {yy} {MM} {dd}. Columns: {Title} or {Department.title}."
           value={draft.formula}
           onChange={this._onFormulaChange}
           disabled={busy}
@@ -192,7 +192,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
         <TextField
           label="Pad length"
           required={true}
-          description="Width for {seq}. {seq:n} overrides this. Use 0 through 12."
+          description="Width for {counter}. {counter:n} overrides this. Use 0 through 12."
           value={padText}
           onChange={this._onPadChange}
           disabled={busy}
@@ -210,7 +210,7 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
             label="Current count"
             value={String(draft.currentCount || 0)}
             disabled={true}
-            description="This count increases each time a blank item on the list receives a number."
+            description="This counter increases each time a blank item on the list receives a number."
           />
         )}
         {editing && (

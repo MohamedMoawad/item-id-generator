@@ -5,8 +5,15 @@ import {
   isActiveValue,
   normalizeGuid
 } from './configContract';
-import { loadConfigRows } from './configListClient';
-import { isBlankNumber, planNextCode } from './formula';
+import { loadConfigRows, loadFormulaColumns } from './configListClient';
+import {
+  columnMapForItem,
+  columnNamesInFormula,
+  IFormulaColumn,
+  isBlankNumber,
+  itemQueryParts,
+  planNextCode
+} from './formula';
 
 const metadataHeaders: { [key: string]: string } = {
   Accept: 'application/json;odata=minimalmetadata'
@@ -62,6 +69,8 @@ export async function numberBlankItems(
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldName)) {
     return [];
   }
+  const columns = await loadFormulaColumns(spHttpClient, webAbsoluteUrl, guid);
+  const columnNames = columnNamesInFormula(config.formula);
   const items = await readRecentItems(spHttpClient, webAbsoluteUrl, guid, fieldName);
   const blanks = items.filter((item) => item.Id !== undefined && isBlankNumber(item[fieldName])).slice(0, 20);
   const assigned: IAssignedNumber[] = [];
@@ -74,7 +83,9 @@ export async function numberBlankItems(
       guid,
       config.id,
       fieldName,
-      item.Id as number
+      item.Id as number,
+      columnNames,
+      columns
     );
     if (!code) {
       break;
@@ -92,12 +103,15 @@ async function reserveAndWrite(
   listGuid: string,
   configItemId: number,
   fieldName: string,
-  itemId: number
+  itemId: number,
+  columnNames: string[],
+  columns: IFormulaColumn[]
 ): Promise<string | undefined> {
-  const currentValue = await readItemValue(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName);
-  if (currentValue === undefined || !isBlankNumber(currentValue)) {
+  const item = await readItemForFormula(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, columnNames, columns);
+  if (!item || !isBlankNumber(item[fieldName])) {
     return undefined;
   }
+  const columnValues = columnMapForItem(item, columnNames, columns);
   for (let attempt = 1; attempt <= 8; attempt += 1) {
     const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, configItemId);
     if (!current || !isActiveValue(current.IsActive) || !current.Formula) {
@@ -110,7 +124,8 @@ async function reserveAndWrite(
       lastResetDate: current.LastResetDate,
       currentCount: Number(current.CurrentCount) || 0,
       padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
-      now: new Date()
+      now: new Date(),
+      columns: columnValues
     });
     const swapped = await swapCounter(
       spHttpClient,
@@ -156,20 +171,38 @@ async function readRecentItems(
   return payload.value || [];
 }
 
-async function readItemValue(
+async function readItemForFormula(
   spHttpClient: SPHttpClient,
   webAbsoluteUrl: string,
   listGuid: string,
   itemId: number,
-  fieldName: string
-): Promise<unknown> {
-  const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})?$select=${fieldName}`;
+  fieldName: string,
+  columnNames: string[],
+  columns: IFormulaColumn[]
+): Promise<IListItemRow | undefined> {
+  const parts = itemQueryParts(fieldName, columnNames, columns);
+  const rich = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, parts.select, parts.expand);
+  if (rich) {
+    return rich;
+  }
+  return readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
+}
+
+async function readItem(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  itemId: number,
+  select: string[],
+  expand: string[]
+): Promise<IListItemRow | undefined> {
+  const expandQuery = expand.length > 0 ? `&$expand=${expand.join(',')}` : '';
+  const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})?$select=${select.join(',')}${expandQuery}`;
   const response = await spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: metadataHeaders });
   if (!response.ok) {
     return undefined;
   }
-  const payload = await response.json() as IListItemRow;
-  return payload[fieldName];
+  return await response.json() as IListItemRow;
 }
 
 async function readCounter(

@@ -9,8 +9,8 @@
   "requiresCustomScript": false,
   "items": {
     "REQUEST_NUMBER_SETTINGS": {
-      "title": { "default": "Request number settings" },
-      "ariaLabel": { "default": "Open request number settings for this list" },
+      "title": { "default": "Autogen Setting" },
+      "ariaLabel": { "default": "Open Autogen Setting for this list" },
       "type": "command"
     }
   }

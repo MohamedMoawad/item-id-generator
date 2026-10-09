@@ -1,4 +1,14 @@
-import { applyFormula, periodKeyFor, periodRolledOver, planNextCode } from './formula';
+import {
+  applyFormula,
+  columnMapForItem,
+  columnNamesInFormula,
+  columnToken,
+  formulaColumns,
+  itemQueryParts,
+  periodKeyFor,
+  periodRolledOver,
+  planNextCode
+} from './formula';
 
 const october = new Date('2026-10-06T15:04:00Z');
 
@@ -12,7 +22,18 @@ describe('formula', () => {
   });
 
   it('rejects a code that would repeat', () => {
-    expect(() => applyFormula('REQ-{yyyy}', 1, october, 0)).toThrow(/\{seq\}/);
+    expect(() => applyFormula('REQ-{yyyy}', 1, october, 0)).toThrow(/\{counter\}/);
+  });
+
+  it('uses counter and list column values, including a lookup title', () => {
+    expect(applyFormula('REQ-{counter}', 12, october, 4)).toBe('REQ-0012');
+    expect(applyFormula('{Title}-{Department.title}-{counter:2}', 3, october, 4, {
+      Title: 'Desk',
+      'Department.title': 'IT'
+    })).toBe('Desk-IT-03');
+    expect(applyFormula('{Department}-{counter}', 1, october, 0, {
+      Department: 'IT'
+    })).toBe('IT-1');
   });
 
   it('uses UTC period keys', () => {
@@ -40,6 +61,29 @@ describe('formula', () => {
       code: 'REQ-0005',
       sequence: 5,
       lastResetDate: october.toISOString()
+    });
+  });
+
+  it('builds a lookup token and reads the lookup title from the item', () => {
+    const columns = formulaColumns([
+      { InternalName: 'Title', Title: 'Title', TypeAsString: 'Text', Hidden: false },
+      { InternalName: 'Department', Title: 'Department', TypeAsString: 'Lookup', Hidden: false },
+      { InternalName: 'LinkTitle', Title: 'Title', TypeAsString: 'Computed', Hidden: false }
+    ]);
+    expect(columnToken('Department', 'Lookup')).toBe('{Department.title}');
+    expect(columns.map((column) => column.token)).toEqual(['{Department.title}', '{Title}']);
+    expect(columnNamesInFormula('REQ-{Department.title}-{counter}')).toEqual(['Department']);
+    expect(itemQueryParts('RequestNumber', ['Department', 'Title'], columns)).toEqual({
+      select: ['Id', 'RequestNumber', 'Department/Title', 'Department/Id', 'Title'],
+      expand: ['Department']
+    });
+    expect(columnMapForItem({
+      Title: 'Desk',
+      Department: { Title: 'IT', Id: 4 }
+    }, ['Title', 'Department'], columns)).toMatchObject({
+      Title: 'Desk',
+      'Department.title': 'IT',
+      'Department.Id': '4'
     });
   });
 });

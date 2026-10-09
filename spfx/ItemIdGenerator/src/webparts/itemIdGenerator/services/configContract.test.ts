@@ -63,7 +63,8 @@ describe('AutoGenFeatureConfiguration contract', () => {
   });
 
   it('rejects a formula that cannot produce distinct codes and a missing GUID', () => {
-    expect(validateDraft({ ...draft, formula: 'REQ-{yyyy}' })).toMatch(/\{seq\}/);
+    expect(validateDraft({ ...draft, formula: 'REQ-{yyyy}' })).toMatch(/\{counter\}/);
+    expect(validateDraft({ ...draft, formula: 'REQ-{Title}-{counter}' })).toBeUndefined();
     expect(validateDraft({ ...draft, targetListGuid: '' })).toMatch(/Resolve list/);
     expect(validateDraft({ ...draft, padLength: 13 })).toMatch(/Pad length/);
     expect(validateDraft(draft)).toBeUndefined();

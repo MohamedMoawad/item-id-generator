@@ -5,7 +5,7 @@ namespace ItemIdGenerator.Numbering;
 
 public static class Formula
 {
-    private static readonly Regex Token = new(@"\{(yyyy|yy|MM|dd|HH|mm|seq(?::\d+)?)\}", RegexOptions.Compiled);
+    private static readonly Regex Token = new(@"\{([^{}]+)\}", RegexOptions.Compiled);
 
     public static string NormalizeResetPeriod(string? value)
     {
@@ -42,11 +42,18 @@ public static class Formula
         return PeriodKeyFor(period, last) != PeriodKeyFor(period, now);
     }
 
-    public static string Apply(string? formula, long sequence, DateTimeOffset date, int padLength)
+    public static string Apply(
+        string? formula,
+        long sequence,
+        DateTimeOffset date,
+        int padLength,
+        IReadOnlyDictionary<string, string>? columns = null)
     {
-        if (string.IsNullOrEmpty(formula) || formula.IndexOf("{seq", StringComparison.Ordinal) < 0)
+        if (string.IsNullOrEmpty(formula) ||
+            (formula.IndexOf("{seq", StringComparison.OrdinalIgnoreCase) < 0 &&
+             formula.IndexOf("{counter", StringComparison.OrdinalIgnoreCase) < 0))
         {
-            throw new InvalidOperationException("Formula must include {seq} or {seq:n} so each item gets a distinct code.");
+            throw new InvalidOperationException("Formula must include {counter} or {counter:n} so each item gets a distinct code.");
         }
 
         if (padLength < 0 || padLength > 12)
@@ -67,23 +74,44 @@ public static class Formula
 
         return Token.Replace(formula, match =>
         {
-            var token = match.Groups[1].Value;
-            if (token == "seq")
+            var token = match.Groups[1].Value.Trim();
+            if (token.Equals("seq", StringComparison.OrdinalIgnoreCase) || token.Equals("counter", StringComparison.OrdinalIgnoreCase))
             {
                 return padLength > 0 ? sequence.ToString(CultureInfo.InvariantCulture).PadLeft(padLength, '0') : sequence.ToString(CultureInfo.InvariantCulture);
             }
 
-            if (token.StartsWith("seq:", StringComparison.Ordinal))
+            var widthToken = token.StartsWith("seq:", StringComparison.OrdinalIgnoreCase) || token.StartsWith("counter:", StringComparison.OrdinalIgnoreCase)
+                ? token[(token.IndexOf(':') + 1)..]
+                : null;
+            if (widthToken is not null)
             {
-                if (!int.TryParse(token.AsSpan(4), NumberStyles.None, CultureInfo.InvariantCulture, out var width) || width < 1 || width > 12)
+                if (!int.TryParse(widthToken, NumberStyles.None, CultureInfo.InvariantCulture, out var width) || width < 1 || width > 12)
                 {
-                    throw new InvalidOperationException("Sequence width must be from 1 to 12.");
+                    throw new InvalidOperationException("Counter width must be from 1 to 12.");
                 }
 
                 return sequence.ToString(CultureInfo.InvariantCulture).PadLeft(width, '0');
             }
 
-            return values.TryGetValue(token, out var value) ? value : match.Value;
+            if (values.TryGetValue(token, out var value))
+            {
+                return value;
+            }
+
+            if (columns is null)
+            {
+                return match.Value;
+            }
+
+            foreach (var pair in columns)
+            {
+                if (pair.Key.Equals(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    return pair.Value ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
         });
     }
 }

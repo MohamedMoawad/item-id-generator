@@ -12,10 +12,10 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.7.0.0** is named **AutoGen Feature**. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
+Package version **1.8.0.0** is named **AutoGen Feature**. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
 
 1. Upload the package to the app catalog and add **AutoGen Feature** to the site.
-2. Open the list and choose **Request number settings**.
+2. Open the list and choose **Autogen Setting**.
 3. Set the formula, leave **Active** checked, and save.
 4. Add a new item. The number shows in the number column by itself.
 
@@ -28,7 +28,7 @@ If you still have the original tenant-wide **ItemIdGenerator** solution, remove 
 3. Upload `item-id-generator.sppkg` and deploy it. Do not choose "add it to all sites".
 4. Open the site collection and go to `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx`. Add **AutoGen Feature**. The modern **New > App** page hides some catalog apps; this classic page lists them.
 5. Adding the app creates the list **AutoGenFeatureConfiguration** on that site collection and adds missing columns the first time an owner opens a page.
-6. Open any list. In the command bar, choose **Request number settings**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
+6. Open any list. In the command bar, choose **Autogen Setting**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
 List owners set the formula, the number column, and the reset. They do not see a webhook address. Saving an active rule is enough. Opening the list fills blank number columns.
 
@@ -84,7 +84,7 @@ The portal sets `FUNCTIONS_WORKER_RUNTIME` when you create a .NET 8 Isolated app
 
 1. On the Function App, open **CORS** (under **API**) and add `https://<tenant>.sharepoint.com`, then save. Without this, the list panel cannot call the function.
 2. Open `RegisterWebhook` → **Get function URL** and copy the whole URL, including `?code=`.
-3. In SharePoint, open the list → **Request number settings**. Paste that URL into **One-time service address**. Leave **Active** checked. Save.
+3. In SharePoint, open the list → **Autogen Setting**. Paste that URL into **One-time service address**. Leave **Active** checked. Save.
 
 Save creates the number column if it is missing, stores the address, and subscribes the list. The success line is **Saved. New items on this list will get the next request number.** Add a new item after that. The number column fills in a few seconds later.
 
@@ -93,7 +93,7 @@ Save creates the number column if it is missing, stores the address, and subscri
 ## 3. Turn numbering on for a list
 
 1. Add a single-line text column on the target list, for example internal name `RequestNumber`.
-2. Open that list and choose **Request number settings**.
+2. Open that list and choose **Autogen Setting**.
 3. Set the formula, the number column, and the reset. Leave **Active** checked and save.
 
 You do not paste an address on this list. Save uses the address stored for the organization and subscribes the list. The same thing happens when someone opens a list that already has an active rule. From then on, a new item from the form, the grid, or Power Automate is queued and numbered.

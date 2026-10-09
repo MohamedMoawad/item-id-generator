@@ -30,8 +30,10 @@ import {
   ensureConfigList,
   ensureTargetNumberColumn,
   loadConfigRows,
+  loadFormulaColumns,
   saveConfigRow
 } from '../../webparts/itemIdGenerator/services/configListClient';
+import { IFormulaColumn } from '../../webparts/itemIdGenerator/services/formula';
 import { numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 
 export interface IRequestNumberSettingsPanelProps {
@@ -49,6 +51,7 @@ interface IRequestNumberSettingsPanelState {
   saving: boolean;
   canEdit: boolean;
   draft?: IConfigDraft;
+  columns: IFormulaColumn[];
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
@@ -63,6 +66,7 @@ export default class RequestNumberSettingsPanel
       loading: true,
       saving: false,
       canEdit: false,
+      columns: [],
       errorMessage: '',
       warningMessage: '',
       statusMessage: ''
@@ -80,12 +84,12 @@ export default class RequestNumberSettingsPanel
       <Panel
         isOpen={true}
         type={PanelType.medium}
-        headerText={`Request numbers for ${this.props.listTitle}`}
+        headerText={`Autogen Setting for ${this.props.listTitle}`}
         onDismiss={this.props.onDismiss}
         isBlocking={false}
       >
         <p className={styles.intro}>
-          Set the formula and save. The next time someone adds an item, the number appears on the list by itself.
+          Set the formula and save. Use {'{counter}'} for the next number. Add a list column, such as {'{Title}'} or {'{Department.title}'} for a lookup. The number appears on the list by itself.
         </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
@@ -134,17 +138,26 @@ export default class RequestNumberSettingsPanel
         <TextField
           label="Formula"
           required={true}
-          description="UTC tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {seq} {seq:n}."
+          description="Use {counter} or {counter:4}. Dates: {yyyy} {yy} {MM} {dd}. Columns: {Title} or {Department.title}."
           value={draft.formula}
           onChange={this._onFormulaChange}
           disabled={busy}
+        />
+        <Dropdown
+          label="Add a column"
+          placeholder="Insert a column from this list"
+          options={this.state.columns
+            .filter((column) => column.internalName !== draft.numberColumnInternalName.trim())
+            .map((column) => ({ key: column.token, text: `${column.title} ${column.token}` }))}
+          onChange={this._onInsertColumn}
+          disabled={busy || this.state.columns.length === 0}
         />
         <TextField
           label="Pad length"
           value={padText}
           onChange={this._onPadChange}
           disabled={busy}
-          description="Width for {seq}. Use 0 through 12."
+          description="Width for {counter}. {counter:4} uses its own width. Use 0 through 12."
         />
         <Dropdown
           label="Reset period"
@@ -155,7 +168,7 @@ export default class RequestNumberSettingsPanel
         />
         <Checkbox label="Active" checked={draft.isActive} onChange={this._onActiveChange} disabled={busy} />
         {draft.id !== undefined && (
-          <TextField label="Current count" value={String(draft.currentCount || 0)} disabled={true} />
+          <TextField label="Current counter" value={String(draft.currentCount || 0)} disabled={true} />
         )}
         {this.state.canEdit && (
           <div className={styles.actions}>
@@ -177,6 +190,15 @@ export default class RequestNumberSettingsPanel
 
   private _onFormulaChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
     this._patch({ formula: value || '' });
+  };
+
+  private _onInsertColumn = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option || !this.state.draft) {
+      return;
+    }
+    const token = String(option.key);
+    const formula = this.state.draft.formula || '';
+    this._patch({ formula: formula.indexOf(token) >= 0 ? formula : `${formula}${token}` });
   };
 
   private _onPadChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
@@ -215,15 +237,26 @@ export default class RequestNumberSettingsPanel
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
     let canEdit = false;
+    let columns: IFormulaColumn[] = [];
     try {
       canEdit = await canEditConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     } catch {
       canEdit = false;
     }
+    try {
+      columns = await loadFormulaColumns(
+        this.props.spHttpClient,
+        deriveWebFromListUrl(this.props.listUrl).webAbsoluteUrl,
+        this.props.listGuid
+      );
+    } catch {
+      columns = [];
+    }
     this.setState({
       loading: false,
       draft,
-      canEdit
+      canEdit,
+      columns
     });
   }
 

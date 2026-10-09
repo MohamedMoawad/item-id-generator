@@ -31,6 +31,7 @@ import {
   REGISTER_WEBHOOK_PROPERTY,
   sharePointError
 } from './configContract';
+import { formulaColumns, IFormulaColumn } from './formula';
 import { buildCreateFieldBody, CONFIG_FIELD_DEFINITIONS } from './requestNumberFields';
 
 export class ConfigListRequestError extends Error {
@@ -267,6 +268,30 @@ async function addFieldToDefaultView(
     return;
   }
   await response.text();
+}
+
+export async function loadFormulaColumns(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string
+): Promise<IFormulaColumn[]> {
+  try {
+    const guid = listGuid.replace(/[{}]/g, '');
+    const response = await spHttpClient.get(
+      `${webAbsoluteUrl.replace(/\/+$/, '')}/_api/web/lists(guid'${guid}')/fields?$select=InternalName,Title,TypeAsString,Hidden&$top=300`,
+      SPHttpClient.configurations.v1,
+      { headers: { Accept: 'application/json;odata=nometadata' } }
+    );
+    if (!response.ok) {
+      return [];
+    }
+    const payload = await response.json() as {
+      value?: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean }>;
+    };
+    return formulaColumns(payload.value || []);
+  } catch {
+    return [];
+  }
 }
 
 export async function connectConfiguredList(

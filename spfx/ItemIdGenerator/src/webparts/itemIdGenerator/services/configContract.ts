@@ -61,7 +61,7 @@ export function emptyDraft(): IConfigDraft {
     targetListUrl: '',
     targetListGuid: '',
     numberColumnInternalName: 'RequestNumber',
-    formula: 'REQ-{yyyy}{MM}-{seq}',
+    formula: 'REQ-{yyyy}{MM}-{counter}',
     resetPeriod: 'Month',
     isActive: true,
     padLength: 4
@@ -94,8 +94,8 @@ export function validateDraft(draft: IConfigDraft): string | undefined {
   if (!FIELD_PATTERN.test(draft.numberColumnInternalName.trim())) {
     return 'Number column internal name must look like RequestNumber.';
   }
-  if (draft.formula.indexOf('{seq') === -1) {
-    return 'Formula must include {seq} or {seq:n}.';
+  if (!/\{(counter|seq)(?::\d+)?\}/i.test(draft.formula)) {
+    return 'Formula must include {counter} or {counter:n}.';
   }
   if (RESET_PERIODS.indexOf(draft.resetPeriod) === -1) {
     return 'Choose a reset period.';

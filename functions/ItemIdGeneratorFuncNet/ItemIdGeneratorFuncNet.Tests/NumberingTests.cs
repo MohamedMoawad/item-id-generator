@@ -20,13 +20,18 @@ public class NumberingTests
         Assert.Equal("REQ-12", Formula.Apply("REQ-{seq}", 12, October, 0));
         Assert.Equal("REQ-12", Formula.Apply("REQ-{seq:2}", 12, October, 6));
         Assert.Equal("2026-{department}-03", Formula.Apply("{yyyy}-{department}-{seq:2}", 3, October, 0));
+        Assert.Equal("Desk-IT-0003", Formula.Apply("{Title}-{Department.title}-{counter}", 3, October, 4, new Dictionary<string, string>
+        {
+            ["Title"] = "Desk",
+            ["Department.title"] = "IT"
+        }));
     }
 
     [Fact]
     public void Formula_rejects_a_code_that_would_repeat()
     {
         var error = Assert.Throws<InvalidOperationException>(() => Formula.Apply("REQ-{yyyy}", 1, October, 0));
-        Assert.Contains("{seq}", error.Message, StringComparison.Ordinal);
+        Assert.Contains("{counter}", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

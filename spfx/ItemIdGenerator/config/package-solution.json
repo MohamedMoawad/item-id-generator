@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Feature",
     "id": "a4a4dfed-37c0-4073-bef5-80c771fc4050",
-    "version": "1.7.0.0",
+    "version": "1.8.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -19,7 +19,7 @@
         "default": "Request numbers for every site collection where this app is added."
       },
       "longDescription": {
-        "default": "Adds the AutoGenFeatureConfiguration list and a Request number settings link on each list."
+        "default": "Adds the AutoGenFeatureConfiguration list and an Autogen Setting link on each list."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -28,9 +28,9 @@
     "features": [
       {
         "title": "AutoGen Feature",
-        "description": "Creates AutoGenFeatureConfiguration and adds request number settings to each list.",
+        "description": "Creates AutoGenFeatureConfiguration and adds Autogen Setting to each list.",
         "id": "9be73e47-2334-4e5f-8e5a-394e668e3520",
-        "version": "1.7.0.0",
+        "version": "1.8.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",
