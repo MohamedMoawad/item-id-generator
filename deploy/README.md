@@ -4,7 +4,7 @@ Files in this folder:
 
 | File | Where it goes |
 | --- | --- |
-| `item-id-generator.sppkg` | SharePoint app catalog. This is the app you add to the site. |
+| `item-id-generator.sppkg` | SharePoint app catalog. Deploy it once for the whole tenant. |
 | `item-id-generator-func-net.zip` | .NET 8 isolated Function App. Upload this zip. It is the webhook package to use. |
 | `item-id-generator-func.zip` | Older Node package. Do not upload this onto a .NET Function App. |
 
@@ -12,22 +12,22 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.11.0.0** is named **AutoGen Feature**. The settings panel title includes the version. Settings open from **Autogen Setting** on the list. The configuration list stays hidden. Upload `item-id-generator.sppkg` only. You do not create an Azure Function, and you do not paste a webhook address.
+Package version **1.12.0.0** is named **AutoGen Feature**. Upload and deploy it in the app catalog only. Check **Make this solution available to all sites in the organization**. Do not add the app on each site. The panel title must say **Autogen Setting 1.12**.
 
-1. Upload the package to the app catalog and add **AutoGen Feature** to the site.
-2. Open the list and choose **Autogen Setting**.
-3. Set the formula, leave **Active** checked, and save.
-4. Add a new item. The number shows in the number column by itself.
+1. Upload `item-id-generator.sppkg` in the app catalog and deploy it for all sites.
+2. Open a list and choose **Autogen Setting**.
+3. Select the single-line text column, set the formula, leave **Active** checked, and save.
+4. Add a new item. The page reloads and the number shows in that column.
 
 The number is written while someone has that list open. Items created while the list is closed receive a number the next time the list is opened. The Azure Function section below is optional and is only for numbering when nobody has the list open.
 
-If you still have the original tenant-wide **ItemIdGenerator** solution, remove it from the app catalog and from the catalog recycle bin first. Do not check “Enable this app and add it to all sites.”
+If an older **AutoGen Feature** or **ItemIdGenerator** package is still installed on a site, remove that site copy once. After that, new versions come only from the app catalog.
 
 1. Download `item-id-generator.sppkg` from this folder.
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
-3. Upload `item-id-generator.sppkg` and deploy it. Do not choose "add it to all sites".
-4. Open the site collection and go to `https://<tenant>.sharepoint.com/sites/<site>/_layouts/15/addanapp.aspx`. Add **AutoGen Feature**. The modern **New > App** page hides some catalog apps; this classic page lists them.
-5. Adding the app creates the list **AutoGenFeatureConfiguration** on that site collection and adds missing columns the first time an owner opens a page.
+3. Upload `item-id-generator.sppkg`, replace the existing app, and deploy it.
+4. Check **Make this solution available to all sites in the organization**.
+5. Open any list. **Autogen Setting** is on the command bar. The panel title must say **Autogen Setting 1.12**.
 6. Open any list. In the command bar, choose **Autogen Setting**. That panel is the configuration for that list. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
 List owners set the formula, the number column, and the reset. They do not see a webhook address. Saving an active rule is enough. Opening the list fills blank number columns.
