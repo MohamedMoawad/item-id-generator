@@ -3,6 +3,7 @@ import {
   Checkbox,
   DefaultButton,
   Dropdown,
+  IContextualMenuItem,
   IDropdownOption,
   MessageBar,
   MessageBarType,
@@ -87,10 +88,21 @@ export default class RequestNumberSettingsPanel
       <Panel
         isOpen={true}
         type={PanelType.medium}
-        headerText={`Autogen Feature 1.15 for ${this.props.listTitle}`}
+        headerText={`Autogen Feature for ${this.props.listTitle}`}
         onDismiss={this.props.onDismiss}
         isBlocking={false}
       >
+        <div className={styles.toolbar}>
+          <p className={styles.statusLine}>{this._statusLine()}</p>
+          <DefaultButton
+            className={styles.settingsButton}
+            text="Settings"
+            iconProps={{ iconName: 'Settings' }}
+            menuIconProps={{ iconName: 'ChevronDown' }}
+            menuProps={{ items: this._settingsItems() }}
+            disabled={this.state.loading || !this.state.draft}
+          />
+        </div>
         <p className={styles.intro}>
           Choose an existing single line of text column. Create that column in the list first if it is not listed. {'{counter}'} is the next number.
         </p>
@@ -185,16 +197,42 @@ export default class RequestNumberSettingsPanel
           {editing && (
             <PrimaryButton text={this.state.saving ? 'Saving...' : 'Save settings'} onClick={this._onSave} disabled={this.state.saving} />
           )}
-          {this.state.canEdit && !editing && (
-            <PrimaryButton text="Edit" onClick={this._onEdit} disabled={this.state.saving} />
-          )}
-          {this.state.canEdit && editing && draft.id !== undefined && (
-            <DefaultButton text="View" onClick={this._onView} disabled={this.state.saving} />
-          )}
           <DefaultButton text="Close" onClick={this.props.onDismiss} disabled={this.state.saving} />
         </div>
       </div>
     );
+  }
+
+  private _statusLine(): string {
+    const draft = this.state.draft;
+    if (this.state.loading) {
+      return 'Loading settings.';
+    }
+    if (!draft || !draft.modified) {
+      return 'Not saved yet.';
+    }
+    const who = draft.modifiedBy ? ` by ${draft.modifiedBy}` : '';
+    return `Last modified ${formatModified(draft.modified)}${who}.`;
+  }
+
+  private _settingsItems(): IContextualMenuItem[] {
+    const editing = this.state.editing && this.state.canEdit;
+    return [
+      {
+        key: 'edit',
+        text: 'Edit',
+        iconProps: { iconName: 'Edit' },
+        disabled: !this.state.canEdit || editing || this.state.saving,
+        onClick: this._onEdit
+      },
+      {
+        key: 'view',
+        text: 'View',
+        iconProps: { iconName: 'View' },
+        disabled: !this.state.editing || this.state.saving,
+        onClick: this._onView
+      }
+    ];
   }
 
   private _textColumns(): IFormulaColumn[] {
