@@ -374,6 +374,13 @@ export function buildGetListUrl(listUrl: string): string {
   return `${location.webAbsoluteUrl}/_api/web/GetList(@listUrl)?@listUrl=${encodeURIComponent(quoted)}&$select=Id,Title`;
 }
 
+export function isExistingColumnError(body: string): boolean {
+  const text = body.toLowerCase();
+  return text.indexOf('already exist') >= 0
+    || text.indexOf('duplicate field') >= 0
+    || text.indexOf('already in use') >= 0;
+}
+
 export function sharePointError(status: number, body: string, listTitle: string): string {
   if (status === 404) {
     return `The list "${listTitle}" was not found on this site collection. Choose Ensure ${listTitle} to create it.`;

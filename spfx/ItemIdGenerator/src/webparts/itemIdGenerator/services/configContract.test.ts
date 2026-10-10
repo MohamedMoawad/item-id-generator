@@ -16,6 +16,7 @@ import {
   findConfigForList,
   hasPermissionFlag,
   isConfigList,
+  isExistingColumnError,
   isPlaceholderSetting,
   mapConfigRow,
   PERMISSION_EDIT_LIST_ITEMS,
@@ -101,6 +102,12 @@ describe('AutoGenFeatureConfiguration contract', () => {
     const getList = buildGetListUrl("https://contoso.sharepoint.com/sites/ops/Lists/Team's Requests");
     expect(getList).toContain('https://contoso.sharepoint.com/sites/ops/_api/web/GetList(@listUrl)?@listUrl=');
     expect(decodeURIComponent(getList)).toContain("/sites/ops/Lists/Team''s Requests");
+  });
+
+  it('treats a duplicate column response as the column already being there', () => {
+    expect(isExistingColumnError('A column with this name already exists. Please choose another name.')).toBe(true);
+    expect(isExistingColumnError('The field name already exists.')).toBe(true);
+    expect(isExistingColumnError('SharePoint returned HTTP 403.')).toBe(false);
   });
 
   it('builds the RegisterWebhook body and treats placeholders as unset', () => {

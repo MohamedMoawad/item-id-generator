@@ -21,6 +21,7 @@ import {
   deriveWebFromListUrl,
   findConfigForList,
   hasPermissionFlag,
+  isExistingColumnError,
   isPlaceholderSetting,
   IConfigDraft,
   ISharePointConfigItem,
@@ -131,10 +132,10 @@ export async function ensureConfigList(
     value?: { InternalName?: string }[];
     d?: { results?: { InternalName?: string }[] };
   }>(fieldsText);
-  const present = new Set(readInternalNames(fieldPayload));
+  const present = new Set(readInternalNames(fieldPayload).map((name) => name.toLowerCase()));
   const fieldsAdded: string[] = [];
   for (const field of CONFIG_FIELD_DEFINITIONS) {
-    if (present.has(field.internalName)) {
+    if (present.has(field.internalName.toLowerCase())) {
       continue;
     }
     const addResponse = await spHttpClient.post(
@@ -146,10 +147,11 @@ export async function ensureConfigList(
       }
     );
     if (!addResponse.ok) {
-      throw new ConfigListRequestError(
-        sharePointError(addResponse.status, await addResponse.text(), listTitle),
-        addResponse.status
-      );
+      const text = await addResponse.text();
+      if (isExistingColumnError(text)) {
+        continue;
+      }
+      throw new ConfigListRequestError(sharePointError(addResponse.status, text, listTitle), addResponse.status);
     }
     fieldsAdded.push(field.internalName);
   }
@@ -271,18 +273,34 @@ export async function ensureTargetNumberColumn(
 ): Promise<void> {
   const name = internalName.trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error('Number column internal name must look like RequestNumber.');
+    throw new Error('Choose a single line of text column.');
   }
-  const web = deriveWebFromListUrl(listUrl).webAbsoluteUrl;
+  const web = deriveWebFromListUrl(listUrl).webAbsoluteUrl.replace(/\/+$/, '');
   const guid = listGuid.replace(/[{}]/g, '');
-  const fieldUrl = `${web}/_api/web/lists(guid'${guid}')/fields/getbyinternalnameorstaticname('${name}')`;
-  const existing = await spHttpClient.get(fieldUrl, SPHttpClient.configurations.v1, {
-    headers: { Accept: 'application/json;odata=nometadata' }
-  });
-  if (!existing.ok) {
-    throw new Error('Choose a single line of text column that already exists on this list.');
+  if (await defaultViewHasField(spHttpClient, web, guid, name)) {
+    return;
   }
   await addFieldToDefaultView(spHttpClient, web, guid, name);
+}
+
+async function defaultViewHasField(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  internalName: string
+): Promise<boolean> {
+  const response = await spHttpClient.get(
+    `${webAbsoluteUrl}/_api/web/lists(guid'${listGuid}')/DefaultView/ViewFields`,
+    SPHttpClient.configurations.v1,
+    { headers: { Accept: 'application/json;odata=nometadata' } }
+  );
+  if (!response.ok) {
+    return false;
+  }
+  const payload = await response.json() as { Items?: string[] | { results?: string[] } };
+  const items = !payload.Items ? [] : (Array.isArray(payload.Items) ? payload.Items : payload.Items.results || []);
+  const wanted = internalName.toLowerCase();
+  return items.some((item) => item.toLowerCase() === wanted);
 }
 
 async function addFieldToDefaultView(
@@ -294,12 +312,15 @@ async function addFieldToDefaultView(
   const response = await spHttpClient.post(
     `${webAbsoluteUrl}/_api/web/lists(guid'${listGuid}')/DefaultView/ViewFields/AddViewField('${internalName}')`,
     SPHttpClient.configurations.v1,
-    { headers: { Accept: 'application/json;odata=verbose' } }
+    { headers: { Accept: 'application/json;odata=nometadata' } }
   );
   if (response.ok) {
     return;
   }
-  await response.text();
+  const text = await response.text();
+  if (isExistingColumnError(text)) {
+    return;
+  }
 }
 
 export async function loadFormulaColumns(
