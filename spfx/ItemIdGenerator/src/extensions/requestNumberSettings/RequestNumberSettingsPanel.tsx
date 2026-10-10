@@ -32,7 +32,7 @@ import {
   deleteConfigRow,
   ensureConfigList,
   ensureTargetNumberColumn,
-  hideConfigList,
+  showConfigList,
   loadConfigRows,
   loadFormulaColumns,
   saveConfigRow
@@ -61,6 +61,7 @@ interface IRequestNumberSettingsPanelState {
   warningMessage: string;
   statusMessage: string;
   confirmDelete: boolean;
+  showingForm: boolean;
 }
 
 export default class RequestNumberSettingsPanel
@@ -77,7 +78,8 @@ export default class RequestNumberSettingsPanel
       errorMessage: '',
       warningMessage: '',
       statusMessage: '',
-      confirmDelete: false
+      confirmDelete: false,
+      showingForm: false
     };
   }
 
@@ -89,7 +91,8 @@ export default class RequestNumberSettingsPanel
 
   public render(): React.ReactElement {
     const draft = this.state.draft;
-    const showRow = !!draft && draft.id !== undefined && !this.state.editing;
+    const showRow = !!draft && draft.id !== undefined && !this.state.showingForm;
+    const showAddLink = !!draft && draft.id === undefined && !this.state.showingForm;
     return (
       <Dialog
         hidden={false}
@@ -131,8 +134,13 @@ export default class RequestNumberSettingsPanel
             <MessageBar messageBarType={MessageBarType.success}>{this.state.statusMessage}</MessageBar>
           </div>
         )}
+        {!this.state.loading && showAddLink && (
+          <button type="button" className={styles.addLink} onClick={this._onAdd} disabled={!this.state.canEdit}>
+            Add AutoGen Configuration
+          </button>
+        )}
         {showRow && draft && this._renderSavedRow(draft)}
-        {!this.state.loading && draft && !showRow && this._renderForm(draft)}
+        {!this.state.loading && draft && this.state.showingForm && this._renderForm(draft)}
       </Dialog>
     );
   }
@@ -245,6 +253,9 @@ export default class RequestNumberSettingsPanel
           {editing && (
             <PrimaryButton text={this.state.saving ? 'Saving...' : 'Save settings'} onClick={this._onSave} disabled={this.state.saving} />
           )}
+          {draft.id !== undefined && (
+            <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
+          )}
           <DefaultButton text="Close" onClick={this.props.onDismiss} disabled={this.state.saving} />
         </div>
       </div>
@@ -277,7 +288,7 @@ export default class RequestNumberSettingsPanel
         key: 'view',
         text: 'View',
         iconProps: { iconName: 'View' },
-        disabled: !this.state.editing || this.state.saving,
+        disabled: !this.state.draft || this.state.draft.id === undefined || this.state.saving || (this.state.showingForm && !this.state.editing),
         onClick: this._onView
       }
     ];
@@ -297,6 +308,13 @@ export default class RequestNumberSettingsPanel
         iconProps: { iconName: 'Edit' },
         disabled: locked,
         onClick: this._onEdit
+      },
+      {
+        key: 'view',
+        text: 'View',
+        iconProps: { iconName: 'View' },
+        disabled: this.state.saving,
+        onClick: this._onViewRow
       },
       {
         key: 'delete',
@@ -323,8 +341,20 @@ export default class RequestNumberSettingsPanel
     this._patch({ numberColumnInternalName: String(option.key) });
   };
 
+  private _onAdd = (): void => {
+    this.setState({ showingForm: true, editing: true, confirmDelete: false, statusMessage: '', errorMessage: '' });
+  };
+
   private _onEdit = (): void => {
-    this.setState({ editing: true, confirmDelete: false, statusMessage: '', errorMessage: '' });
+    this.setState({ showingForm: true, editing: true, confirmDelete: false, statusMessage: '', errorMessage: '' });
+  };
+
+  private _onViewRow = (): void => {
+    this.setState({ showingForm: true, editing: false, confirmDelete: false, statusMessage: '', errorMessage: '' });
+  };
+
+  private _onBack = (): void => {
+    this.setState({ showingForm: false, editing: false, confirmDelete: false });
   };
 
   private _onAskDelete = (): void => {
@@ -342,9 +372,11 @@ export default class RequestNumberSettingsPanel
   };
 
   private _onView = (): void => {
-    this._load().catch((error: unknown) => {
-      this.setState({ loading: false, errorMessage: messageOf(error) });
-    });
+    if (this.state.draft && this.state.draft.id !== undefined && this.state.showingForm && this.state.editing) {
+      this.setState({ editing: false, confirmDelete: false });
+      return;
+    }
+    this._onViewRow();
   };
 
   private _onFormulaChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
@@ -392,7 +424,7 @@ export default class RequestNumberSettingsPanel
     const listTitle = this.props.configListTitle.trim() || DEFAULT_CONFIG_LIST_TITLE;
     this.setState({ loading: true, errorMessage: '' });
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
-    await hideConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
+    await showConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const rows = await loadConfigRows(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
@@ -420,9 +452,10 @@ export default class RequestNumberSettingsPanel
       loading: false,
       draft,
       canEdit,
-      editing: !existing && canEdit,
+      editing: false,
       columns,
-      confirmDelete: false
+      confirmDelete: false,
+      showingForm: false
     });
   }
 

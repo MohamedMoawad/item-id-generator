@@ -156,72 +156,31 @@ export async function ensureConfigList(
   return { created, fieldsAdded };
 }
 
-export async function hideConfigList(
+export async function showConfigList(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
   listTitle: string
 ): Promise<void> {
-  const response = await spHttpClient.post(buildListUrl(siteAbsoluteUrl, listTitle), SPHttpClient.configurations.v1, {
-    headers: {
-      ...jsonHeaders,
-      'IF-MATCH': '*',
-      'X-HTTP-Method': 'MERGE'
-    },
-    body: JSON.stringify({ Hidden: true })
+  const url = buildListUrl(siteAbsoluteUrl, listTitle);
+  const headers = {
+    ...jsonHeaders,
+    'IF-MATCH': '*',
+    'X-HTTP-Method': 'MERGE'
+  };
+  const visible = await spHttpClient.post(url, SPHttpClient.configurations.v1, {
+    headers,
+    body: JSON.stringify({ Hidden: false })
   });
-  if (!response.ok && response.status !== 404) {
-    await response.text();
+  if (!visible.ok && visible.status !== 404) {
+    await visible.text();
   }
-  await removeQuickLaunchLink(spHttpClient, siteAbsoluteUrl, listTitle);
-}
-
-async function removeQuickLaunchLink(
-  spHttpClient: SPHttpClient,
-  siteAbsoluteUrl: string,
-  listTitle: string
-): Promise<void> {
-  const site = siteAbsoluteUrl.replace(/\/+$/, '');
-  const response = await spHttpClient.get(
-    `${site}/_api/web/Navigation/QuickLaunch?$select=Id,Title&$expand=Children&$top=100`,
-    SPHttpClient.configurations.v1,
-    { headers: { Accept: 'application/json;odata=nometadata' } }
-  );
-  if (!response.ok) {
-    return;
-  }
-  const payload = await response.json() as { value?: INavNode[] };
-  const nodes = flattenNav(payload.value || []);
-  const wanted = listTitle.trim().toLowerCase();
-  for (let index = 0; index < nodes.length; index += 1) {
-    const node = nodes[index];
-    if (!node.Id || (node.Title || '').trim().toLowerCase() !== wanted) {
-      continue;
-    }
-    const deleted = await spHttpClient.post(
-      `${site}/_api/web/Navigation/GetNodeById(${node.Id})`,
-      SPHttpClient.configurations.v1,
-      { headers: { 'IF-MATCH': '*', 'X-HTTP-Method': 'DELETE' } }
-    );
-    if (!deleted.ok) {
-      await deleted.text();
-    }
-  }
-}
-
-interface INavNode {
-  Id?: number;
-  Title?: string;
-  Children?: INavNode[] | { results?: INavNode[] };
-}
-
-function flattenNav(nodes: INavNode[]): INavNode[] {
-  const flat: INavNode[] = [];
-  nodes.forEach((node) => {
-    flat.push(node);
-    const children = Array.isArray(node.Children) ? node.Children : (node.Children && node.Children.results) || [];
-    children.forEach((child) => flat.push(child));
+  const navigation = await spHttpClient.post(url, SPHttpClient.configurations.v1, {
+    headers,
+    body: JSON.stringify({ OnQuickLaunch: true })
   });
-  return flat;
+  if (!navigation.ok && navigation.status !== 404) {
+    await navigation.text();
+  }
 }
 
 export async function resolveTargetList(spHttpClient: SPHttpClient, listUrl: string): Promise<IResolvedList> {

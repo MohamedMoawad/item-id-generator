@@ -1,7 +1,7 @@
 import { BaseApplicationCustomizer } from '@microsoft/sp-application-base';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { buildGetListUrl, DEFAULT_CONFIG_LIST_TITLE } from '../../webparts/itemIdGenerator/services/configContract';
-import { ensureConfigList, hideConfigList } from '../../webparts/itemIdGenerator/services/configListClient';
+import { ensureConfigList, showConfigList } from '../../webparts/itemIdGenerator/services/configListClient';
 import { syncAutogenFromCustomizer } from '../requestNumberSettings/autogenListRuntime';
 import { ILegacyPageContextInfo, listServerRelativeUrlFromPath, readLegacyListContext } from '../requestNumberSettings/commandVisibility';
 
@@ -9,7 +9,7 @@ export interface IRequestNumberProvisionerProperties {
   configListTitle?: string;
 }
 
-const ENSURED_KEY = 'requestNumberConfigEnsured';
+const ENSURED_KEY = 'requestNumberConfigVisible';
 
 export default class RequestNumberProvisionerApplicationCustomizer
   extends BaseApplicationCustomizer<IRequestNumberProvisionerProperties> {
@@ -123,7 +123,7 @@ export default class RequestNumberProvisionerApplicationCustomizer
         this.context.pageContext.site.absoluteUrl,
         listTitle
       );
-      await hideConfigList(
+      await showConfigList(
         this.context.spHttpClient,
         this.context.pageContext.site.absoluteUrl,
         listTitle

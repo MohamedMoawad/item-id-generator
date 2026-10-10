@@ -35,6 +35,22 @@
   font-weight: 600;
 }
 
+.addLink {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #107c10;
+  font: 600 14px "Segoe UI", "Segoe UI Web (West European)", sans-serif;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.addLink:disabled {
+  color: #a19f9d;
+  cursor: default;
+}
+
 .confirm {
   display: flex;
   flex-wrap: wrap;

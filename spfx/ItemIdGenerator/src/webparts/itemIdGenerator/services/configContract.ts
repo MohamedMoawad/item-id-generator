@@ -355,8 +355,8 @@ export function buildCreateListBody(listTitle: string): { BaseTemplate: number; 
   return {
     BaseTemplate: 100,
     Title: listTitle,
-    Description: 'Hidden per-list Autogen settings. Open Autogen Setting on a list to view or edit them.',
-    Hidden: true
+    Description: 'Per-list Autogen settings. Open Autogen Feature on a list to view or edit them.',
+    Hidden: false
   };
 }
 
