@@ -1,3 +1,18 @@
+:global(.ms-Dialog-main).dialogHost {
+  box-sizing: border-box;
+  width: 96vw !important;
+  max-width: 1280px !important;
+  min-width: 1100px !important;
+}
+
+@media (max-width: 1140px) {
+  :global(.ms-Dialog-main).dialogHost {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    min-width: 96vw !important;
+  }
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -11,9 +26,15 @@
 .head,
 .dataRow {
   display: grid;
-  grid-template-columns: minmax(120px, 1.4fr) minmax(90px, 1fr) minmax(120px, 1.5fr) 70px minmax(80px, 1fr) 40px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 1.8fr) minmax(0, 0.7fr) minmax(0, 1fr) 40px;
+  gap: 12px;
   align-items: center;
+}
+
+.head > span,
+.dataRow > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .head {

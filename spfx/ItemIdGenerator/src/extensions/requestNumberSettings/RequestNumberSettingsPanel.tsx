@@ -97,6 +97,8 @@ export default class RequestNumberSettingsPanel
       <Dialog
         hidden={false}
         onDismiss={this.props.onDismiss}
+        minWidth="1100px"
+        maxWidth="1280px"
         dialogContentProps={{
           type: DialogType.normal,
           title: 'Autogen Feature',
@@ -104,7 +106,7 @@ export default class RequestNumberSettingsPanel
         }}
         modalProps={{
           isBlocking: false,
-          styles: { main: { maxWidth: 880, width: '92%' } }
+          containerClassName: styles.dialogHost
         }}
       >
         <div className={styles.toolbar}>
