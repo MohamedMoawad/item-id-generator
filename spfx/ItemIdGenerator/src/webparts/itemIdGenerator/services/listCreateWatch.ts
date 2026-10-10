@@ -108,16 +108,17 @@ interface IAssignedPaint {
 const assignedPaints = new Map<number, IAssignedPaint>();
 let paintObserver: MutationObserver | undefined;
 let paintScheduled = false;
-let refreshArmed = false;
-let listRefreshed = false;
-let lastRefreshTry = 0;
+let refreshTimer: number | undefined;
+let refreshGeneration = 0;
 
 export function clearAssignedPaints(): void {
   assignedPaints.clear();
-  refreshArmed = false;
-  listRefreshed = false;
   paintScheduled = false;
-  lastRefreshTry = 0;
+  refreshGeneration += 1;
+  if (refreshTimer !== undefined) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+  }
   if (paintObserver) {
     paintObserver.disconnect();
     paintObserver = undefined;
@@ -136,39 +137,30 @@ export function repaintAssignedNumbers(): void {
   applyAssignedPaints();
 }
 
+const REFRESH_SELECTORS = [
+  'button[data-automationid="refreshCommand"]',
+  'button[data-id="Refresh"]',
+  'button[name="Refresh"]',
+  'button[aria-label="Refresh"]',
+  'button[title="Refresh"]'
+];
+
 export function clickListRefresh(): boolean {
-  const named = document.querySelector(
-    'button[data-automationid="refreshCommand"], button[data-id="Refresh"], button[name="Refresh"], button[aria-label="Refresh"], button[title="Refresh"]'
-  );
-  if (named instanceof HTMLButtonElement) {
-    named.click();
-    return true;
+  const button = findRefreshButton(document);
+  if (!button) {
+    return false;
   }
-  const buttons = document.querySelectorAll('button');
-  for (let index = 0; index < buttons.length; index += 1) {
-    const label = `${buttons[index].getAttribute('aria-label') || ''} ${buttons[index].getAttribute('title') || ''} ${buttons[index].getAttribute('name') || ''}`.toLowerCase();
-    if (label.indexOf('refresh') >= 0) {
-      buttons[index].click();
-      return true;
-    }
-  }
-  const icon = document.querySelector('[data-icon-name="Refresh"]');
-  const button = icon ? icon.closest('button') : null;
-  if (button instanceof HTMLButtonElement) {
-    button.click();
-    return true;
-  }
-  return false;
+  button.click();
+  return true;
 }
 
 export function revealAssignedNumbers(itemIds: number[]): void {
   if (itemIds.length === 0) {
     return;
   }
-  refreshArmed = true;
-  listRefreshed = false;
   watchAssignedRows();
   applyAssignedPaints();
+  scheduleAjaxRefresh(itemIds);
 }
 
 function watchAssignedRows(): void {
@@ -193,7 +185,6 @@ function applyAssignedPaints(): void {
     paintListCell(update);
     paintOpenForm(update);
   });
-  maybeRefreshList();
 }
 
 function paintListCell(update: IAssignedPaint): void {
@@ -270,16 +261,92 @@ function visibleText(element: Element): string {
   return (element.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
-function maybeRefreshList(): void {
-  if (!refreshArmed || listRefreshed || gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
+function scheduleAjaxRefresh(itemIds: number[]): void {
+  const generation = refreshGeneration;
+  let overflowOpened = false;
+  const started = Date.now();
+  const tick = (): void => {
+    refreshTimer = undefined;
+    if (generation !== refreshGeneration) {
+      return;
+    }
+    if (gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
+      if (Date.now() - started < 20000) {
+        refreshTimer = window.setTimeout(tick, 400);
+      }
+      return;
+    }
+    if (clickListRefresh()) {
+      window.setTimeout(() => {
+        if (generation === refreshGeneration) {
+          applyAssignedPaints();
+        }
+      }, 700);
+      return;
+    }
+    if (!overflowOpened && openCommandOverflow()) {
+      overflowOpened = true;
+      refreshTimer = window.setTimeout(tick, 350);
+      return;
+    }
+    if (Date.now() - started < 2500) {
+      refreshTimer = window.setTimeout(tick, 400);
+      return;
+    }
+    reloadListOnce(itemIds);
+  };
+  if (refreshTimer !== undefined) {
+    window.clearTimeout(refreshTimer);
+  }
+  refreshTimer = window.setTimeout(tick, 400);
+}
+
+function findRefreshButton(root: ParentNode): HTMLButtonElement | undefined {
+  for (let index = 0; index < REFRESH_SELECTORS.length; index += 1) {
+    const nodes = root.querySelectorAll(REFRESH_SELECTORS[index]);
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+      const button = nodes[nodeIndex];
+      if (button instanceof HTMLButtonElement && button.getClientRects().length > 0) {
+        return button;
+      }
+    }
+  }
+  const icons = root.querySelectorAll('[data-icon-name="Refresh"]');
+  for (let index = 0; index < icons.length; index += 1) {
+    const button = icons[index].closest('button');
+    if (button instanceof HTMLButtonElement && button.getClientRects().length > 0) {
+      return button;
+    }
+  }
+  return undefined;
+}
+
+function openCommandOverflow(): boolean {
+  const bars = document.querySelectorAll('[data-automationid="ListViewCommandBar"], [role="menubar"]');
+  for (let index = 0; index < bars.length; index += 1) {
+    const overflow = bars[index].querySelector(
+      'button[data-automationid="overflowButton"], button[aria-label="More commands"], button[aria-label="More"], button[title="More commands"], button[title="More"]'
+    );
+    if (overflow instanceof HTMLButtonElement && overflow.getClientRects().length > 0) {
+      overflow.click();
+      return true;
+    }
+  }
+  return false;
+}
+
+function reloadListOnce(itemIds: number[]): void {
+  const key = `autogenReload:${itemIds.slice().sort((left, right) => left - right).join(',')}`;
+  try {
+    if (window.sessionStorage.getItem(key) === '1') {
+      return;
+    }
+    window.sessionStorage.setItem(key, '1');
+  } catch {
+    window.location.reload();
     return;
   }
-  const now = Date.now();
-  if (now - lastRefreshTry < 500) {
-    return;
-  }
-  lastRefreshTry = now;
-  listRefreshed = clickListRefresh();
+  window.location.reload();
 }
 
 export function gridEditIsOpen(): boolean {
