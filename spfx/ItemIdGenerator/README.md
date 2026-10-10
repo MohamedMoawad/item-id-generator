@@ -28,7 +28,7 @@ The generator uses Heft. `npm start` is the old `gulp serve`. `npm run package-s
 
 ## Deploy
 
-Upload `sharepoint/solution/item-id-generator.sppkg` to the App Catalog. `skipFeatureDeployment` is true, so make the solution available to all sites when the catalog asks. Add **AutoGen Feature** to a page on the site collection.
+Upload `sharepoint/solution/item-id-generator.sppkg` to the App Catalog and deploy it. On the site collection, open **Site contents**, choose **Add an app**, then **From your organization**, and add **AutoGen Feature**.
 
 The web part uses the current user's `SPHttpClient`. That user needs permission to create a list on the site collection and to read the target list. Webhook registration itself is app-only inside the Function, because SharePoint calls `spoWebhook` back during subscribe and the browser cannot finish that handshake.
 
