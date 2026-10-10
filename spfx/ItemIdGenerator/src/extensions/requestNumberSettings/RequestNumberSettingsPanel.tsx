@@ -97,8 +97,8 @@ export default class RequestNumberSettingsPanel
       <Dialog
         hidden={false}
         onDismiss={this.props.onDismiss}
-        minWidth="1100px"
-        maxWidth="1280px"
+        minWidth="40vw"
+        maxWidth="40vw"
         dialogContentProps={{
           type: DialogType.normal,
           title: 'Autogen Feature',
@@ -155,7 +155,8 @@ export default class RequestNumberSettingsPanel
           <span>Number column</span>
           <span>Formula</span>
           <span>Status</span>
-          <span>Owner</span>
+          <span>Modified</span>
+          <span>Modified by</span>
           <span />
         </div>
         <div className={styles.dataRow}>
@@ -163,7 +164,8 @@ export default class RequestNumberSettingsPanel
           <span>{this._columnTitle(draft.numberColumnInternalName)}</span>
           <span>{draft.formula}</span>
           <span>{draft.isActive ? 'Active' : 'Off'}</span>
-          <span>{draft.modifiedBy || ''}</span>
+          <span>{formatModified(draft.modified)}</span>
+          <span>{draft.modifiedBy || 'Not saved yet'}</span>
           <IconButton
             iconProps={{ iconName: 'More' }}
             ariaLabel="Autogen actions"
@@ -191,8 +193,6 @@ export default class RequestNumberSettingsPanel
         <p className={styles.intro}>
           Choose an existing single line of text column. Create that column in the list first if it is not listed. {'{counter}'} is the next number.
         </p>
-        <TextField label="Last modified" value={formatModified(draft.modified)} readOnly={true} />
-        <TextField label="Modified by" value={draft.modifiedBy || 'Not saved yet'} readOnly={true} />
         {!this.state.canEdit && (
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.info}>
