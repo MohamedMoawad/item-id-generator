@@ -12,11 +12,11 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.16.0.0** is named **AutoGen Feature**. Upload it in the app catalog and check **Make this solution available to all sites in the organization**. Sites that already have the app pick up this version on refresh. Do not remove the app from the site. Open a list. A teal **Autogen Feature** button stays at the bottom-right. The panel title is **Autogen Feature for** the list name, with **Settings** at the top right.
+Package version **1.17.0.0** is named **AutoGen Feature**. Upload it in the app catalog and check **Make this solution available to all sites in the organization**. Sites that already have the app pick up this version on refresh. Do not remove the app from the site. **Autogen Feature** is on the list command bar. The settings open in the middle of the page. A list that already uses Autogen shows one row, with Edit and Delete on that row.
 
 1. Upload `item-id-generator.sppkg` in the app catalog, replace the existing app, and deploy it.
 2. Check **Make this solution available to all sites in the organization**.
-3. Open a list and choose the teal **Autogen Feature** button at the bottom-right. Use **Settings** to edit or view.
+3. Open a list and choose **Autogen Feature** on the command bar. The dialog opens in the middle of the page.
 4. Select the single-line text column, set the formula, leave **Active** checked, and save.
 5. Add a new item. The page reloads and the number shows in that column.
 
@@ -28,7 +28,7 @@ Later versions are the same upload. Replace the package in the app catalog and d
 2. Open the app catalog (`https://<tenant>.sharepoint.com/sites/appcatalog`) and go to **Apps for SharePoint**.
 3. Upload `item-id-generator.sppkg`, replace the existing app, and deploy it.
 4. Check **Make this solution available to all sites in the organization**.
-5. Open any list and refresh. The teal **Autogen Feature** button is fixed at the bottom-right. The panel title is **Autogen Feature for** the list name. **Settings** switches between view and edit.
+5. Open any list and refresh. **Autogen Feature** is on the command bar, not at the bottom of the page. A saved list shows a settings row. The **...** menu on that row has Edit and Delete.
 6. Save stores the row on `AutoGenFeatureConfiguration`. People who can edit the config list can change it. Other people can open the same link and see the settings.
 
 List owners set the formula, the number column, and the reset. They do not see a webhook address. Saving an active rule is enough. Opening the list fills blank number columns.

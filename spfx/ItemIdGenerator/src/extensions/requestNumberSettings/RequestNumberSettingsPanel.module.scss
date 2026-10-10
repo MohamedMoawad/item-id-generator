@@ -1,7 +1,46 @@
 .panel {
   display: flex;
   flex-direction: column;
-  max-width: 640px;
+}
+
+.table {
+  width: 100%;
+  border-top: 1px solid #edebe9;
+}
+
+.head,
+.dataRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) minmax(90px, 1fr) minmax(120px, 1.5fr) 70px minmax(80px, 1fr) 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.head {
+  padding: 10px 0;
+  color: #605e5c;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid #edebe9;
+}
+
+.dataRow {
+  padding: 8px 0;
+  font-size: 14px;
+  color: #323130;
+}
+
+.titleLink {
+  color: #107c10;
+  font-weight: 600;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .toolbar {

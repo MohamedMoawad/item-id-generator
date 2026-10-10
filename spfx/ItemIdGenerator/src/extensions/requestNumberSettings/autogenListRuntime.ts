@@ -28,6 +28,7 @@ let activeListId = '';
 const numberGate = { busy: false, pending: false };
 let timer: number | undefined;
 let stopWatch: (() => void) | undefined;
+let barObserver: MutationObserver | undefined;
 let panelHost: HTMLDivElement | undefined;
 
 export function syncAutogenFromCommandSet(next: IAutogenListTarget | undefined): void {
@@ -87,6 +88,11 @@ function startWork(next: IAutogenListTarget): void {
   showNumberColumn(next).catch(() => undefined);
   connectList(next).catch(() => undefined);
   numberList().catch(() => undefined);
+  ensureButton();
+  if (!barObserver && typeof MutationObserver !== 'undefined') {
+    barObserver = new MutationObserver(() => ensureButton());
+    barObserver.observe(document.body, { childList: true, subtree: true });
+  }
   timer = window.setInterval(() => {
     ensureButton();
     numberList().catch(() => undefined);
@@ -110,6 +116,10 @@ function stopWork(): void {
   if (timer !== undefined) {
     window.clearInterval(timer);
     timer = undefined;
+  }
+  if (barObserver) {
+    barObserver.disconnect();
+    barObserver = undefined;
   }
 }
 
@@ -191,12 +201,45 @@ async function connectList(next: IAutogenListTarget): Promise<void> {
 }
 
 function ensureButton(): void {
-  // SharePoint rebuilds the list command bar and deletes buttons placed inside it.
-  ensureStyles();
-  if (document.getElementById(BUTTON_ID)) {
+  const host = findCommandBarHost();
+  const current = document.getElementById(BUTTON_ID);
+  if (!host) {
+    if (current && current.parentElement === document.body) {
+      current.parentElement.removeChild(current);
+    }
     return;
   }
-  document.body.appendChild(createButton());
+  if (current && current.parentElement === host) {
+    return;
+  }
+  if (!current && (host.textContent || '').indexOf(AUTOGEN_COMMAND_LABEL) >= 0) {
+    return;
+  }
+  ensureStyles();
+  host.appendChild(current || createButton());
+}
+
+function findCommandBarHost(): HTMLElement | undefined {
+  const selectors = [
+    'button[data-automationid="newCommand"]',
+    'button[name="New"]',
+    'button[title="New"]',
+    '[data-automationid="splitbuttonprimary"]'
+  ];
+  for (let index = 0; index < selectors.length; index++) {
+    const nodes = document.querySelectorAll(selectors[index]);
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+      const node = nodes[nodeIndex] as HTMLElement;
+      if (node.getClientRects().length === 0) {
+        continue;
+      }
+      const bar = node.closest('[role="menubar"]') || node.closest('[role="toolbar"]') || node.parentElement;
+      if (bar && bar.id !== BUTTON_ID) {
+        return bar as HTMLElement;
+      }
+    }
+  }
+  return undefined;
 }
 
 function createButton(): HTMLButtonElement {
@@ -229,10 +272,10 @@ function ensureStyles(): void {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = [
-    `#${BUTTON_ID}{position:fixed;right:24px;bottom:24px;z-index:1000000;display:inline-flex;align-items:center;`,
-    'height:40px;padding:0 16px;border:0;border-radius:20px;background:#038387;color:#fff;cursor:pointer;',
-    'box-shadow:0 4px 16px rgba(0,0,0,.28);font:600 14px/40px "Segoe UI","Segoe UI Web (West European)",sans-serif;}',
-    `#${BUTTON_ID}:hover{background:#026d70;}`
+    `#${BUTTON_ID}{display:inline-flex;align-items:center;height:32px;margin:0 4px;padding:0 8px;`,
+    'border:0;border-radius:2px;background:transparent;color:#038387;cursor:pointer;flex:0 0 auto;',
+    'font:600 14px/32px "Segoe UI","Segoe UI Web (West European)",sans-serif;}',
+    `#${BUTTON_ID}:hover{background:#f3f2f1;}`
   ].join('');
   document.head.appendChild(style);
 }

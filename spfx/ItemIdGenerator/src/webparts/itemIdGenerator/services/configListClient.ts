@@ -282,6 +282,28 @@ export async function saveConfigRow(
   return createdId;
 }
 
+export async function deleteConfigRow(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  listTitle: string,
+  itemId: number
+): Promise<void> {
+  const response = await spHttpClient.post(
+    buildUpdateItemUrl(siteAbsoluteUrl, listTitle, itemId),
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata=nometadata',
+        'IF-MATCH': '*',
+        'X-HTTP-Method': 'DELETE'
+      }
+    }
+  );
+  if (!response.ok) {
+    throw new ConfigListRequestError(sharePointError(response.status, await response.text(), listTitle), response.status);
+  }
+}
+
 export async function ensureTargetNumberColumn(
   spHttpClient: SPHttpClient,
   listUrl: string,

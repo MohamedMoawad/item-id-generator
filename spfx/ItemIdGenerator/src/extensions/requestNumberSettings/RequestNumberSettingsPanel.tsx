@@ -2,13 +2,14 @@ import * as React from 'react';
 import {
   Checkbox,
   DefaultButton,
+  Dialog,
+  DialogType,
   Dropdown,
   IContextualMenuItem,
   IDropdownOption,
+  IconButton,
   MessageBar,
   MessageBarType,
-  Panel,
-  PanelType,
   PrimaryButton,
   Spinner,
   SpinnerSize,
@@ -28,6 +29,7 @@ import {
 } from '../../webparts/itemIdGenerator/services/configContract';
 import {
   canEditConfigList,
+  deleteConfigRow,
   ensureConfigList,
   ensureTargetNumberColumn,
   hideConfigList,
@@ -58,6 +60,7 @@ interface IRequestNumberSettingsPanelState {
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
+  confirmDelete: boolean;
 }
 
 export default class RequestNumberSettingsPanel
@@ -73,7 +76,8 @@ export default class RequestNumberSettingsPanel
       columns: [],
       errorMessage: '',
       warningMessage: '',
-      statusMessage: ''
+      statusMessage: '',
+      confirmDelete: false
     };
   }
 
@@ -84,13 +88,21 @@ export default class RequestNumberSettingsPanel
   }
 
   public render(): React.ReactElement {
+    const draft = this.state.draft;
+    const showRow = !!draft && draft.id !== undefined && !this.state.editing;
     return (
-      <Panel
-        isOpen={true}
-        type={PanelType.medium}
-        headerText={`Autogen Feature for ${this.props.listTitle}`}
+      <Dialog
+        hidden={false}
         onDismiss={this.props.onDismiss}
-        isBlocking={false}
+        dialogContentProps={{
+          type: DialogType.normal,
+          title: 'Autogen Feature',
+          showCloseButton: true
+        }}
+        modalProps={{
+          isBlocking: false,
+          styles: { main: { maxWidth: 880, width: '92%' } }
+        }}
       >
         <div className={styles.toolbar}>
           <p className={styles.statusLine}>{this._statusLine()}</p>
@@ -100,12 +112,9 @@ export default class RequestNumberSettingsPanel
             iconProps={{ iconName: 'Settings' }}
             menuIconProps={{ iconName: 'ChevronDown' }}
             menuProps={{ items: this._settingsItems() }}
-            disabled={this.state.loading || !this.state.draft}
+            disabled={this.state.loading || !draft}
           />
         </div>
-        <p className={styles.intro}>
-          Choose an existing single line of text column. Create that column in the list first if it is not listed. {'{counter}'} is the next number.
-        </p>
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
           <div className={styles.status}>
@@ -122,8 +131,44 @@ export default class RequestNumberSettingsPanel
             <MessageBar messageBarType={MessageBarType.success}>{this.state.statusMessage}</MessageBar>
           </div>
         )}
-        {!this.state.loading && this.state.draft && this._renderForm(this.state.draft)}
-      </Panel>
+        {showRow && draft && this._renderSavedRow(draft)}
+        {!this.state.loading && draft && !showRow && this._renderForm(draft)}
+      </Dialog>
+    );
+  }
+
+  private _renderSavedRow(draft: IConfigDraft): React.ReactElement {
+    return (
+      <div className={styles.table}>
+        <div className={styles.head}>
+          <span>Title</span>
+          <span>Number column</span>
+          <span>Formula</span>
+          <span>Status</span>
+          <span>Owner</span>
+          <span />
+        </div>
+        <div className={styles.dataRow}>
+          <span className={styles.titleLink}>{draft.title || this.props.listTitle}</span>
+          <span>{this._columnTitle(draft.numberColumnInternalName)}</span>
+          <span>{draft.formula}</span>
+          <span>{draft.isActive ? 'Active' : 'Off'}</span>
+          <span>{draft.modifiedBy || ''}</span>
+          <IconButton
+            iconProps={{ iconName: 'More' }}
+            ariaLabel="Autogen actions"
+            menuProps={{ items: this._rowItems() }}
+            disabled={this.state.saving}
+          />
+        </div>
+        {this.state.confirmDelete && (
+          <div className={styles.confirm}>
+            <span>Delete Autogen from this list?</span>
+            <PrimaryButton text={this.state.saving ? 'Deleting...' : 'Delete'} onClick={this._onDelete} disabled={this.state.saving} />
+            <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -133,6 +178,9 @@ export default class RequestNumberSettingsPanel
     const padText = Number.isInteger(draft.padLength) ? String(draft.padLength) : '';
     return (
       <div className={styles.panel}>
+        <p className={styles.intro}>
+          Choose an existing single line of text column. Create that column in the list first if it is not listed. {'{counter}'} is the next number.
+        </p>
         <TextField label="Last modified" value={formatModified(draft.modified)} readOnly={true} />
         <TextField label="Modified by" value={draft.modifiedBy || 'Not saved yet'} readOnly={true} />
         {!this.state.canEdit && (
@@ -235,6 +283,31 @@ export default class RequestNumberSettingsPanel
     ];
   }
 
+  private _columnTitle(internalName: string): string {
+    const match = this.state.columns.filter((column) => column.internalName === internalName)[0];
+    return match ? match.title : internalName;
+  }
+
+  private _rowItems(): IContextualMenuItem[] {
+    const locked = !this.state.canEdit || this.state.saving;
+    return [
+      {
+        key: 'edit',
+        text: 'Edit',
+        iconProps: { iconName: 'Edit' },
+        disabled: locked,
+        onClick: this._onEdit
+      },
+      {
+        key: 'delete',
+        text: 'Delete',
+        iconProps: { iconName: 'Delete' },
+        disabled: locked,
+        onClick: this._onAskDelete
+      }
+    ];
+  }
+
   private _textColumns(): IFormulaColumn[] {
     return this.state.columns.filter((column) => column.type === 'Text');
   }
@@ -251,7 +324,21 @@ export default class RequestNumberSettingsPanel
   };
 
   private _onEdit = (): void => {
-    this.setState({ editing: true, statusMessage: '', errorMessage: '' });
+    this.setState({ editing: true, confirmDelete: false, statusMessage: '', errorMessage: '' });
+  };
+
+  private _onAskDelete = (): void => {
+    this.setState({ confirmDelete: true, errorMessage: '' });
+  };
+
+  private _onCancelDelete = (): void => {
+    this.setState({ confirmDelete: false });
+  };
+
+  private _onDelete = (): void => {
+    this._delete().catch((error: unknown) => {
+      this.setState({ saving: false, errorMessage: messageOf(error) });
+    });
   };
 
   private _onView = (): void => {
@@ -334,8 +421,25 @@ export default class RequestNumberSettingsPanel
       draft,
       canEdit,
       editing: !existing && canEdit,
-      columns
+      columns,
+      confirmDelete: false
     });
+  }
+
+  private async _delete(): Promise<void> {
+    if (!this.state.draft || this.state.draft.id === undefined || !this.state.canEdit) {
+      return;
+    }
+    const listTitle = this.props.configListTitle.trim() || DEFAULT_CONFIG_LIST_TITLE;
+    this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '' });
+    await deleteConfigRow(
+      this.props.spHttpClient,
+      this.props.siteAbsoluteUrl,
+      listTitle,
+      this.state.draft.id
+    );
+    this.setState({ saving: false, statusMessage: 'Removed Autogen from this list.' });
+    await this._load();
   }
 
   private async _save(): Promise<void> {
