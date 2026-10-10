@@ -99,30 +99,46 @@ export function watchNewListItems(
   };
 }
 
-export function paintNumbers(updates: { itemId: number; fieldName: string; code: string }[]): void {
+interface IAssignedPaint {
+  itemId: number;
+  fieldName: string;
+  code: string;
+}
+
+const assignedPaints = new Map<number, IAssignedPaint>();
+let paintObserver: MutationObserver | undefined;
+let paintScheduled = false;
+let refreshArmed = false;
+let listRefreshed = false;
+let lastRefreshTry = 0;
+
+export function clearAssignedPaints(): void {
+  assignedPaints.clear();
+  refreshArmed = false;
+  listRefreshed = false;
+  paintScheduled = false;
+  lastRefreshTry = 0;
+  if (paintObserver) {
+    paintObserver.disconnect();
+    paintObserver = undefined;
+  }
+}
+
+export function paintNumbers(updates: IAssignedPaint[]): void {
   updates.forEach((update) => {
-    const row = findRow(update.itemId);
-    if (!row) {
-      return;
-    }
-    const cell = row.querySelector(`[data-automation-key="${update.fieldName}"]`);
-    if (!cell) {
-      return;
-    }
-    const input = cell.querySelector('input, textarea');
-    if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
-      input.value = update.code;
-    }
-    const text = cell.querySelector('span') || cell;
-    if (text !== input) {
-      text.textContent = update.code;
-    }
+    assignedPaints.set(update.itemId, update);
   });
+  watchAssignedRows();
+  applyAssignedPaints();
+}
+
+export function repaintAssignedNumbers(): void {
+  applyAssignedPaints();
 }
 
 export function clickListRefresh(): boolean {
   const named = document.querySelector(
-    'button[data-automationid="refreshCommand"], button[name="Refresh"], button[aria-label="Refresh"], button[title="Refresh"]'
+    'button[data-automationid="refreshCommand"], button[data-id="Refresh"], button[name="Refresh"], button[aria-label="Refresh"], button[title="Refresh"]'
   );
   if (named instanceof HTMLButtonElement) {
     named.click();
@@ -146,24 +162,124 @@ export function clickListRefresh(): boolean {
 }
 
 export function revealAssignedNumbers(itemIds: number[]): void {
-  if (gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
-    clickListRefresh();
+  if (itemIds.length === 0) {
     return;
   }
-  const key = `autogenReload:${itemIds.join(',')}`;
-  try {
-    if (window.sessionStorage.getItem(key) === '1') {
-      clickListRefresh();
+  refreshArmed = true;
+  listRefreshed = false;
+  watchAssignedRows();
+  applyAssignedPaints();
+}
+
+function watchAssignedRows(): void {
+  if (paintObserver || assignedPaints.size === 0 || typeof MutationObserver === 'undefined' || !document.body) {
+    return;
+  }
+  paintObserver = new MutationObserver(() => {
+    if (paintScheduled) {
       return;
     }
-    window.sessionStorage.setItem(key, '1');
-  } catch {
-    clickListRefresh();
+    paintScheduled = true;
+    window.requestAnimationFrame(() => {
+      paintScheduled = false;
+      applyAssignedPaints();
+    });
+  });
+  paintObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
+function applyAssignedPaints(): void {
+  assignedPaints.forEach((update) => {
+    paintListCell(update);
+    paintOpenForm(update);
+  });
+  maybeRefreshList();
+}
+
+function paintListCell(update: IAssignedPaint): void {
+  const row = findRow(update.itemId);
+  if (!row) {
     return;
   }
-  window.setTimeout(() => {
-    window.location.reload();
-  }, 400);
+  const cell = findCell(row, update.fieldName);
+  if (!cell) {
+    return;
+  }
+  const input = cell.querySelector('input, textarea');
+  if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+    writeControl(input, update.code);
+    return;
+  }
+  const renderer = cell.querySelector('[data-automationid^="FieldRenderer"]') || cell.querySelector('span') || cell;
+  if (visibleText(renderer)) {
+    return;
+  }
+  renderer.textContent = update.code;
+}
+
+function paintOpenForm(update: IAssignedPaint): void {
+  if (assignedPaints.size !== 1) {
+    return;
+  }
+  const panel = document.querySelector('.ms-Panel-main');
+  if (!panel) {
+    return;
+  }
+  const control = findFormControl(panel, update.fieldName);
+  if (!control) {
+    return;
+  }
+  writeControl(control, update.code);
+}
+
+function writeControl(control: HTMLInputElement | HTMLTextAreaElement, code: string): void {
+  if (control.value.trim()) {
+    return;
+  }
+  control.value = code;
+}
+
+function findCell(row: Element, fieldName: string): Element | undefined {
+  const name = fieldName.replace(/"/g, '');
+  return row.querySelector(`[data-automation-key="${name}"]`)
+    || row.querySelector(`[data-automationid="FieldRenderer-${name}"]`)
+    || row.querySelector(`[data-field="${name}"]`)
+    || undefined;
+}
+
+function findFormControl(root: ParentNode, fieldName: string): HTMLInputElement | HTMLTextAreaElement | undefined {
+  const name = fieldName.replace(/"/g, '');
+  const selectors = [
+    `[data-automation-id="${name}"] input`,
+    `[data-automation-id="${name}"] textarea`,
+    `[data-automationid="${name}"] input`,
+    `[data-automationid="${name}"] textarea`,
+    `input[id*="${name}"]`,
+    `textarea[id*="${name}"]`
+  ];
+  for (let index = 0; index < selectors.length; index += 1) {
+    const node = root.querySelector(selectors[index]);
+    if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+      return node;
+    }
+  }
+  return undefined;
+}
+
+function visibleText(element: Element): string {
+  return (element.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function maybeRefreshList(): void {
+  if (!refreshArmed || listRefreshed || gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
+    return;
+  }
+  const now = Date.now();
+  if (now - lastRefreshTry < 500) {
+    return;
+  }
+  lastRefreshTry = now;
+  listRefreshed = clickListRefresh();
 }
 
 export function gridEditIsOpen(): boolean {
@@ -191,11 +307,11 @@ async function notifyIfCreated(response: Response, onCreated: () => Promise<void
 }
 
 function findRow(itemId: number): Element | undefined {
-  const marked = document.querySelector(`[role="row"][data-id="${itemId}"]`);
+  const marked = document.querySelector(`[role="row"][data-id="${itemId}"], [role="row"][data-item-key="${itemId}"]`);
   if (marked) {
     return marked;
   }
-  const link = document.querySelector(`a[href*="ID=${itemId}"], a[href*="ID%3D${itemId}"]`);
+  const link = document.querySelector(`a[href*="ID=${itemId}"], a[href*="ID%3D${itemId}"], a[href*="ID%3d${itemId}"]`);
   if (!link) {
     return undefined;
   }

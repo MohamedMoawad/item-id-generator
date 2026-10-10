@@ -141,6 +141,9 @@ describe('AutoGenFeatureConfiguration contract', () => {
       expect(Object.prototype.hasOwnProperty.call(body.parameters, '__metadata')).toBe(false);
     });
     expect(FIELD_CREATION_OPTIONS).toBe(25);
+    const reset = CONFIG_FIELD_DEFINITIONS.filter((field) => field.internalName === 'ResetPeriod')[0];
+    expect(reset.schemaXml).toContain('<Default>None</Default>');
+    expect(emptyDraft().resetPeriod).toBe('None');
   });
 
   it('finds the row for the current list and hides the command on the config list', () => {

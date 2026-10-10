@@ -3,7 +3,7 @@ import * as ReactDom from 'react-dom';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
 import { connectConfiguredList, ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
-import { paintNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { clearAssignedPaints, paintNumbers, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
 import { IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
@@ -95,6 +95,7 @@ function startWork(next: IAutogenListTarget): void {
   }
   timer = window.setInterval(() => {
     ensureButton();
+    repaintAssignedNumbers();
     numberList().catch(() => undefined);
   }, 1000);
 }
@@ -108,6 +109,7 @@ function stopRuntime(): void {
 }
 
 function stopWork(): void {
+  clearAssignedPaints();
   numberGate.pending = false;
   if (stopWatch) {
     stopWatch();

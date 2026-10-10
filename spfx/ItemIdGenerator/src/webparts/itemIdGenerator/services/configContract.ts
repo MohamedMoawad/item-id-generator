@@ -66,7 +66,7 @@ export function emptyDraft(): IConfigDraft {
     targetListGuid: '',
     numberColumnInternalName: '',
     formula: 'REQ-{yyyy}{MM}-{counter}',
-    resetPeriod: 'Month',
+    resetPeriod: 'None',
     isActive: true,
     padLength: 4
   };

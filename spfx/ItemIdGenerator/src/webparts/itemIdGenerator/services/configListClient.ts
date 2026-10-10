@@ -155,7 +155,34 @@ export async function ensureConfigList(
     }
     fieldsAdded.push(field.internalName);
   }
+  await setResetPeriodDefault(spHttpClient, siteAbsoluteUrl, listTitle);
   return { created, fieldsAdded };
+}
+
+async function setResetPeriodDefault(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  listTitle: string
+): Promise<void> {
+  try {
+    const response = await spHttpClient.post(
+      `${buildListUrl(siteAbsoluteUrl, listTitle)}/fields/getbyinternalnameortitle('ResetPeriod')`,
+      SPHttpClient.configurations.v1,
+      {
+        headers: {
+          ...jsonHeaders,
+          'IF-MATCH': '*',
+          'X-HTTP-Method': 'MERGE'
+        },
+        body: JSON.stringify({ DefaultValue: 'None' })
+      }
+    );
+    if (!response.ok) {
+      await response.text();
+    }
+  } catch {
+    // The settings form still defaults Reset to None when the column update is refused.
+  }
 }
 
 export async function showConfigList(

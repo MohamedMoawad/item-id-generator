@@ -35,7 +35,7 @@ export const CONFIG_FIELD_DEFINITIONS: IConfigFieldDefinition[] = [
   {
     internalName: 'ResetPeriod',
     displayName: 'Reset period',
-    schemaXml: '<Field Type="Choice" Name="ResetPeriod" StaticName="ResetPeriod" DisplayName="Reset period" Format="Dropdown"><CHOICES><CHOICE>None</CHOICE><CHOICE>Day</CHOICE><CHOICE>Month</CHOICE><CHOICE>Year</CHOICE></CHOICES><Default>Month</Default></Field>'
+    schemaXml: '<Field Type="Choice" Name="ResetPeriod" StaticName="ResetPeriod" DisplayName="Reset period" Format="Dropdown"><CHOICES><CHOICE>None</CHOICE><CHOICE>Day</CHOICE><CHOICE>Month</CHOICE><CHOICE>Year</CHOICE></CHOICES><Default>None</Default></Field>'
   },
   {
     internalName: 'LastResetDate',

@@ -1,4 +1,4 @@
-import { createdItemId, isNewItemRequest } from './listCreateWatch';
+import { clearAssignedPaints, createdItemId, isNewItemRequest, paintNumbers, revealAssignedNumbers } from './listCreateWatch';
 
 const listGuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const listPath = '/sites/ops/Lists/Requests';
@@ -34,5 +34,38 @@ describe('list create watch', () => {
       ]
     })).toBe(18);
     expect(createdItemId({ Title: 'Desk' })).toBeUndefined();
+  });
+
+  it('shows a generated number in a blank list cell and leaves a filled cell alone', () => {
+    document.body.innerHTML = [
+      '<div role="row" data-id="18">',
+      '<span data-automation-key="RequestNumber"></span>',
+      '</div>',
+      '<div role="row" data-id="19">',
+      '<span data-automation-key="RequestNumber">KEEP</span>',
+      '</div>',
+      '<div class="ms-Panel-main"><input id="RequestNumber" value="" /></div>'
+    ].join('');
+    paintNumbers([
+      { itemId: 18, fieldName: 'RequestNumber', code: 'REQ-202610-0007' },
+      { itemId: 19, fieldName: 'RequestNumber', code: 'REQ-202610-0008' }
+    ]);
+    revealAssignedNumbers([18, 19]);
+    const cells = document.querySelectorAll('[data-automation-key="RequestNumber"]');
+    expect(cells[0].textContent).toBe('REQ-202610-0007');
+    expect(cells[1].textContent).toBe('KEEP');
+    const input = document.querySelector('input');
+    expect(input instanceof HTMLInputElement ? input.value : '').toBe('');
+    clearAssignedPaints();
+    document.body.innerHTML = '';
+  });
+
+  it('fills the open item form when that save is the only new number', () => {
+    document.body.innerHTML = '<div class="ms-Panel-main"><input id="RequestNumber" value="" /></div>';
+    paintNumbers([{ itemId: 21, fieldName: 'RequestNumber', code: 'REQ-202610-0009' }]);
+    const input = document.querySelector('input');
+    expect(input instanceof HTMLInputElement ? input.value : '').toBe('REQ-202610-0009');
+    clearAssignedPaints();
+    document.body.innerHTML = '';
   });
 });

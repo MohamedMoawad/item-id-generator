@@ -12,13 +12,13 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.21.0.0** is named **AutoGen Feature**. Upload it in the app catalog and check **Make this solution available to all sites in the organization**. Sites that already have the app pick up this version on refresh. Do not remove the app from the site. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is wide enough to show the settings row without scrolling. It shows **Add AutoGen Configuration** until the list is saved, then one row with Edit and View.
+Package version **1.22.0.0** is named **AutoGen Feature**. Upload it in the app catalog and check **Make this solution available to all sites in the organization**. Sites that already have the app pick up this version on refresh. Do not remove the app from the site. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is wide enough to show the settings row without scrolling. It shows **Add AutoGen Configuration** until the list is saved, then one row with Edit and View. A new rule starts with Reset set to **None**.
 
 1. Upload `item-id-generator.sppkg` in the app catalog, replace the existing app, and deploy it.
 2. Check **Make this solution available to all sites in the organization**.
 3. Open a list and choose **Autogen Feature** on the command bar. The dialog opens in the middle of the page.
 4. Select the single-line text column, set the formula, leave **Active** checked, and save.
-5. Add a new item. The page reloads and the number shows in that column.
+5. Add a new item and leave the number column empty. The number appears in the list. You do not type it or click Refresh.
 
 The number is written while someone has that list open. Items created while the list is closed receive a number the next time the list is opened. The Azure Function section below is optional and is only for numbering when nobody has the list open.
 
