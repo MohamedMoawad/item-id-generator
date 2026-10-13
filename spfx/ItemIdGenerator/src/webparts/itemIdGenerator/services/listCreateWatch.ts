@@ -43,20 +43,25 @@ export function isNewItemRequest(url: string, method: string, listGuid: string, 
 
 export function createdItemId(payload: unknown): number | undefined {
   const record = asRecord(payload);
-  const direct = positiveId(record.Id) || positiveId(asRecord(record.d).Id);
+  const direct = positiveId(record.Id) || positiveId(record.ID) || positiveId(asRecord(record.d).Id) || positiveId(record.ItemId);
   if (direct) {
     return direct;
   }
-  const nested = asRecord(asRecord(record.d).AddValidateUpdateItemUsingPath);
-  const rows = arrayOf(record.value) || arrayOf(nested.results) || arrayOf(nested.value);
+  const rows = resultRows(payload);
   for (let index = 0; index < rows.length; index += 1) {
-    const row = asRecord(rows[index]);
+    const row = rows[index];
     const name = typeof row.FieldName === 'string' ? row.FieldName : '';
     if (name === 'Id' || name === 'ID') {
       const id = positiveId(row.FieldValue);
       if (id) {
         return id;
       }
+    }
+  }
+  for (let index = 0; index < rows.length; index += 1) {
+    const id = positiveId(rows[index].ItemId);
+    if (id) {
+      return id;
     }
   }
   return undefined;
@@ -158,6 +163,9 @@ export function createSaveFailed(payload: unknown): boolean {
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
     if (row.HasException === true) {
+      return true;
+    }
+    if (typeof row.ErrorCode === 'number' && row.ErrorCode !== 0) {
       return true;
     }
     if (typeof row.ErrorMessage === 'string' && row.ErrorMessage.trim()) {
@@ -342,12 +350,15 @@ export function clickListRefresh(): boolean {
   return true;
 }
 
+export function refreshOpenList(itemIds: number[] = []): void {
+  scheduleAjaxRefresh(itemIds);
+}
+
 export function revealAssignedNumbers(itemIds: number[]): void {
-  if (itemIds.length === 0) {
-    return;
+  if (itemIds.length > 0) {
+    watchAssignedRows();
+    applyAssignedPaints();
   }
-  watchAssignedRows();
-  applyAssignedPaints();
   scheduleAjaxRefresh(itemIds);
 }
 
@@ -458,11 +469,11 @@ function scheduleAjaxRefresh(itemIds: number[]): void {
     if (generation !== refreshGeneration) {
       return;
     }
-    if (gridEditIsOpen() || document.querySelector('.ms-Panel-main')) {
+    if (gridEditIsOpen() || formPanelIsOpen()) {
       if (Date.now() - started < 20000) {
         refreshTimer = window.setTimeout(tick, 400);
+        return;
       }
-      return;
     }
     if (clickListRefresh()) {
       window.setTimeout(() => {
@@ -489,21 +500,33 @@ function scheduleAjaxRefresh(itemIds: number[]): void {
   refreshTimer = window.setTimeout(tick, 400);
 }
 
-function findRefreshButton(root: ParentNode): HTMLButtonElement | undefined {
-  for (let index = 0; index < REFRESH_SELECTORS.length; index += 1) {
-    const nodes = root.querySelectorAll(REFRESH_SELECTORS[index]);
-    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
-      const button = nodes[nodeIndex];
-      if (button instanceof HTMLButtonElement && button.getClientRects().length > 0) {
-        return button;
-      }
+function formPanelIsOpen(): boolean {
+  const panels = document.querySelectorAll('.ms-Panel-main');
+  for (let index = 0; index < panels.length; index += 1) {
+    const panel = panels[index];
+    if (panel instanceof HTMLElement && panel.getClientRects().length > 0) {
+      return true;
     }
   }
-  const icons = root.querySelectorAll('[data-icon-name="Refresh"]');
-  for (let index = 0; index < icons.length; index += 1) {
-    const button = icons[index].closest('button');
-    if (button instanceof HTMLButtonElement && button.getClientRects().length > 0) {
-      return button;
+  return false;
+}
+
+function findRefreshButton(root: ParentNode): HTMLElement | undefined {
+  const selectors = REFRESH_SELECTORS.concat([
+    '[data-automationid="refreshCommand"]',
+    '[data-automation-id="refreshCommand"]',
+    '[role="menuitem"][name="Refresh"]',
+    '[role="menuitem"][aria-label="Refresh"]',
+    '[data-icon-name="Refresh"]'
+  ]);
+  for (let index = 0; index < selectors.length; index += 1) {
+    const nodes = root.querySelectorAll(selectors[index]);
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+      const node = nodes[nodeIndex];
+      const host = node.closest('button, [role="button"], [role="menuitem"]') || node;
+      if (host instanceof HTMLElement && host.getClientRects().length > 0) {
+        return host;
+      }
     }
   }
   return undefined;
@@ -659,9 +682,6 @@ async function settleCreate(ok: boolean, responseText: string, rollback?: () => 
   const outcome = batchCreateOutcome(responseText);
   if (outcome === 'failed') {
     await runRollback(rollback);
-    return;
-  }
-  if (outcome !== 'saved') {
     return;
   }
   const created = (window as IWatchWindow).__autogenOnCreated;
@@ -1166,7 +1186,8 @@ function arrayOf(value: unknown): unknown[] {
 function resultRows(payload: unknown): IRecord[] {
   const record = asRecord(payload);
   const nested = asRecord(asRecord(record.d).AddValidateUpdateItemUsingPath);
-  const sources = [record.value, nested.results, record.results, nested.value];
+  const validated = asRecord(asRecord(record.d).ValidateUpdateListItem);
+  const sources = [record.value, nested.results, nested.value, validated.results, validated.value, record.results];
   for (let index = 0; index < sources.length; index += 1) {
     const rows = arrayOf(sources[index]);
     if (!rows.length) {

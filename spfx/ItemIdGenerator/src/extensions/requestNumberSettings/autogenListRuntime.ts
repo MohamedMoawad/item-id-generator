@@ -3,7 +3,7 @@ import * as ReactDom from 'react-dom';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
 import { ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
-import { clearAssignedPaints, IPreparedCreate, paintNumbers, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { clearAssignedPaints, IPreparedCreate, paintNumbers, refreshOpenList, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
 import { embedNumberInCreate, IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
@@ -31,7 +31,6 @@ let target: IAutogenListTarget | undefined;
 let activeListId = '';
 let ownsTimer = false;
 let stopWatch: (() => void) | undefined;
-let barObserver: MutationObserver | undefined;
 let panelHost: HTMLDivElement | undefined;
 
 export function syncAutogenFromCommandSet(next: IAutogenListTarget | undefined): void {
@@ -96,10 +95,6 @@ function startWork(next: IAutogenListTarget): void {
   showNumberColumn(next).catch(() => undefined);
   numberList().catch(() => undefined);
   ensureButton();
-  if (!barObserver && typeof MutationObserver !== 'undefined') {
-    barObserver = new MutationObserver(() => ensureButton());
-    barObserver.observe(document.body, { childList: true, subtree: true });
-  }
   const host = window as IAutogenWindow;
   if (host.__autogenNumberTimer === undefined) {
     ownsTimer = true;
@@ -131,10 +126,6 @@ function stopWork(): void {
     host.__autogenNumberTimer = undefined;
     ownsTimer = false;
   }
-  if (barObserver) {
-    barObserver.disconnect();
-    barObserver = undefined;
-  }
 }
 
 function embedOnCreate(body: string): Promise<IPreparedCreate | undefined> {
@@ -155,8 +146,8 @@ function embedOnCreate(body: string): Promise<IPreparedCreate | undefined> {
 
 async function numberAfterCreate(itemId?: number): Promise<void> {
   const showed = await numberList();
-  if (!showed && itemId) {
-    revealAssignedNumbers([itemId]);
+  if (!showed) {
+    refreshOpenList(itemId ? [itemId] : []);
   }
 }
 
@@ -202,15 +193,10 @@ function ensureButton(): void {
   const host = findCommandBarHost();
   const current = document.getElementById(BUTTON_ID);
   if (!host) {
-    if (current && current.parentElement === document.body) {
-      current.parentElement.removeChild(current);
-    }
+    removeButton();
     return;
   }
   if (current && current.parentElement === host) {
-    return;
-  }
-  if (!current && (host.textContent || '').indexOf(AUTOGEN_COMMAND_LABEL) >= 0) {
     return;
   }
   ensureStyles();
@@ -218,11 +204,15 @@ function ensureButton(): void {
 }
 
 function findCommandBarHost(): HTMLElement | undefined {
+  const listBar = document.querySelector('[data-automationid="ListViewCommandBar"]');
+  if (listBar instanceof HTMLElement && listBar.getClientRects().length > 0) {
+    const menu = listBar.querySelector('[role="menubar"]');
+    return (menu instanceof HTMLElement ? menu : listBar);
+  }
   const selectors = [
     'button[data-automationid="newCommand"]',
     'button[name="New"]',
-    'button[title="New"]',
-    '[data-automationid="splitbuttonprimary"]'
+    'button[title="New"]'
   ];
   for (let index = 0; index < selectors.length; index++) {
     const nodes = document.querySelectorAll(selectors[index]);
@@ -231,9 +221,9 @@ function findCommandBarHost(): HTMLElement | undefined {
       if (node.getClientRects().length === 0) {
         continue;
       }
-      const bar = node.closest('[role="menubar"]') || node.closest('[role="toolbar"]') || node.parentElement;
-      if (bar && bar.id !== BUTTON_ID) {
-        return bar as HTMLElement;
+      const bar = node.closest('[role="menubar"]') || node.closest('[data-automationid="ListViewCommandBar"]');
+      if (bar instanceof HTMLElement) {
+        return bar;
       }
     }
   }

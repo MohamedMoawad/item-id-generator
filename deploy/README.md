@@ -2,7 +2,7 @@
 
 Upload `item-id-generator.sppkg` to the SharePoint app catalog. One upload updates every site that already has the app.
 
-Package version **1.28.0.0** is named **AutoGen Feature**. A new item saved from the open list stores its number in that same save. The counter moves once for that item. Add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
+Package version **1.29.0.0** is named **AutoGen Feature**. A new item saved from the open list stores its number in that same save. The counter moves once for that item. Add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
 
 1. Upload `item-id-generator.sppkg` in the app catalog, replace the existing app, and deploy it. If SharePoint refuses the upgrade, delete **AutoGen Feature** from the app catalog and upload this package again.
 2. On the site collection, open **Site contents**, choose **Add an app**, open **From your organization**, and add **AutoGen Feature**.

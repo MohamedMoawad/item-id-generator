@@ -9,6 +9,7 @@ import {
   newItemJson,
   paintNumbers,
   readCreateField,
+  refreshOpenList,
   revealAssignedNumbers,
   rewriteNewItemBody,
   watchNewListItems
@@ -58,6 +59,16 @@ describe('list create watch', () => {
         { FieldName: 'Id', FieldValue: '18' }
       ]
     })).toBe(18);
+    expect(createdItemId({
+      value: [
+        { FieldName: 'Title', FieldValue: 'Desk', HasException: false, ItemId: 21 }
+      ]
+    })).toBe(21);
+    expect(batchCreateOutcome(JSON.stringify({
+      value: [
+        { FieldName: 'Title', FieldValue: 'Desk', HasException: false, ItemId: 21 }
+      ]
+    }))).toBe('saved');
     expect(createdItemId({ Title: 'Desk' })).toBeUndefined();
   });
 
@@ -102,6 +113,13 @@ describe('list create watch', () => {
     revealAssignedNumbers([18]);
     jest.advanceTimersByTime(500);
     expect(click).toHaveBeenCalled();
+    clearAssignedPaints();
+    document.body.innerHTML = '<button data-automationid="refreshCommand" style="display:inline-block;width:32px;height:32px">Refresh</button>';
+    const again = document.querySelector('button');
+    const refreshClick = jest.spyOn(again as HTMLButtonElement, 'click');
+    refreshOpenList();
+    jest.advanceTimersByTime(500);
+    expect(refreshClick).toHaveBeenCalled();
     clearAssignedPaints();
     rects.mockRestore();
     jest.useRealTimers();
@@ -238,6 +256,30 @@ describe('list create watch', () => {
         { FieldName: 'RequestNumber', FieldValue: 'REQ-202610-0007' }
       ]);
       expect(created).toBe(1);
+    } finally {
+      stop();
+      window.fetch = realFetch;
+    }
+  });
+
+  it('fills a blank number after the form save returns only ItemId', async () => {
+    const realFetch = window.fetch;
+    window.fetch = (() => Promise.resolve(jsonResponse({
+      value: [{ FieldName: 'Title', FieldValue: 'Desk', HasException: false, ItemId: 21 }]
+    }, 200))) as typeof window.fetch;
+    let createdId = 0;
+    const stop = watchNewListItems(listGuid, listPath, async () => undefined, async (itemId) => {
+      createdId = itemId || 0;
+    });
+    try {
+      await window.fetch(
+        `https://contoso.sharepoint.com/sites/ops/_api/web/lists(guid'${listGuid}')/AddValidateUpdateItemUsingPath`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ formValues: [{ FieldName: 'Title', FieldValue: 'Desk' }] })
+        }
+      );
+      expect(createdId).toBe(21);
     } finally {
       stop();
       window.fetch = realFetch;

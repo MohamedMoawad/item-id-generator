@@ -16,6 +16,7 @@ import {
 } from './formula';
 import {
   columnValuesFromCreateBody,
+  createSaveFailed,
   embedCreateField,
   IPreparedCreate,
   newItemJson,
@@ -31,7 +32,14 @@ const mergeHeaders: { [key: string]: string } = {
   Accept: 'application/json;odata=nometadata',
   'Content-Type': 'application/json;odata=nometadata',
   'IF-MATCH': '*',
-  'X-HTTP-Method': 'MERGE'
+  'X-HTTP-Method': 'MERGE',
+  'odata-version': ''
+};
+
+const validateHeaders: { [key: string]: string } = {
+  Accept: 'application/json;odata=nometadata',
+  'Content-Type': 'application/json;odata=nometadata',
+  'odata-version': ''
 };
 
 interface ICounterRow {
@@ -111,7 +119,7 @@ export async function embedNumberInCreate(
   } catch {
     return undefined;
   } finally {
-    numberLock().busy = false;
+    releaseNumberLock(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, guid);
   }
 }
 
@@ -249,6 +257,22 @@ async function acquireNumberLock(): Promise<boolean> {
   return true;
 }
 
+function releaseNumberLock(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  webAbsoluteUrl: string,
+  listGuid: string
+): void {
+  const lock = numberLock();
+  lock.busy = false;
+  if (!lock.pending) {
+    return;
+  }
+  lock.pending = false;
+  numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid).catch(() => undefined);
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -320,11 +344,8 @@ async function numberBlankItemsNow(
       columnNames,
       columns
     );
-    if (code === '') {
-      continue;
-    }
     if (!code) {
-      break;
+      continue;
     }
     assigned.push({ itemId: item.Id as number, fieldName, code });
   }
@@ -419,8 +440,19 @@ async function reserveAndWrite(
         planned.code,
         again ? etagOf(again) : '*'
       );
-      return retry === 'wrote' ? planned.code : undefined;
+      if (retry === 'wrote') {
+        return planned.code;
+      }
     }
+    await releaseReservedCount(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      configItemId,
+      planned.sequence,
+      previousCount,
+      previousReset
+    );
     return undefined;
   }
   return undefined;
@@ -534,6 +566,48 @@ async function swapCounter(
 }
 
 async function writeNumber(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  itemId: number,
+  fieldName: string,
+  code: string,
+  etag: string
+): Promise<'wrote' | 'conflict' | 'failed'> {
+  const validated = await writeNumberByValidate(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, code);
+  if (validated === 'wrote') {
+    return 'wrote';
+  }
+  return writeNumberByMerge(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, code, etag);
+}
+
+async function writeNumberByValidate(
+  spHttpClient: SPHttpClient,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  itemId: number,
+  fieldName: string,
+  code: string
+): Promise<'wrote' | 'failed'> {
+  const response = await spHttpClient.post(
+    `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})/ValidateUpdateListItem()`,
+    SPHttpClient.configurations.v1,
+    {
+      headers: validateHeaders,
+      body: JSON.stringify({
+        formValues: [{ FieldName: fieldName, FieldValue: code }],
+        bNewDocumentUpdate: false
+      })
+    }
+  );
+  if (!response.ok) {
+    return 'failed';
+  }
+  const payload: unknown = await response.json().catch(() => undefined);
+  return createSaveFailed(payload) ? 'failed' : 'wrote';
+}
+
+async function writeNumberByMerge(
   spHttpClient: SPHttpClient,
   webAbsoluteUrl: string,
   listGuid: string,
