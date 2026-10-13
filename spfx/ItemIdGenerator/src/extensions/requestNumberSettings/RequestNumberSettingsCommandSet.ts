@@ -1,6 +1,7 @@
 import { BaseListViewCommandSet, IListViewCommandSetExecuteEventParameters } from '@microsoft/sp-listview-extensibility';
 import { DEFAULT_CONFIG_LIST_TITLE } from '../../webparts/itemIdGenerator/services/configContract';
 import { AUTOGEN_COMMAND_LABEL, openAutogenSettingsPanel, syncAutogenFromCommandSet } from './autogenListRuntime';
+import { shouldShowAutogenCommand } from './commandVisibility';
 
 export interface IRequestNumberSettingsCommandSetProperties {
   configListTitle?: string;
@@ -41,7 +42,13 @@ export default class RequestNumberSettingsCommandSet
     if (!command) {
       return;
     }
-    command.visible = false;
+    const list = this.context.pageContext.list;
+    const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
+    command.visible = shouldShowAutogenCommand(
+      list ? list.title : undefined,
+      list ? list.serverRelativeUrl : undefined,
+      configTitle
+    );
     command.disabled = false;
     command.title = AUTOGEN_COMMAND_LABEL;
   }

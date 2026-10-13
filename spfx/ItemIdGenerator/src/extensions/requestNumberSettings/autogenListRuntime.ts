@@ -8,8 +8,6 @@ import { embedNumberInCreate, IAssignedNumber, numberBlankItems } from '../../we
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
 export const AUTOGEN_COMMAND_LABEL = 'Autogen Feature';
-const BUTTON_ID = 'autogen-setting-command';
-const STYLE_ID = 'autogen-setting-command-style';
 
 export interface IAutogenListTarget {
   spHttpClient: SPHttpClient;
@@ -62,7 +60,7 @@ function applyActiveTarget(): void {
     activeListId = next.listId;
     startWork(next);
   }
-  ensureButton();
+  removeInjectedButton();
 }
 
 export function openAutogenSettingsPanel(): void {
@@ -94,12 +92,12 @@ function startWork(next: IAutogenListTarget): void {
   );
   showNumberColumn(next).catch(() => undefined);
   numberList().catch(() => undefined);
-  ensureButton();
+  removeInjectedButton();
   const host = window as IAutogenWindow;
   if (host.__autogenNumberTimer === undefined) {
     ownsTimer = true;
     host.__autogenNumberTimer = window.setInterval(() => {
-      ensureButton();
+      removeInjectedButton();
       repaintAssignedNumbers();
       numberList().catch(() => undefined);
     }, 1000);
@@ -110,7 +108,7 @@ function stopRuntime(): void {
   stopWork();
   target = undefined;
   activeListId = '';
-  removeButton();
+  removeInjectedButton();
   closePanel();
 }
 
@@ -145,10 +143,11 @@ function embedOnCreate(body: string): Promise<IPreparedCreate | undefined> {
 }
 
 async function numberAfterCreate(itemId?: number): Promise<void> {
-  const showed = await numberList();
-  if (!showed) {
-    refreshOpenList(itemId ? [itemId] : []);
+  await numberList();
+  if (itemId) {
+    revealAssignedNumbers([itemId]);
   }
+  refreshOpenList();
 }
 
 async function numberList(): Promise<boolean> {
@@ -189,83 +188,15 @@ async function showNumberColumn(next: IAutogenListTarget): Promise<void> {
   );
 }
 
-function ensureButton(): void {
-  const host = findCommandBarHost();
-  const current = document.getElementById(BUTTON_ID);
-  if (!host) {
-    removeButton();
-    return;
-  }
-  if (current && current.parentElement === host) {
-    return;
-  }
-  ensureStyles();
-  host.appendChild(current || createButton());
-}
-
-function findCommandBarHost(): HTMLElement | undefined {
-  const listBar = document.querySelector('[data-automationid="ListViewCommandBar"]');
-  if (listBar instanceof HTMLElement && listBar.getClientRects().length > 0) {
-    const menu = listBar.querySelector('[role="menubar"]');
-    return (menu instanceof HTMLElement ? menu : listBar);
-  }
-  const selectors = [
-    'button[data-automationid="newCommand"]',
-    'button[name="New"]',
-    'button[title="New"]'
-  ];
-  for (let index = 0; index < selectors.length; index++) {
-    const nodes = document.querySelectorAll(selectors[index]);
-    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
-      const node = nodes[nodeIndex] as HTMLElement;
-      if (node.getClientRects().length === 0) {
-        continue;
-      }
-      const bar = node.closest('[role="menubar"]') || node.closest('[data-automationid="ListViewCommandBar"]');
-      if (bar instanceof HTMLElement) {
-        return bar;
-      }
-    }
-  }
-  return undefined;
-}
-
-function createButton(): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.id = BUTTON_ID;
-  button.type = 'button';
-  button.setAttribute('aria-label', AUTOGEN_COMMAND_LABEL);
-  const label = document.createElement('span');
-  label.textContent = AUTOGEN_COMMAND_LABEL;
-  button.appendChild(label);
-  button.addEventListener('click', (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openAutogenSettingsPanel();
-  });
-  return button;
-}
-
-function removeButton(): void {
-  const button = document.getElementById(BUTTON_ID);
+function removeInjectedButton(): void {
+  const button = document.getElementById('autogen-setting-command');
   if (button && button.parentElement) {
     button.parentElement.removeChild(button);
   }
-}
-
-function ensureStyles(): void {
-  if (document.getElementById(STYLE_ID)) {
-    return;
+  const style = document.getElementById('autogen-setting-command-style');
+  if (style && style.parentElement) {
+    style.parentElement.removeChild(style);
   }
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = [
-    `#${BUTTON_ID}{display:inline-flex;align-items:center;height:32px;margin:0 4px;padding:0 8px;`,
-    'border:0;border-radius:2px;background:transparent;color:#038387;cursor:pointer;flex:0 0 auto;',
-    'font:600 14px/32px "Segoe UI","Segoe UI Web (West European)",sans-serif;}',
-    `#${BUTTON_ID}:hover{background:#f3f2f1;}`
-  ].join('');
-  document.head.appendChild(style);
 }
 
 function closePanel(): void {

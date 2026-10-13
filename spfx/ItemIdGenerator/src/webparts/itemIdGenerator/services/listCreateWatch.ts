@@ -281,6 +281,11 @@ export function watchNewListItems(
     const url = marked.__autoGenUrl || '';
     const method = marked.__autoGenMethod || 'GET';
     if (textBody === undefined || !shouldInspectCreate(url, method, textBody)) {
+      if (isDirectNewItem(url, method)) {
+        this.addEventListener('load', () => {
+          settleCreate(this.status >= 200 && this.status < 300, xhrResponseText(this)).catch(() => undefined);
+        });
+      }
       return originalSend.apply(this, arguments as unknown as Parameters<typeof originalSend>);
     }
     sendPreparedXhr(this, textBody, originalSend).catch(() => undefined);
@@ -306,6 +311,7 @@ let paintObserver: MutationObserver | undefined;
 let paintScheduled = false;
 let refreshTimer: number | undefined;
 let refreshGeneration = 0;
+let reloadArmed = false;
 
 export function clearAssignedPaints(): void {
   assignedPaints.clear();
@@ -350,8 +356,14 @@ export function clickListRefresh(): boolean {
   return true;
 }
 
-export function refreshOpenList(itemIds: number[] = []): void {
-  scheduleAjaxRefresh(itemIds);
+export function refreshOpenList(): void {
+  reloadArmed = true;
+  try {
+    window.sessionStorage.removeItem('autogenReloadOnce');
+  } catch {
+    // Session storage can be blocked. The in-place click still runs.
+  }
+  scheduleAjaxRefresh();
 }
 
 export function revealAssignedNumbers(itemIds: number[]): void {
@@ -359,7 +371,7 @@ export function revealAssignedNumbers(itemIds: number[]): void {
     watchAssignedRows();
     applyAssignedPaints();
   }
-  scheduleAjaxRefresh(itemIds);
+  scheduleAjaxRefresh();
 }
 
 function watchAssignedRows(): void {
@@ -460,7 +472,7 @@ function visibleText(element: Element): string {
   return (element.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
-function scheduleAjaxRefresh(itemIds: number[]): void {
+function scheduleAjaxRefresh(): void {
   const generation = refreshGeneration;
   let overflowOpened = false;
   const started = Date.now();
@@ -492,7 +504,7 @@ function scheduleAjaxRefresh(itemIds: number[]): void {
       refreshTimer = window.setTimeout(tick, 400);
       return;
     }
-    reloadListOnce(itemIds);
+    reloadListOnce();
   };
   if (refreshTimer !== undefined) {
     window.clearTimeout(refreshTimer);
@@ -546,13 +558,16 @@ function openCommandOverflow(): boolean {
   return false;
 }
 
-function reloadListOnce(itemIds: number[]): void {
-  const key = `autogenReload:${itemIds.slice().sort((left, right) => left - right).join(',')}`;
+function reloadListOnce(): void {
+  if (!reloadArmed) {
+    return;
+  }
+  reloadArmed = false;
   try {
-    if (window.sessionStorage.getItem(key) === '1') {
+    if (window.sessionStorage.getItem('autogenReloadOnce') === '1') {
       return;
     }
-    window.sessionStorage.setItem(key, '1');
+    window.sessionStorage.setItem('autogenReloadOnce', '1');
   } catch {
     window.location.reload();
     return;
@@ -570,6 +585,11 @@ export function gridEditIsOpen(): boolean {
     }
   }
   return false;
+}
+
+function isDirectNewItem(url: string, method: string): boolean {
+  const host = window as IWatchWindow;
+  return isNewItemRequest(url, method, host.__autogenCreateListGuid || '', host.__autogenCreateListUrl || '');
 }
 
 function mayCarryNewItem(url: string, method: string): boolean {
@@ -614,7 +634,12 @@ async function sendPreparedFetch(
   const method = requestMethod(input, init);
   const text = await readBodyText(input, init);
   if (text === undefined || !shouldInspectCreate(url, method, text)) {
-    return originalFetch(input, init);
+    const response = await originalFetch(input, init);
+    if (isDirectNewItem(url, method)) {
+      const responseText = await response.clone().text().catch(() => '');
+      await settleCreate(response.ok, responseText);
+    }
+    return response;
   }
   let nextInput: RequestInfo | URL = input;
   let nextInit = init;

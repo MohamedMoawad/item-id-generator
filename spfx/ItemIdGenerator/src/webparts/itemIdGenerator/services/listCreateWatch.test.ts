@@ -262,6 +262,27 @@ describe('list create watch', () => {
     }
   });
 
+  it('refreshes after a create whose body cannot be rewritten', async () => {
+    const realFetch = window.fetch;
+    window.fetch = (() => Promise.resolve(jsonResponse({
+      value: [{ FieldName: 'Title', FieldValue: 'Desk', HasException: false, ItemId: 22 }]
+    }, 200))) as typeof window.fetch;
+    let createdId = 0;
+    const stop = watchNewListItems(listGuid, listPath, async () => undefined, async (itemId) => {
+      createdId = itemId || 0;
+    });
+    try {
+      await window.fetch(
+        `https://contoso.sharepoint.com/sites/ops/_api/web/lists(guid'${listGuid}')/AddValidateUpdateItemUsingPath`,
+        { method: 'POST', body: new Blob(['{"formValues":[]}']) }
+      );
+      expect(createdId).toBe(22);
+    } finally {
+      stop();
+      window.fetch = realFetch;
+    }
+  });
+
   it('fills a blank number after the form save returns only ItemId', async () => {
     const realFetch = window.fetch;
     window.fetch = (() => Promise.resolve(jsonResponse({
