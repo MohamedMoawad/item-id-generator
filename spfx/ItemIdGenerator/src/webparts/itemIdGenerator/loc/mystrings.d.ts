@@ -3,8 +3,6 @@ declare interface IItemIdGeneratorWebPartStrings {
   BasicGroupName: string;
   ConfigListTitleFieldLabel: string;
   ConfigListTitleFieldDescription: string;
-  RegisterWebhookUrlFieldLabel: string;
-  RegisterWebhookUrlFieldDescription: string;
 }
 
 declare module 'ItemIdGeneratorWebPartStrings' {

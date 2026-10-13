@@ -14,8 +14,6 @@ import {
 import styles from './ItemIdGenerator.module.scss';
 import type { IItemIdGeneratorProps } from './IItemIdGeneratorProps';
 import {
-  callRegisterWebhook,
-  readRegisterWebhookUrl,
   ConfigListRequestError,
   ensureConfigList,
   loadConfigRows,
@@ -26,7 +24,6 @@ import {
   DEFAULT_CONFIG_LIST_TITLE,
   emptyDraft,
   IConfigDraft,
-  isPlaceholderSetting,
   RESET_PERIODS,
   ResetPeriod,
   validateDraft
@@ -75,9 +72,8 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
       <section className={styles.itemIdGenerator}>
         <h2 className={styles.header}>AutoGen Feature</h2>
         <p className={styles.lede}>
-          {listTitle} lives on this site collection. Add one row per list. Saving an active row
-          registers a SharePoint webhook. After that, a new item from the form, the grid, or
-          Power Automate is numbered by the Azure Function. This page does not assign numbers.
+          {listTitle} lives on this site collection. Add one row per list. An open list writes the
+          number when the item is saved. This page stores the rule.
         </p>
         <div className={styles.toolbar}>
           <PrimaryButton text="New rule" onClick={this._startCreate} disabled={busy} />
@@ -128,9 +124,6 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
                 <p className={styles.formula}>{item.targetListGuid || 'GUID not resolved'}</p>
                 <p className={styles.cardMeta}>Column {item.numberColumnInternalName || 'not set'}</p>
                 <p className={styles.formula}>{item.formula}</p>
-                <p className={styles.cardMeta}>
-                  Webhook {item.webhookSubscriptionId || 'not registered'}
-                </p>
                 <div className={styles.actions}>
                   <DefaultButton
                     text="Edit"
@@ -212,9 +205,6 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
             disabled={true}
             description="This counter increases each time a blank item on the list receives a number."
           />
-        )}
-        {editing && (
-          <TextField label="Webhook subscription ID" value={draft.webhookSubscriptionId || ''} disabled={true} />
         )}
         <div className={styles.actions}>
           <PrimaryButton text={this.state.saving ? 'Saving...' : 'Save rule'} onClick={this._onSave} disabled={busy} />
@@ -373,49 +363,22 @@ export default class ItemIdGenerator extends React.Component<IItemIdGeneratorPro
     const draft = this.state.draft;
     this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '' });
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
-    const itemId = await saveConfigRow(
+    await saveConfigRow(
       this.props.spHttpClient,
       this.props.siteAbsoluteUrl,
       listTitle,
       draft
     );
-    const registration = await this._registerIfActive(draft, itemId);
     this.setState({
       saving: false,
       draft: undefined,
       listMissing: false,
-      statusMessage: registration.statusMessage,
-      warningMessage: registration.warningMessage
+      statusMessage: draft.isActive
+        ? 'Saved the rule. Open the list and add an item. The number appears by itself.'
+        : 'Saved the rule. Numbering is turned off.',
+      warningMessage: ''
     });
     await this._load();
-  }
-
-  private async _registerIfActive(draft: IConfigDraft, itemId: number): Promise<{ statusMessage: string; warningMessage: string }> {
-    if (!draft.isActive) {
-      return {
-        statusMessage: 'Saved the rule. Numbering is turned off.',
-        warningMessage: ''
-      };
-    }
-    let webhookUrl = this.props.registerWebhookUrl.trim();
-    if (isPlaceholderSetting(webhookUrl)) {
-      try {
-        webhookUrl = (await readRegisterWebhookUrl(this.props.spHttpClient, this.props.siteAbsoluteUrl)).trim();
-      } catch {
-        webhookUrl = '';
-      }
-    }
-    if (!isPlaceholderSetting(webhookUrl)) {
-      try {
-        await callRegisterWebhook(webhookUrl, this.props.siteAbsoluteUrl, itemId);
-      } catch {
-        // The list still numbers items while it is open.
-      }
-    }
-    return {
-      statusMessage: 'Saved the rule. Open the list and add an item. The number appears by itself.',
-      warningMessage: ''
-    };
   }
 }
 

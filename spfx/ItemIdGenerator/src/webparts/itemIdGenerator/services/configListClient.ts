@@ -1,10 +1,5 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
-  buildAllPropertiesUrl,
-  buildPropertyBagMerge,
-  buildSetStorageEntity,
-  buildStorageEntityUrl,
-  buildTenantSettingsUrl,
   buildCreateBody,
   buildCreateFieldUrl,
   buildCreateItemUrl,
@@ -15,21 +10,15 @@ import {
   buildListItemsUrl,
   buildListPermissionsUrl,
   buildListUrl,
-  buildRegisterWebhookBody,
   buildUpdateBody,
   buildUpdateItemUrl,
   deriveWebFromListUrl,
-  findConfigForList,
   hasPermissionFlag,
   isExistingColumnError,
-  isPlaceholderSetting,
   IConfigDraft,
   ISharePointConfigItem,
   mapConfigRow,
-  readCorporateCatalogUrl,
-  readStorageEntityValue,
   PERMISSION_EDIT_LIST_ITEMS,
-  REGISTER_WEBHOOK_PROPERTY,
   sharePointError
 } from './configContract';
 import { formulaColumns, IFormulaColumn } from './formula';
@@ -374,66 +363,6 @@ export async function loadFormulaColumns(
   }
 }
 
-export async function connectConfiguredList(
-  spHttpClient: SPHttpClient,
-  siteAbsoluteUrl: string,
-  listTitle: string,
-  listGuid: string
-): Promise<boolean> {
-  const webhookUrl = await readRegisterWebhookUrl(spHttpClient, siteAbsoluteUrl);
-  if (isPlaceholderSetting(webhookUrl)) {
-    return false;
-  }
-  const rows = await loadConfigRows(spHttpClient, siteAbsoluteUrl, listTitle);
-  const row = findConfigForList(rows, listGuid);
-  if (!row || !row.isActive || row.id === undefined) {
-    return false;
-  }
-  if (row.webhookSubscriptionId) {
-    return true;
-  }
-  await callRegisterWebhook(webhookUrl, siteAbsoluteUrl, row.id);
-  return true;
-}
-
-export async function callRegisterWebhook(
-  registerWebhookUrl: string,
-  configSiteUrl: string,
-  configItemId: number
-): Promise<{ subscriptionId: string; alreadyRegistered: boolean }> {
-  let response: Response;
-  try {
-    response = await fetch(registerWebhookUrl, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(buildRegisterWebhookBody(configSiteUrl, configItemId))
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'network error';
-    throw new Error(`The browser could not reach the function (${detail}). On the Function App open CORS and add the SharePoint origin, then save again.`);
-  }
-  const text = await response.text();
-  const payload = text
-    ? parseJson<{ subscriptionId?: string; alreadyRegistered?: boolean; error?: string }>(text)
-    : {};
-  if (!response.ok) {
-    const fallback = response.status === 401
-      ? 'The function rejected the key. Copy RegisterWebhook → Get function URL, including ?code=.'
-      : `RegisterWebhook returned HTTP ${response.status}.`;
-    throw new Error(payload.error || fallback);
-  }
-  if (!payload.subscriptionId) {
-    throw new Error('RegisterWebhook did not return a subscription id.');
-  }
-  return {
-    subscriptionId: payload.subscriptionId,
-    alreadyRegistered: payload.alreadyRegistered === true
-  };
-}
-
 export async function canEditConfigList(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
@@ -449,101 +378,6 @@ export async function canEditConfigList(
   }
   const payload = parseJson<{ Low?: string | number; d?: { Low?: string | number } }>(await response.text());
   return hasPermissionFlag(payload.Low ?? (payload.d && payload.d.Low), PERMISSION_EDIT_LIST_ITEMS);
-}
-
-export async function readRegisterWebhookUrl(spHttpClient: SPHttpClient, siteAbsoluteUrl: string): Promise<string> {
-  const organization = await readOrganizationWebhookUrl(spHttpClient, siteAbsoluteUrl);
-  if (organization) {
-    return organization;
-  }
-  const response = await spHttpClient.get(
-    buildAllPropertiesUrl(siteAbsoluteUrl),
-    SPHttpClient.configurations.v1,
-    { headers: { Accept: 'application/json;odata=nometadata' } }
-  );
-  if (!response.ok) {
-    return '';
-  }
-  const payload = parseJson<Record<string, unknown>>(await response.text());
-  const direct = payload[REGISTER_WEBHOOK_PROPERTY];
-  if (typeof direct === 'string') {
-    return direct;
-  }
-  const nested = payload.d;
-  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>)[REGISTER_WEBHOOK_PROPERTY] === 'string') {
-    return (nested as Record<string, unknown>)[REGISTER_WEBHOOK_PROPERTY] as string;
-  }
-  return '';
-}
-
-export async function saveRegisterWebhookUrl(
-  spHttpClient: SPHttpClient,
-  siteAbsoluteUrl: string,
-  registerWebhookUrl: string
-): Promise<{ organization: boolean }> {
-  const organization = await trySaveOrganizationWebhookUrl(spHttpClient, siteAbsoluteUrl, registerWebhookUrl.trim());
-  const merge = buildPropertyBagMerge(REGISTER_WEBHOOK_PROPERTY, registerWebhookUrl.trim());
-  const response = await spHttpClient.post(
-    buildAllPropertiesUrl(siteAbsoluteUrl),
-    SPHttpClient.configurations.v1,
-    {
-      headers: merge.headers,
-      body: merge.body
-    }
-  );
-  if (!response.ok) {
-    throw new ConfigListRequestError(
-      sharePointError(response.status, await response.text(), 'site properties'),
-      response.status
-    );
-  }
-  return { organization };
-}
-
-async function readOrganizationWebhookUrl(spHttpClient: SPHttpClient, siteAbsoluteUrl: string): Promise<string> {
-  try {
-    const response = await spHttpClient.get(
-      buildStorageEntityUrl(siteAbsoluteUrl),
-      SPHttpClient.configurations.v1,
-      { headers: { Accept: 'application/json;odata=verbose' } }
-    );
-    if (!response.ok) {
-      return '';
-    }
-    const value = readStorageEntityValue(parseJson<unknown>(await response.text()));
-    return value && !isPlaceholderSetting(value) ? value : '';
-  } catch {
-    return '';
-  }
-}
-
-async function trySaveOrganizationWebhookUrl(
-  spHttpClient: SPHttpClient,
-  siteAbsoluteUrl: string,
-  registerWebhookUrl: string
-): Promise<boolean> {
-  try {
-    const settings = await spHttpClient.get(
-      buildTenantSettingsUrl(siteAbsoluteUrl),
-      SPHttpClient.configurations.v1,
-      { headers: { Accept: 'application/json;odata=verbose' } }
-    );
-    if (!settings.ok) {
-      return false;
-    }
-    const catalog = readCorporateCatalogUrl(parseJson<unknown>(await settings.text()));
-    if (!catalog) {
-      return false;
-    }
-    const request = buildSetStorageEntity(catalog, registerWebhookUrl);
-    const response = await spHttpClient.post(request.url, SPHttpClient.configurations.v1, {
-      headers: request.headers,
-      body: request.body
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
 }
 
 function readInternalNames(payload: { value?: { InternalName?: string }[]; d?: { results?: { InternalName?: string }[] } }): string[] {

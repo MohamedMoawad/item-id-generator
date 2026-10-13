@@ -51,11 +51,6 @@ export const CONFIG_FIELD_DEFINITIONS: IConfigFieldDefinition[] = [
     internalName: 'PadLength',
     displayName: 'Pad length',
     schemaXml: '<Field Type="Number" Name="PadLength" StaticName="PadLength" DisplayName="Pad length" Decimals="0" Min="0" Max="12"><Default>4</Default></Field>'
-  },
-  {
-    internalName: 'WebhookSubscriptionId',
-    displayName: 'Webhook subscription ID',
-    schemaXml: '<Field Type="Text" Name="WebhookSubscriptionId" StaticName="WebhookSubscriptionId" DisplayName="Webhook subscription ID" />'
   }
 ];
 

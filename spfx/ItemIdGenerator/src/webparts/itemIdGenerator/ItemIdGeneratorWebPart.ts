@@ -15,7 +15,6 @@ import { DEFAULT_CONFIG_LIST_TITLE } from './services/configContract';
 
 export interface IItemIdGeneratorWebPartProps {
   configListTitle: string;
-  registerWebhookUrl: string;
 }
 
 export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemIdGeneratorWebPartProps> {
@@ -25,7 +24,6 @@ export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemI
       {
         configListTitle: this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE,
         siteAbsoluteUrl: this.context.pageContext.site.absoluteUrl,
-        registerWebhookUrl: this.properties.registerWebhookUrl || '',
         spHttpClient: this.context.spHttpClient
       }
     );
@@ -72,11 +70,6 @@ export default class ItemIdGeneratorWebPart extends BaseClientSideWebPart<IItemI
                   label: strings.ConfigListTitleFieldLabel,
                   description: strings.ConfigListTitleFieldDescription,
                   placeholder: DEFAULT_CONFIG_LIST_TITLE
-                }),
-                PropertyPaneTextField('registerWebhookUrl', {
-                  label: strings.RegisterWebhookUrlFieldLabel,
-                  description: strings.RegisterWebhookUrlFieldDescription,
-                  placeholder: 'https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>'
                 })
               ]
             }

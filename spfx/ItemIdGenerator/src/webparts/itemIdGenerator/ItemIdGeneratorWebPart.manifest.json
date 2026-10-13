@@ -19,11 +19,10 @@
     "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
     "group": { "default": "Advanced" },
     "title": { "default": "AutoGen Feature" },
-    "description": { "default": "Provision AutoGenFeatureConfiguration, resolve a list URL, and register the numbering webhook." },
+    "description": { "default": "Provision AutoGenFeatureConfiguration and resolve a list URL." },
     "officeFabricIconFontName": "Settings",
     "properties": {
-      "configListTitle": "AutoGenFeatureConfiguration",
-      "registerWebhookUrl": "https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>"
+      "configListTitle": "AutoGenFeatureConfiguration"
     }
   }]
 }

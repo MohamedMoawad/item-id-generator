@@ -1,7 +1,0 @@
-*.md
-*.test.js
-.git*
-.vscode
-local.settings.json
-node_modules
-test

@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
-import { connectConfiguredList, ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
+import { ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
 import { clearAssignedPaints, IPreparedCreate, paintNumbers, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
 import { embedNumberInCreate, IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
@@ -94,7 +94,6 @@ function startWork(next: IAutogenListTarget): void {
     (itemId) => numberAfterCreate(itemId)
   );
   showNumberColumn(next).catch(() => undefined);
-  connectList(next).catch(() => undefined);
   numberList().catch(() => undefined);
   ensureButton();
   if (!barObserver && typeof MutationObserver !== 'undefined') {
@@ -197,31 +196,6 @@ async function showNumberColumn(next: IAutogenListTarget): Promise<void> {
     next.listId,
     config.numberColumnInternalName
   );
-}
-
-async function connectList(next: IAutogenListTarget): Promise<void> {
-  const key = `requestNumberConnected:${next.listId}`;
-  try {
-    if (window.sessionStorage.getItem(key) === '1') {
-      return;
-    }
-  } catch {
-    // Session storage can be blocked. Still try to connect.
-  }
-  const connected = await connectConfiguredList(
-    next.spHttpClient,
-    next.siteAbsoluteUrl,
-    next.configListTitle,
-    next.listId
-  );
-  if (!connected) {
-    return;
-  }
-  try {
-    window.sessionStorage.setItem(key, '1');
-  } catch {
-    // The connection itself succeeded.
-  }
 }
 
 function ensureButton(): void {

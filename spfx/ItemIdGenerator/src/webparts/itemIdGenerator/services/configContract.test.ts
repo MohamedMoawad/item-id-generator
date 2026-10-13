@@ -1,14 +1,8 @@
 import {
   buildCreateBody,
   buildGetListUrl,
-  buildPropertyBagMerge,
-  buildSetStorageEntity,
-  buildStorageEntityUrl,
   buildListAbsoluteUrl,
-  readCorporateCatalogUrl,
-  readStorageEntityValue,
   buildListItemsUrl,
-  buildRegisterWebhookBody,
   buildUpdateBody,
   deriveWebFromListUrl,
   draftForCurrentList,
@@ -17,7 +11,6 @@ import {
   hasPermissionFlag,
   isConfigList,
   isExistingColumnError,
-  isPlaceholderSetting,
   mapConfigRow,
   PERMISSION_EDIT_LIST_ITEMS,
   validateDraft
@@ -37,13 +30,12 @@ describe('AutoGenFeatureConfiguration contract', () => {
     padLength: 4
   };
 
-  it('starts a new row at count 0 and does not send counter fields the function owns', () => {
+  it('starts a new row at count 0 and does not send the counter fields', () => {
     const body = buildCreateBody(draft);
     expect(body.CurrentCount).toBe(0);
     expect(body.TargetListGuid).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
     expect(body.PadLength).toBe(4);
     expect(Object.prototype.hasOwnProperty.call(body, 'LastResetDate')).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(body, 'WebhookSubscriptionId')).toBe(false);
   });
 
   it('does not send the counter when an admin edits a row', () => {
@@ -52,15 +44,6 @@ describe('AutoGenFeatureConfiguration contract', () => {
     expect(body.IsActive).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(body, 'CurrentCount')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(body, 'LastResetDate')).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(body, 'WebhookSubscriptionId')).toBe(false);
-  });
-
-  it('clears the stored subscription when the target list changes', () => {
-    const body = buildUpdateBody({
-      ...draft,
-      loadedTargetListGuid: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee'
-    });
-    expect(body.WebhookSubscriptionId).toBe('');
   });
 
   it('rejects a formula that cannot produce distinct codes and a missing GUID', () => {
@@ -75,7 +58,7 @@ describe('AutoGenFeatureConfiguration contract', () => {
     const url = buildListItemsUrl('https://contoso.sharepoint.com/sites/config/', "Team's Config");
     expect(url).toContain("/lists/getbytitle('Team''s Config')/items");
     expect(url).toContain('NumberColumnInternalName');
-    expect(url).toContain('WebhookSubscriptionId');
+    expect(url.indexOf('WebhookSubscriptionId')).toBe(-1);
     expect(mapConfigRow({
       Id: 4,
       Title: 'Operations requests',
@@ -110,15 +93,6 @@ describe('AutoGenFeatureConfiguration contract', () => {
     expect(isExistingColumnError('SharePoint returned HTTP 403.')).toBe(false);
   });
 
-  it('builds the RegisterWebhook body and treats placeholders as unset', () => {
-    expect(buildRegisterWebhookBody('https://contoso.sharepoint.com/sites/config/', 8)).toEqual({
-      configSiteUrl: 'https://contoso.sharepoint.com/sites/config',
-      configItemId: 8
-    });
-    expect(isPlaceholderSetting('https://<function-app>.azurewebsites.net/api/RegisterWebhook?code=<function-key>')).toBe(true);
-    expect(isPlaceholderSetting('https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc')).toBe(false);
-  });
-
   it('describes every AutoGenFeatureConfiguration column in field XML', () => {
     const names = CONFIG_FIELD_DEFINITIONS.map((field) => field.internalName);
     expect(names).toEqual([
@@ -130,8 +104,7 @@ describe('AutoGenFeatureConfiguration contract', () => {
       'ResetPeriod',
       'LastResetDate',
       'IsActive',
-      'PadLength',
-      'WebhookSubscriptionId'
+      'PadLength'
     ]);
     CONFIG_FIELD_DEFINITIONS.forEach((field) => {
       expect(field.schemaXml).toContain(`Name="${field.internalName}"`);
@@ -162,32 +135,5 @@ describe('AutoGenFeatureConfiguration contract', () => {
     expect(isConfigList('Requests', '/sites/ops/Lists/Requests', 'AutoGenFeatureConfiguration')).toBe(false);
     expect(hasPermissionFlag('4', PERMISSION_EDIT_LIST_ITEMS)).toBe(true);
     expect(hasPermissionFlag('1', PERMISSION_EDIT_LIST_ITEMS)).toBe(false);
-  });
-
-  it('stores the RegisterWebhook URL with an OData 3 MERGE', () => {
-    const merge = buildPropertyBagMerge('RequestNumberRegisterWebhookUrl', 'https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc');
-    const body = JSON.parse(merge.body) as { __metadata: { type: string }; RequestNumberRegisterWebhookUrl: string };
-    expect(merge.headers['OData-Version']).toBe('3.0');
-    expect(merge.headers['X-HTTP-Method']).toBe('MERGE');
-    expect(merge.headers['Content-Type']).toContain('odata=verbose');
-    expect(body.__metadata.type).toBe('SP.PropertyValues');
-    expect(body.RequestNumberRegisterWebhookUrl).toContain('/api/RegisterWebhook');
-  });
-
-  it('reads the organization webhook URL from the app catalog', () => {
-    const webhook = 'https://contoso.azurewebsites.net/api/RegisterWebhook?code=abc';
-    expect(readStorageEntityValue({ Value: webhook })).toBe(webhook);
-    expect(readStorageEntityValue({ d: { GetStorageEntity: { Value: webhook } } })).toBe(webhook);
-    expect(readStorageEntityValue({ 'odata.null': true })).toBe('');
-    expect(readCorporateCatalogUrl({ CorporateCatalogUrl: 'https://contoso.sharepoint.com/sites/appcatalog/' })).toBe(
-      'https://contoso.sharepoint.com/sites/appcatalog'
-    );
-    expect(readCorporateCatalogUrl({ d: { CorporateCatalogUrl: 'http://contoso.sharepoint.com/sites/appcatalog' } })).toBe('');
-    const stored = buildSetStorageEntity('https://contoso.sharepoint.com/sites/appcatalog', webhook);
-    const entity = JSON.parse(stored.body) as { entity: { __metadata: { type: string }; Key: string; Value: string } };
-    expect(stored.url).toContain('/sites/appcatalog/_api/web/SetStorageEntity');
-    expect(entity.entity.__metadata.type).toBe('SP.AppKeyValue');
-    expect(entity.entity.Key).toBe('RequestNumberRegisterWebhookUrl');
-    expect(buildStorageEntityUrl('https://contoso.sharepoint.com/sites/ops')).toContain("GetStorageEntity('RequestNumberRegisterWebhookUrl')");
   });
 });

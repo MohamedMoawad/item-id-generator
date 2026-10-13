@@ -13,7 +13,6 @@ export interface IConfigDraft {
   targetListUrl: string;
   targetListGuid: string;
   targetListTitle?: string;
-  loadedTargetListGuid?: string;
   numberColumnInternalName: string;
   formula: string;
   resetPeriod: ResetPeriod;
@@ -21,7 +20,6 @@ export interface IConfigDraft {
   padLength: number;
   currentCount?: number;
   lastResetDate?: string;
-  webhookSubscriptionId?: string;
   modified?: string;
   modifiedBy?: string;
 }
@@ -38,7 +36,6 @@ export interface ISharePointConfigItem {
   LastResetDate?: string;
   IsActive?: boolean | string | number;
   PadLength?: number | string;
-  WebhookSubscriptionId?: string;
   Modified?: string;
   Editor?: { Title?: string };
   'odata.etag'?: string;
@@ -80,11 +77,6 @@ export function isActiveValue(value: boolean | string | number | undefined): boo
   return value === true || value === 1 || value === '1' || value === 'true' || value === 'Yes';
 }
 
-export function isPlaceholderSetting(value: string): boolean {
-  const text = value.trim();
-  return text.length === 0 || text.indexOf('<') >= 0;
-}
-
 export function validateDraft(draft: IConfigDraft): string | undefined {
   if (!draft.title.trim()) {
     return 'Enter a title for this rule.';
@@ -122,7 +114,6 @@ export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
     title: item.Title || '',
     targetListUrl: item.TargetListUrl || '',
     targetListGuid: guid,
-    loadedTargetListGuid: guid,
     numberColumnInternalName: item.NumberColumnInternalName || '',
     formula: item.Formula || '',
     resetPeriod: normalizeResetPeriod(item.ResetPeriod),
@@ -130,7 +121,6 @@ export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
     padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
     currentCount: Number(item.CurrentCount) || 0,
     lastResetDate: item.LastResetDate || '',
-    webhookSubscriptionId: item.WebhookSubscriptionId || '',
     modified: item.Modified || '',
     modifiedBy: item.Editor && item.Editor.Title ? item.Editor.Title : ''
   };
@@ -161,16 +151,10 @@ export function buildUpdateBody(draft: IConfigDraft): Record<string, string | nu
     IsActive: draft.isActive,
     PadLength: draft.padLength
   };
-  const previous = draft.loadedTargetListGuid ? normalizeGuid(draft.loadedTargetListGuid) : '';
-  if (previous && previous !== normalizeGuid(draft.targetListGuid)) {
-    body.WebhookSubscriptionId = '';
-  }
   return body;
 }
 
 export const PERMISSION_EDIT_LIST_ITEMS = 4;
-
-export const REGISTER_WEBHOOK_PROPERTY = 'RequestNumberRegisterWebhookUrl';
 
 export function hasPermissionFlag(low: string | number | undefined, flag: number): boolean {
   const value = typeof low === 'number' ? low : parseInt(String(low ?? ''), 10);
@@ -213,16 +197,6 @@ export function isConfigList(listTitle: string, serverRelativeUrl: string, confi
   return /\/lists\/(autogenfeatureconfiguration|requestnumberconfig)$/i.test(serverRelativeUrl);
 }
 
-export function buildRegisterWebhookBody(configSiteUrl: string, configItemId: number): {
-  configSiteUrl: string;
-  configItemId: number;
-} {
-  return {
-    configSiteUrl: trimSlash(configSiteUrl),
-    configItemId
-  };
-}
-
 export function escapeListTitle(title: string): string {
   return title.replace(/'/g, "''");
 }
@@ -262,89 +236,6 @@ export function buildListUrl(siteAbsoluteUrl: string, listTitle: string): string
 
 export function buildListPermissionsUrl(siteAbsoluteUrl: string, listTitle: string): string {
   return `${listApi(siteAbsoluteUrl, listTitle)}/EffectiveBasePermissions`;
-}
-
-export function buildAllPropertiesUrl(siteAbsoluteUrl: string): string {
-  return `${trimSlash(siteAbsoluteUrl)}/_api/web/AllProperties`;
-}
-
-export function buildStorageEntityUrl(siteAbsoluteUrl: string): string {
-  return `${trimSlash(siteAbsoluteUrl)}/_api/web/GetStorageEntity('${REGISTER_WEBHOOK_PROPERTY}')`;
-}
-
-export function buildTenantSettingsUrl(siteAbsoluteUrl: string): string {
-  return `${trimSlash(siteAbsoluteUrl)}/_api/SP_TenantSettings_Current`;
-}
-
-export function readStorageEntityValue(payload: unknown): string {
-  const record = asRecord(payload);
-  if (record['odata.null'] === true) {
-    return '';
-  }
-  const direct = textValue(record.Value);
-  if (direct) {
-    return direct;
-  }
-  const nested = asRecord(record.d);
-  const method = asRecord(nested.GetStorageEntity);
-  return textValue(method.Value) || textValue(nested.Value);
-}
-
-export function readCorporateCatalogUrl(payload: unknown): string {
-  const record = asRecord(payload);
-  const nested = asRecord(record.d);
-  const url = textValue(record.CorporateCatalogUrl) || textValue(nested.CorporateCatalogUrl);
-  if (!url || url.indexOf('https://') !== 0) {
-    return '';
-  }
-  return trimSlash(url);
-}
-
-export function buildSetStorageEntity(catalogSiteUrl: string, value: string): { url: string; headers: { [key: string]: string }; body: string } {
-  return {
-    url: `${trimSlash(catalogSiteUrl)}/_api/web/SetStorageEntity`,
-    headers: {
-      Accept: 'application/json;odata=verbose',
-      'Content-Type': 'application/json;odata=verbose',
-      'OData-Version': '3.0'
-    },
-    body: JSON.stringify({
-      entity: {
-        __metadata: { type: 'SP.AppKeyValue' },
-        Key: REGISTER_WEBHOOK_PROPERTY,
-        Value: value,
-        Description: 'Organization RegisterWebhook URL for request numbers',
-        Comment: 'Used by every site collection where the app is added'
-      }
-    })
-  };
-}
-
-function asRecord(value: unknown): { [key: string]: unknown } {
-  return value && typeof value === 'object' ? value as { [key: string]: unknown } : {};
-}
-
-function textValue(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-// SP.PropertyValues accepts MERGE only under OData 3. SPHttpClient v1 defaults to
-// OData 4, which turns MERGE into PATCH and SharePoint returns HTTP 400.
-export function buildPropertyBagMerge(propertyName: string, value: string): { headers: { [key: string]: string }; body: string } {
-  const payload: { [key: string]: string | { type: string } } = {
-    __metadata: { type: 'SP.PropertyValues' }
-  };
-  payload[propertyName] = value;
-  return {
-    headers: {
-      Accept: 'application/json;odata=verbose',
-      'Content-Type': 'application/json;odata=verbose',
-      'OData-Version': '3.0',
-      'IF-MATCH': '*',
-      'X-HTTP-Method': 'MERGE'
-    },
-    body: JSON.stringify(payload)
-  };
 }
 
 export function buildCreateListUrl(siteAbsoluteUrl: string): string {
