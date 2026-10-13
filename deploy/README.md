@@ -12,7 +12,7 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.25.0.0** is named **AutoGen Feature**. Upload it in the app catalog and deploy it. Then add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
+Package version **1.26.0.0** is named **AutoGen Feature**. A saved item keeps one number, and the counter moves once for that item. Upload it in the app catalog and deploy it. Then add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
 
 1. Upload `item-id-generator.sppkg` in the app catalog, replace the existing app, and deploy it. If SharePoint refuses the upgrade, delete **AutoGen Feature** from the app catalog and upload this package again.
 2. On the site collection, open **Site contents**, choose **Add an app**, open **From your organization**, and add **AutoGen Feature**.

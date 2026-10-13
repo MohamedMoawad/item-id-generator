@@ -1,4 +1,4 @@
-import { SPHttpClient } from '@microsoft/sp-http';
+import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
   escapeListTitle,
   findConfigForList,
@@ -49,7 +49,51 @@ export interface IAssignedNumber {
   code: string;
 }
 
+interface INumberLock {
+  busy: boolean;
+  pending: boolean;
+}
+
+interface INumberWindow extends Window {
+  __autogenNumberLock?: INumberLock;
+}
+
+function numberLock(): INumberLock {
+  const host = window as INumberWindow;
+  if (!host.__autogenNumberLock) {
+    host.__autogenNumberLock = { busy: false, pending: false };
+  }
+  return host.__autogenNumberLock;
+}
+
 export async function numberBlankItems(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  webAbsoluteUrl: string,
+  listGuid: string
+): Promise<IAssignedNumber[]> {
+  const lock = numberLock();
+  if (lock.busy) {
+    lock.pending = true;
+    return [];
+  }
+  lock.busy = true;
+  let assigned: IAssignedNumber[] = [];
+  try {
+    assigned = await numberBlankItemsNow(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid);
+  } finally {
+    lock.busy = false;
+  }
+  if (!lock.pending) {
+    return assigned;
+  }
+  lock.pending = false;
+  const more = await numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid);
+  return assigned.concat(more);
+}
+
+async function numberBlankItemsNow(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
   configListTitle: string,
@@ -87,6 +131,9 @@ export async function numberBlankItems(
       columnNames,
       columns
     );
+    if (code === '') {
+      continue;
+    }
     if (!code) {
       break;
     }
@@ -109,20 +156,26 @@ async function reserveAndWrite(
 ): Promise<string | undefined> {
   const item = await readItemForFormula(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, columnNames, columns);
   if (!item || !isBlankNumber(item[fieldName])) {
-    return undefined;
+    return '';
   }
   const columnValues = columnMapForItem(item, columnNames, columns);
   for (let attempt = 1; attempt <= 8; attempt += 1) {
+    const fresh = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
+    if (!fresh || !isBlankNumber(fresh[fieldName])) {
+      return '';
+    }
     const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, configItemId);
     if (!current || !isActiveValue(current.IsActive) || !current.Formula) {
       return undefined;
     }
+    const previousCount = Number(current.CurrentCount) || 0;
+    const previousReset = current.LastResetDate || '';
     const padLength = Number(current.PadLength);
     const planned = planNextCode({
       formula: current.Formula,
       resetPeriod: current.ResetPeriod || 'None',
       lastResetDate: current.LastResetDate,
-      currentCount: Number(current.CurrentCount) || 0,
+      currentCount: previousCount,
       padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
       now: new Date(),
       columns: columnValues
@@ -132,7 +185,7 @@ async function reserveAndWrite(
       siteAbsoluteUrl,
       configListTitle,
       configItemId,
-      current['odata.etag'] || '*',
+      etagOf(current),
       planned.sequence,
       planned.lastResetDate
     );
@@ -142,8 +195,44 @@ async function reserveAndWrite(
     if (swapped === 'failed') {
       return undefined;
     }
-    const wrote = await writeNumber(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, planned.code);
-    return wrote ? planned.code : undefined;
+    const wrote = await writeNumber(
+      spHttpClient,
+      webAbsoluteUrl,
+      listGuid,
+      itemId,
+      fieldName,
+      planned.code,
+      etagOf(fresh)
+    );
+    if (wrote === 'wrote') {
+      return planned.code;
+    }
+    if (wrote === 'conflict') {
+      const again = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
+      if (again && !isBlankNumber(again[fieldName])) {
+        await releaseReservedCount(
+          spHttpClient,
+          siteAbsoluteUrl,
+          configListTitle,
+          configItemId,
+          planned.sequence,
+          previousCount,
+          previousReset
+        );
+        return '';
+      }
+      const retry = await writeNumber(
+        spHttpClient,
+        webAbsoluteUrl,
+        listGuid,
+        itemId,
+        fieldName,
+        planned.code,
+        again ? etagOf(again) : '*'
+      );
+      return retry === 'wrote' ? planned.code : undefined;
+    }
+    return undefined;
   }
   return undefined;
 }
@@ -202,7 +291,9 @@ async function readItem(
   if (!response.ok) {
     return undefined;
   }
-  return await response.json() as IListItemRow;
+  const payload = await response.json() as IListItemRow;
+  rememberEtag(response, payload);
+  return payload;
 }
 
 async function readCounter(
@@ -216,7 +307,9 @@ async function readCounter(
   if (!response.ok) {
     return undefined;
   }
-  return await response.json() as ICounterRow;
+  const payload = await response.json() as ICounterRow;
+  rememberEtag(response, payload);
+  return payload;
 }
 
 async function swapCounter(
@@ -257,19 +350,68 @@ async function writeNumber(
   listGuid: string,
   itemId: number,
   fieldName: string,
-  code: string
-): Promise<boolean> {
+  code: string,
+  etag: string
+): Promise<'wrote' | 'conflict' | 'failed'> {
   const body: { [key: string]: string } = {};
   body[fieldName] = code;
   const response = await spHttpClient.post(
     `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})`,
     SPHttpClient.configurations.v1,
     {
-      headers: mergeHeaders,
+      headers: {
+        ...mergeHeaders,
+        'IF-MATCH': etag || '*'
+      },
       body: JSON.stringify(body)
     }
   );
-  return response.ok || response.status === 204;
+  if (response.ok || response.status === 204) {
+    return 'wrote';
+  }
+  if (response.status === 412 || response.status === 409) {
+    return 'conflict';
+  }
+  return 'failed';
+}
+
+async function releaseReservedCount(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  itemId: number,
+  reservedSequence: number,
+  previousCount: number,
+  previousReset: string
+): Promise<void> {
+  const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, itemId);
+  if (!current || Number(current.CurrentCount) !== reservedSequence) {
+    return;
+  }
+  await swapCounter(
+    spHttpClient,
+    siteAbsoluteUrl,
+    configListTitle,
+    itemId,
+    etagOf(current),
+    previousCount,
+    previousReset
+  );
+}
+
+function etagOf(row: IListItemRow | ICounterRow): string {
+  const record = row as { 'odata.etag'?: string; '@odata.etag'?: string };
+  return record['odata.etag'] || record['@odata.etag'] || '*';
+}
+
+function rememberEtag(response: SPHttpClientResponse, row: IListItemRow | ICounterRow): void {
+  if (etagOf(row) !== '*') {
+    return;
+  }
+  const header = response.headers.get('ETag') || response.headers.get('etag') || '';
+  if (header) {
+    (row as IListItemRow)['odata.etag'] = header;
+  }
 }
 
 function configItems(siteAbsoluteUrl: string, configListTitle: string): string {

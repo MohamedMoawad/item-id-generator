@@ -21,12 +21,15 @@ export interface IAutogenListTarget {
   listServerRelativeUrl: string;
 }
 
+interface IAutogenWindow extends Window {
+  __autogenNumberTimer?: number;
+}
+
 let commandSetTarget: IAutogenListTarget | undefined;
 let customizerTarget: IAutogenListTarget | undefined;
 let target: IAutogenListTarget | undefined;
 let activeListId = '';
-const numberGate = { busy: false, pending: false };
-let timer: number | undefined;
+let ownsTimer = false;
 let stopWatch: (() => void) | undefined;
 let barObserver: MutationObserver | undefined;
 let panelHost: HTMLDivElement | undefined;
@@ -93,11 +96,15 @@ function startWork(next: IAutogenListTarget): void {
     barObserver = new MutationObserver(() => ensureButton());
     barObserver.observe(document.body, { childList: true, subtree: true });
   }
-  timer = window.setInterval(() => {
-    ensureButton();
-    repaintAssignedNumbers();
-    numberList().catch(() => undefined);
-  }, 1000);
+  const host = window as IAutogenWindow;
+  if (host.__autogenNumberTimer === undefined) {
+    ownsTimer = true;
+    host.__autogenNumberTimer = window.setInterval(() => {
+      ensureButton();
+      repaintAssignedNumbers();
+      numberList().catch(() => undefined);
+    }, 1000);
+  }
 }
 
 function stopRuntime(): void {
@@ -110,14 +117,15 @@ function stopRuntime(): void {
 
 function stopWork(): void {
   clearAssignedPaints();
-  numberGate.pending = false;
   if (stopWatch) {
     stopWatch();
     stopWatch = undefined;
   }
-  if (timer !== undefined) {
-    window.clearInterval(timer);
-    timer = undefined;
+  const host = window as IAutogenWindow;
+  if (ownsTimer && host.__autogenNumberTimer !== undefined) {
+    window.clearInterval(host.__autogenNumberTimer);
+    host.__autogenNumberTimer = undefined;
+    ownsTimer = false;
   }
   if (barObserver) {
     barObserver.disconnect();
@@ -129,12 +137,7 @@ async function numberList(): Promise<void> {
   if (!target) {
     return;
   }
-  if (numberGate.busy) {
-    numberGate.pending = true;
-    return;
-  }
   const current = target;
-  numberGate.busy = true;
   let assigned: IAssignedNumber[] = [];
   try {
     assigned = await numberBlankItems(
@@ -147,20 +150,9 @@ async function numberList(): Promise<void> {
   } catch {
     assigned = [];
   }
-  finishNumbering(current, assigned);
-}
-
-function finishNumbering(current: IAutogenListTarget, assigned: IAssignedNumber[]): void {
-  numberGate.busy = false;
-  if (assigned.length > 0) {
+  if (assigned.length > 0 && target && target.listId === current.listId) {
     showAssignedNumbers(assigned);
   }
-  if (!numberGate.pending || !target || target.listId !== current.listId) {
-    numberGate.pending = false;
-    return;
-  }
-  numberGate.pending = false;
-  numberList().catch(() => undefined);
 }
 
 async function showNumberColumn(next: IAutogenListTarget): Promise<void> {
