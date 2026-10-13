@@ -7,12 +7,20 @@ export interface IPreparedCreate {
   rollback?: () => Promise<void>;
 }
 
+interface IWrapped {
+  __autogenWrapped?: boolean;
+}
+
 interface IWatchWindow extends Window {
   __autoGenListCreateWatch?: boolean;
   __autogenCreateListGuid?: string;
   __autogenCreateListUrl?: string;
   __autogenOnCreating?: (body: string) => Promise<IPreparedCreate | undefined>;
   __autogenOnCreated?: (itemId?: number) => Promise<void>;
+  __autogenOriginalFetch?: typeof window.fetch;
+  __autogenOriginalOpen?: typeof XMLHttpRequest.prototype.open;
+  __autogenOriginalSend?: typeof XMLHttpRequest.prototype.send;
+  __autogenReload?: () => void;
 }
 
 interface IRecord {
@@ -30,8 +38,10 @@ export function isNewItemRequest(url: string, method: string, listGuid: string, 
     text = url;
   }
   const lower = text.toLowerCase();
-  const onThisList = lower.indexOf(listGuid.toLowerCase()) >= 0 ||
-    (serverRelativeUrl.length > 1 && lower.indexOf(serverRelativeUrl.toLowerCase()) >= 0);
+  const guid = (listGuid || '').toLowerCase();
+  const listUrl = (serverRelativeUrl || '').toLowerCase();
+  const onThisList = (guid.length > 0 && lower.indexOf(guid) >= 0) ||
+    (listUrl.length > 1 && lower.indexOf(listUrl) >= 0);
   if (!onThisList) {
     return false;
   }
@@ -251,30 +261,68 @@ export function watchNewListItems(
       target.__autogenOnCreated = undefined;
     }
   };
-  if (target[WATCH_FLAG]) {
-    return releaseCallbacks;
+  installTransportHooks();
+  return () => {
+    releaseCallbacks();
+    const host = window as IWatchWindow;
+    if (host.__autogenOriginalFetch) {
+      window.fetch = host.__autogenOriginalFetch;
+      host.__autogenOriginalFetch = undefined;
+    }
+    if (host.__autogenOriginalOpen) {
+      XMLHttpRequest.prototype.open = host.__autogenOriginalOpen;
+      host.__autogenOriginalOpen = undefined;
+    }
+    if (host.__autogenOriginalSend) {
+      XMLHttpRequest.prototype.send = host.__autogenOriginalSend;
+      host.__autogenOriginalSend = undefined;
+    }
+    target[WATCH_FLAG] = false;
+  };
+}
+
+export function ensureListCreateWatch(): void {
+  installTransportHooks();
+}
+
+function installTransportHooks(): void {
+  const host = window as IWatchWindow;
+  host[WATCH_FLAG] = true;
+  const currentFetch = window.fetch as typeof window.fetch & IWrapped;
+  if (!currentFetch.__autogenWrapped) {
+    const originalFetch = currentFetch.bind(window);
+    if (!host.__autogenOriginalFetch) {
+      host.__autogenOriginalFetch = originalFetch;
+    }
+    const wrapped = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      if (!mayCarryNewItem(url, method)) {
+        return originalFetch(input, init);
+      }
+      return sendPreparedFetch(originalFetch, input, init);
+    }) as typeof window.fetch & IWrapped;
+    wrapped.__autogenWrapped = true;
+    window.fetch = wrapped;
   }
-  target[WATCH_FLAG] = true;
-  const originalFetch = window.fetch.bind(window);
+  const currentSend = XMLHttpRequest.prototype.send as typeof XMLHttpRequest.prototype.send & IWrapped;
+  if (currentSend.__autogenWrapped) {
+    return;
+  }
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
-
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = requestUrl(input);
-    const method = requestMethod(input, init);
-    if (!mayCarryNewItem(url, method)) {
-      return originalFetch(input, init);
-    }
-    return sendPreparedFetch(originalFetch, input, init);
-  };
-
-  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, method: string, url: string | URL): void {
+  if (!host.__autogenOriginalOpen) {
+    host.__autogenOriginalOpen = originalOpen;
+  }
+  if (!host.__autogenOriginalSend) {
+    host.__autogenOriginalSend = originalSend;
+  }
+  const wrappedOpen = function (this: XMLHttpRequest, method: string, url: string | URL): void {
     (this as XMLHttpRequest & { __autoGenMethod?: string; __autoGenUrl?: string }).__autoGenMethod = method;
     (this as XMLHttpRequest & { __autoGenUrl?: string }).__autoGenUrl = String(url);
     return originalOpen.apply(this, arguments as unknown as Parameters<typeof originalOpen>);
   };
-
-  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest): void {
+  const wrappedSend = function (this: XMLHttpRequest): void {
     const marked = this as XMLHttpRequest & { __autoGenMethod?: string; __autoGenUrl?: string };
     const sent = arguments[0] as unknown;
     const textBody = typeof sent === 'string' ? sent : undefined;
@@ -289,15 +337,10 @@ export function watchNewListItems(
       return originalSend.apply(this, arguments as unknown as Parameters<typeof originalSend>);
     }
     sendPreparedXhr(this, textBody, originalSend).catch(() => undefined);
-  };
-
-  return () => {
-    releaseCallbacks();
-    window.fetch = originalFetch;
-    XMLHttpRequest.prototype.open = originalOpen;
-    XMLHttpRequest.prototype.send = originalSend;
-    target[WATCH_FLAG] = false;
-  };
+  } as typeof XMLHttpRequest.prototype.send & IWrapped;
+  wrappedSend.__autogenWrapped = true;
+  XMLHttpRequest.prototype.open = wrappedOpen;
+  XMLHttpRequest.prototype.send = wrappedSend;
 }
 
 interface IAssignedPaint {
@@ -481,11 +524,19 @@ function scheduleAjaxRefresh(): void {
     if (generation !== refreshGeneration) {
       return;
     }
-    if (gridEditIsOpen() || formPanelIsOpen()) {
-      if (Date.now() - started < 20000) {
-        refreshTimer = window.setTimeout(tick, 400);
+    if (gridEditIsOpen() || itemFormIsOpen()) {
+      if (Date.now() - started < 8000) {
+        refreshTimer = window.setTimeout(tick, 300);
         return;
       }
+      if (gridEditIsOpen()) {
+        return;
+      }
+    }
+    if (reloadArmed) {
+      clickListRefresh();
+      reloadListOnce();
+      return;
     }
     if (clickListRefresh()) {
       window.setTimeout(() => {
@@ -500,8 +551,8 @@ function scheduleAjaxRefresh(): void {
       refreshTimer = window.setTimeout(tick, 350);
       return;
     }
-    if (Date.now() - started < 2500) {
-      refreshTimer = window.setTimeout(tick, 400);
+    if (Date.now() - started < 1200) {
+      refreshTimer = window.setTimeout(tick, 300);
       return;
     }
     reloadListOnce();
@@ -512,8 +563,8 @@ function scheduleAjaxRefresh(): void {
   refreshTimer = window.setTimeout(tick, 400);
 }
 
-function formPanelIsOpen(): boolean {
-  const panels = document.querySelectorAll('.ms-Panel-main');
+function itemFormIsOpen(): boolean {
+  const panels = document.querySelectorAll('.ms-Panel.is-open, [role="dialog"][aria-modal="true"]');
   for (let index = 0; index < panels.length; index += 1) {
     const panel = panels[index];
     if (panel instanceof HTMLElement && panel.getClientRects().length > 0) {
@@ -570,6 +621,11 @@ function reloadListOnce(): void {
     window.sessionStorage.setItem('autogenReloadOnce', '1');
   } catch {
     window.location.reload();
+    return;
+  }
+  const reload = (window as IWatchWindow).__autogenReload;
+  if (reload) {
+    reload();
     return;
   }
   window.location.reload();

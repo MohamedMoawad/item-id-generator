@@ -1,9 +1,9 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { SPHttpClient } from '@microsoft/sp-http';
-import { buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
+import { buildListAbsoluteUrl, findConfigForList, isConfigList, normalizeGuid } from '../../webparts/itemIdGenerator/services/configContract';
 import { ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
-import { clearAssignedPaints, IPreparedCreate, paintNumbers, refreshOpenList, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { clearAssignedPaints, ensureListCreateWatch, IPreparedCreate, paintNumbers, refreshOpenList, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
 import { embedNumberInCreate, IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
@@ -55,9 +55,10 @@ function applyActiveTarget(): void {
     return;
   }
   target = next;
-  if (activeListId !== next.listId) {
+  const nextId = normalizeGuid(next.listId) || next.listId;
+  if (activeListId !== nextId) {
     stopWork();
-    activeListId = next.listId;
+    activeListId = nextId;
     startWork(next);
   }
   removeInjectedButton();
@@ -98,6 +99,7 @@ function startWork(next: IAutogenListTarget): void {
     ownsTimer = true;
     host.__autogenNumberTimer = window.setInterval(() => {
       removeInjectedButton();
+      ensureListCreateWatch();
       repaintAssignedNumbers();
       numberList().catch(() => undefined);
     }, 1000);

@@ -114,12 +114,12 @@ describe('list create watch', () => {
     jest.advanceTimersByTime(500);
     expect(click).toHaveBeenCalled();
     clearAssignedPaints();
-    document.body.innerHTML = '<button data-automationid="refreshCommand" style="display:inline-block;width:32px;height:32px">Refresh</button>';
-    const again = document.querySelector('button');
-    const refreshClick = jest.spyOn(again as HTMLButtonElement, 'click');
+    const reload = jest.fn();
+    (window as unknown as { __autogenReload?: () => void }).__autogenReload = reload;
     refreshOpenList();
-    jest.advanceTimersByTime(500);
-    expect(refreshClick).toHaveBeenCalled();
+    jest.advanceTimersByTime(600);
+    expect(reload).toHaveBeenCalled();
+    (window as unknown as { __autogenReload?: () => void }).__autogenReload = undefined;
     clearAssignedPaints();
     rects.mockRestore();
     jest.useRealTimers();
