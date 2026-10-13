@@ -3,8 +3,8 @@ import * as ReactDom from 'react-dom';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { buildListAbsoluteUrl, findConfigForList, isConfigList } from '../../webparts/itemIdGenerator/services/configContract';
 import { connectConfiguredList, ensureTargetNumberColumn, loadConfigRows } from '../../webparts/itemIdGenerator/services/configListClient';
-import { clearAssignedPaints, paintNumbers, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
-import { IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
+import { clearAssignedPaints, IPreparedCreate, paintNumbers, repaintAssignedNumbers, revealAssignedNumbers, watchNewListItems } from '../../webparts/itemIdGenerator/services/listCreateWatch';
+import { embedNumberInCreate, IAssignedNumber, numberBlankItems } from '../../webparts/itemIdGenerator/services/listNumbering';
 import RequestNumberSettingsPanel from './RequestNumberSettingsPanel';
 
 export const AUTOGEN_COMMAND_LABEL = 'Autogen Feature';
@@ -87,7 +87,12 @@ export function openAutogenSettingsPanel(): void {
 }
 
 function startWork(next: IAutogenListTarget): void {
-  stopWatch = watchNewListItems(next.listId, next.listServerRelativeUrl, () => numberList());
+  stopWatch = watchNewListItems(
+    next.listId,
+    next.listServerRelativeUrl,
+    (body) => embedOnCreate(body),
+    (itemId) => numberAfterCreate(itemId)
+  );
   showNumberColumn(next).catch(() => undefined);
   connectList(next).catch(() => undefined);
   numberList().catch(() => undefined);
@@ -133,9 +138,32 @@ function stopWork(): void {
   }
 }
 
-async function numberList(): Promise<void> {
+function embedOnCreate(body: string): Promise<IPreparedCreate | undefined> {
   if (!target) {
-    return;
+    return Promise.resolve(undefined);
+  }
+  const current = target;
+  return embedNumberInCreate(
+    current.spHttpClient,
+    current.siteAbsoluteUrl,
+    current.configListTitle,
+    current.webAbsoluteUrl,
+    current.listId,
+    current.listServerRelativeUrl,
+    body
+  );
+}
+
+async function numberAfterCreate(itemId?: number): Promise<void> {
+  const showed = await numberList();
+  if (!showed && itemId) {
+    revealAssignedNumbers([itemId]);
+  }
+}
+
+async function numberList(): Promise<boolean> {
+  if (!target) {
+    return false;
   }
   const current = target;
   let assigned: IAssignedNumber[] = [];
@@ -152,7 +180,9 @@ async function numberList(): Promise<void> {
   }
   if (assigned.length > 0 && target && target.listId === current.listId) {
     showAssignedNumbers(assigned);
+    return true;
   }
+  return false;
 }
 
 async function showNumberColumn(next: IAutogenListTarget): Promise<void> {

@@ -85,5 +85,10 @@ describe('formula', () => {
       'Department.title': 'IT',
       'Department.Id': '4'
     });
+    expect(columnMapForItem({
+      Author: { DisplayText: 'Jane Doe', Key: 'i:0#.f|membership|jane@contoso.com' }
+    }, ['Author'], [{ internalName: 'Author', title: 'Author', type: 'User', token: '{Author.title}' }])).toMatchObject({
+      'Author.title': 'Jane Doe'
+    });
   });
 });

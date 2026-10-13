@@ -14,6 +14,14 @@ import {
   itemQueryParts,
   planNextCode
 } from './formula';
+import {
+  columnValuesFromCreateBody,
+  embedCreateField,
+  IPreparedCreate,
+  newItemJson,
+  readCreateField,
+  rewriteNewItemBody
+} from './listCreateWatch';
 
 const metadataHeaders: { [key: string]: string } = {
   Accept: 'application/json;odata=minimalmetadata'
@@ -64,6 +72,187 @@ function numberLock(): INumberLock {
     host.__autogenNumberLock = { busy: false, pending: false };
   }
   return host.__autogenNumberLock;
+}
+
+const CREATE_LOCK_WAIT_MS = 8000;
+
+export async function embedNumberInCreate(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  listServerRelativeUrl: string,
+  body: string
+): Promise<IPreparedCreate | undefined> {
+  const guid = normalizeGuid(listGuid);
+  if (!guid) {
+    return undefined;
+  }
+  const json = newItemJson(body, guid, listServerRelativeUrl);
+  if (!json) {
+    return undefined;
+  }
+  const acquired = await acquireNumberLock();
+  if (!acquired) {
+    return undefined;
+  }
+  try {
+    return await reserveEmbeddedNumber(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      webAbsoluteUrl,
+      guid,
+      listServerRelativeUrl,
+      body,
+      json
+    );
+  } catch {
+    return undefined;
+  } finally {
+    numberLock().busy = false;
+  }
+}
+
+async function reserveEmbeddedNumber(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  webAbsoluteUrl: string,
+  listGuid: string,
+  listServerRelativeUrl: string,
+  body: string,
+  json: string
+): Promise<IPreparedCreate | undefined> {
+  const rows = await loadRows(spHttpClient, siteAbsoluteUrl, configListTitle);
+  const config = findConfigForList(rows, listGuid);
+  if (!config || !config.isActive || config.id === undefined) {
+    return undefined;
+  }
+  const fieldName = config.numberColumnInternalName.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(fieldName)) {
+    return undefined;
+  }
+  const existing = readCreateField(json, fieldName);
+  if (!existing || (existing.found && !isBlankNumber(existing.value))) {
+    return undefined;
+  }
+  const columns = await loadFormulaColumns(spHttpClient, webAbsoluteUrl, listGuid);
+  const columnNames = columnNamesInFormula(config.formula);
+  const mapped = columnValuesFromCreateBody(json, columnNames, columns);
+  if (!mapped || !mapped.complete) {
+    return undefined;
+  }
+  const configItemId = config.id;
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    const embedded = await reserveOneCreate(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      configItemId,
+      fieldName,
+      mapped.values,
+      body,
+      listGuid,
+      listServerRelativeUrl
+    );
+    if (embedded !== 'conflict') {
+      return embedded;
+    }
+  }
+  return undefined;
+}
+
+async function reserveOneCreate(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
+  configItemId: number,
+  fieldName: string,
+  columns: { [token: string]: string },
+  body: string,
+  listGuid: string,
+  listServerRelativeUrl: string
+): Promise<IPreparedCreate | undefined | 'conflict'> {
+  const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, configItemId);
+  if (!current || !isActiveValue(current.IsActive) || !current.Formula) {
+    return undefined;
+  }
+  const previousCount = Number(current.CurrentCount) || 0;
+  const previousReset = current.LastResetDate || '';
+  const padLength = Number(current.PadLength);
+  let planned: { code: string; sequence: number; lastResetDate: string };
+  try {
+    planned = planNextCode({
+      formula: current.Formula,
+      resetPeriod: current.ResetPeriod || 'None',
+      lastResetDate: current.LastResetDate,
+      currentCount: previousCount,
+      padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
+      now: new Date(),
+      columns
+    });
+  } catch {
+    return undefined;
+  }
+  const swapped = await swapCounter(
+    spHttpClient,
+    siteAbsoluteUrl,
+    configListTitle,
+    configItemId,
+    etagOf(current),
+    planned.sequence,
+    planned.lastResetDate
+  );
+  if (swapped !== 'swapped') {
+    return swapped === 'conflict' ? 'conflict' : undefined;
+  }
+  const rewritten = rewriteNewItemBody(body, listGuid, listServerRelativeUrl, (part) => embedCreateField(part, fieldName, planned.code));
+  if (!rewritten) {
+    await releaseReservedCount(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      configItemId,
+      planned.sequence,
+      previousCount,
+      previousReset
+    );
+    return undefined;
+  }
+  return {
+    body: rewritten,
+    rollback: () => releaseReservedCount(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      configItemId,
+      planned.sequence,
+      previousCount,
+      previousReset
+    )
+  };
+}
+
+async function acquireNumberLock(): Promise<boolean> {
+  const started = Date.now();
+  let lock = numberLock();
+  while (lock.busy) {
+    if (Date.now() - started >= CREATE_LOCK_WAIT_MS) {
+      return false;
+    }
+    await delay(40);
+    lock = numberLock();
+  }
+  lock.busy = true;
+  return true;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 export async function numberBlankItems(

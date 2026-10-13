@@ -12,13 +12,13 @@ The list subscription is a SharePoint webhook, which is the current replacement 
 
 ## 1. Upload the SharePoint app
 
-Package version **1.26.0.0** is named **AutoGen Feature**. A saved item keeps one number, and the counter moves once for that item. Upload it in the app catalog and deploy it. Then add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
+Package version **1.27.0.0** is named **AutoGen Feature**. A new item saved from the open list stores its number in that same save. The counter moves once for that item. Upload it in the app catalog and deploy it. Then add it from the site: **Site contents → Add an app → From your organization → AutoGen Feature**. **AutoGenFeatureConfiguration** stays visible in site contents. The dialog is 40% of the screen width. It shows **Add AutoGen Configuration** until the list is saved, then one row with Modified, Modified by, Edit, and View. A new rule starts with Reset set to **None**.
 
 1. Upload `item-id-generator.sppkg` in the app catalog, replace the existing app, and deploy it. If SharePoint refuses the upgrade, delete **AutoGen Feature** from the app catalog and upload this package again.
 2. On the site collection, open **Site contents**, choose **Add an app**, open **From your organization**, and add **AutoGen Feature**.
 3. Open a list and choose **Autogen Feature** on the command bar. The dialog opens in the middle of the page.
 4. Select the single-line text column, set the formula, leave **Active** checked, and save.
-5. Add a new item and leave the number column empty. After you save, the list refreshes in place and the number appears. You do not type it or click Refresh.
+5. Add a new item and leave the number column empty. The number is part of the save. The list then refreshes in place and the number appears. You do not type it or click Refresh. Items created while the list page is closed, or by Power Automate, still receive a number the next time that list is open.
 
 The number is written while someone has that list open. Items created while the list is closed receive a number the next time the list is opened. The Azure Function section below is optional and is only for numbering when nobody has the list open.
 

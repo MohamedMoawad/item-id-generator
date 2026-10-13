@@ -247,7 +247,7 @@ export function textFromFieldValue(value: unknown, property?: string): string {
       }
       return '';
     }
-    const title = readProperty(record, 'Title') ?? readProperty(record, 'LookupValue') ?? readProperty(record, 'Label') ?? readProperty(record, 'EMail') ?? readProperty(record, 'Email');
+    const title = readProperty(record, 'Title') ?? readProperty(record, 'LookupValue') ?? readProperty(record, 'Label') ?? readProperty(record, 'DisplayText') ?? readProperty(record, 'EMail') ?? readProperty(record, 'Email');
     if (title !== undefined && title !== null && typeof title !== 'object') {
       return formatScalar(title);
     }
