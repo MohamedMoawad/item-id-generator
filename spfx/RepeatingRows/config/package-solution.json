@@ -3,7 +3,7 @@
   "solution": {
     "name": "Repeating Rows",
     "id": "c3a1e8b4-7d2f-4a91-9c55-1b6e0d4f8a22",
-    "version": "1.1.0.0",
+    "version": "1.2.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -30,7 +30,7 @@
         "title": "Repeating Rows",
         "description": "Adds the Repeating Rows command to generic lists.",
         "id": "6f2c9a10-4e77-4b3d-8a61-2d5c7e9b0f33",
-        "version": "1.1.0.0",
+        "version": "1.2.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

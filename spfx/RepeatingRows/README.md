@@ -149,7 +149,7 @@ The package is `sharepoint/solution/repeating-rows.sppkg`. Copy it to `deploy/re
 
 1. Upload `repeating-rows.sppkg` to the tenant app catalog and deploy it. This is a full-trust client-side solution in the same way other SPFx packages are: it asks for no extra Microsoft Graph permission. It uses the current user's SharePoint access.
 2. On the site, open **Site contents → Add an app → From your organization → Repeating Rows**.
-3. Open the parent list, for example Purchase Requests. Choose **Repeating Rows**.
+3. Open the parent list, for example Purchase Requests. At the right of the column headings, select **+ Add column**, then **Repeating Rows**. SharePoint Online cannot put a custom type in the server field-type list, so the app adds that choice to this menu. The list command **Repeating Rows** opens the same setup.
 4. Set the child list name to Purchase Request Details. Leave the relationship field as ParentID. The form already lists Description, Quantity, Unit Price, and Amount. Add or change columns there. Set min and max rows if you need them. Click **Create column**. Opening **Repeating Rows** again loads these settings so you can change them.
 5. Add **Requestor** and **Department** as normal SharePoint columns if they are not there yet. The form picks them up because they are ordinary fields.
 6. Choose **New**. The line-item grid is the form. Save. The view shows the row count in **Line Items**. Edit the item to change, reorder, or remove rows.

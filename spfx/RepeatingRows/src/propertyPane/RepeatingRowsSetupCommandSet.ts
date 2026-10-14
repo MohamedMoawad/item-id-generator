@@ -5,6 +5,7 @@ import * as ReactDOM from 'react-dom';
 import { SetupPanel } from '../controls/SetupPanel';
 import { IRepeatingRowsConfig, RepeatingRowsError } from '../models/repeatingRows';
 import { loadExistingConfig } from '../services/loadExistingConfig';
+import { addRepeatingColumnType } from '../utilities/columnTypeMenu';
 import { fieldHeaders, provisionRepeatingRows } from '../services/sharePointProvisioner';
 import { SpHttpGateway } from '../services/sharePointGateway';
 
@@ -15,12 +16,15 @@ const HOST_ID = 'repeating-rows-setup-host';
 
 export default class RepeatingRowsSetupCommandSet extends BaseListViewCommandSet<IRepeatingRowsSetupCommandSetProperties> {
   private _session = 0;
+  private _observer: MutationObserver | undefined;
+  private _scanTimer: number | undefined;
 
   public onInit(): Promise<void> {
     const command = this.tryGetCommand('REPEATING_ROWS');
     if (command) {
       command.visible = !!this.context.pageContext.list;
     }
+    this._watchColumnTypes();
     return Promise.resolve();
   }
 
@@ -32,7 +36,30 @@ export default class RepeatingRowsSetupCommandSet extends BaseListViewCommandSet
   }
 
   public onDispose(): void {
+    if (this._observer) {
+      this._observer.disconnect();
+    }
+    if (this._scanTimer !== undefined) {
+      window.clearTimeout(this._scanTimer);
+    }
     this._close();
+  }
+
+  private _watchColumnTypes(): void {
+    const scan = (): void => {
+      addRepeatingColumnType(document, () => this._open());
+    };
+    scan();
+    this._observer = new MutationObserver(() => {
+      if (this._scanTimer !== undefined) {
+        return;
+      }
+      this._scanTimer = window.setTimeout(() => {
+        this._scanTimer = undefined;
+        scan();
+      }, 50);
+    });
+    this._observer.observe(document.body, { childList: true, subtree: true });
   }
 
   private _open(): void {
