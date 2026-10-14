@@ -1,0 +1,32 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "repeating-rows-field-customizer": {
+      "components": [
+        {
+          "entrypoint": "./lib/fieldCustomizers/RepeatingRowsFieldCustomizer.js",
+          "manifest": "./src/fieldCustomizers/RepeatingRowsFieldCustomizer.manifest.json"
+        }
+      ]
+    },
+    "repeating-rows-form-customizer": {
+      "components": [
+        {
+          "entrypoint": "./lib/formCustomizers/RepeatingRowsFormCustomizer.js",
+          "manifest": "./src/formCustomizers/RepeatingRowsFormCustomizer.manifest.json"
+        }
+      ]
+    },
+    "repeating-rows-setup-command-set": {
+      "components": [
+        {
+          "entrypoint": "./lib/propertyPane/RepeatingRowsSetupCommandSet.js",
+          "manifest": "./src/propertyPane/RepeatingRowsSetupCommandSet.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {}
+}

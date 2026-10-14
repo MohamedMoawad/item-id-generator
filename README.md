@@ -19,6 +19,7 @@ An item created while nobody has the list open stays blank until the next person
 | Path | Role |
 | --- | --- |
 | `spfx/ItemIdGenerator` | The SharePoint Framework app: settings dialog, config list, and numbering on the open list. |
+| `spfx/RepeatingRows` | Repeating line items stored in a child list. See [spfx/RepeatingRows/README.md](spfx/RepeatingRows/README.md). |
 
 ## Versions
 

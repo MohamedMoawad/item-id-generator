@@ -15,3 +15,7 @@ The number is written while someone has that list open. Items created while the 
 Later versions are the same upload. Replace the package in the app catalog and deploy it again. On each site, open **Site contents** and update **AutoGen Feature** if SharePoint shows an update. Refresh the list.
 
 List owners set the formula, the number column, and the reset. Saving an active rule is enough. Opening the list fills blank number columns.
+
+## Repeating Rows
+
+`repeating-rows.sppkg` is a separate app. Upload it to the app catalog, add **Repeating Rows** to the site, open a generic list, and choose **Repeating Rows** on the command bar. The steps and the platform limits are in [spfx/RepeatingRows/README.md](../spfx/RepeatingRows/README.md).

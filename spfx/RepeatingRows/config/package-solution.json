@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "Repeating Rows",
+    "id": "c3a1e8b4-7d2f-4a91-9c55-1b6e0d4f8a22",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": false,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.23.2"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "Repeating rows stored in a child list."
+      },
+      "longDescription": {
+        "default": "Adds a Repeating Rows command that stores line items in a related child list and opens them in the new, edit, and display forms."
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "Repeating Rows",
+        "description": "Adds the Repeating Rows command to generic lists.",
+        "id": "6f2c9a10-4e77-4b3d-8a61-2d5c7e9b0f33",
+        "version": "1.0.0.0",
+        "assets": {
+          "elementManifests": [
+            "elements.xml",
+            "clientsideinstance.xml"
+          ]
+        }
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/repeating-rows.sppkg"
+  }
+}

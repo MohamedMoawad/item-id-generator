@@ -1,0 +1,17 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/command-set-extension-manifest.schema.json",
+  "id": "5b9e2d80-6f14-4c57-8a23-d0e7b1c4f956",
+  "alias": "RepeatingRowsSetupCommandSet",
+  "componentType": "Extension",
+  "extensionType": "ListViewCommandSet",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "items": {
+    "REPEATING_ROWS": {
+      "title": { "default": "Repeating Rows" },
+      "ariaLabel": { "default": "Configure repeating rows for this list" },
+      "type": "command"
+    }
+  }
+}

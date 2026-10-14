@@ -25,6 +25,7 @@ release/
 .heft/
 *.sppkg
 !deploy/item-id-generator.sppkg
+!deploy/repeating-rows.sppkg
 coverage/
 jest-output/
 *.scss.ts

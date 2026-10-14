@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Elements xmlns="http://schemas.microsoft.com/sharepoint/">
+  <CustomAction
+    Id="{5b9e2d80-6f14-4c57-8a23-d0e7b1c4f957}"
+    Title="RepeatingRowsSetup"
+    RegistrationId="100"
+    RegistrationType="List"
+    Location="ClientSideExtension.ListViewCommandSet.CommandBar"
+    ClientSideComponentId="5b9e2d80-6f14-4c57-8a23-d0e7b1c4f956" />
+</Elements>

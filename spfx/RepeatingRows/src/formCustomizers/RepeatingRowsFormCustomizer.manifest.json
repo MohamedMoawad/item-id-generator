@@ -1,0 +1,10 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-extension-manifest.schema.json",
+  "id": "1d7a6e45-3c28-4f90-a1b6-9e5d0c3f7a64",
+  "alias": "RepeatingRowsFormCustomizer",
+  "componentType": "Extension",
+  "extensionType": "FormCustomizer",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false
+}
