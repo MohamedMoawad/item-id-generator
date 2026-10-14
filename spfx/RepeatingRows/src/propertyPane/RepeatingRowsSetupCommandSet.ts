@@ -86,6 +86,8 @@ export default class RepeatingRowsSetupCommandSet extends BaseListViewCommandSet
   private _render(listTitle: string, listId: string, existing: IRepeatingRowsConfig | undefined, ready: boolean): void {
     const host = document.getElementById(HOST_ID) || document.createElement('div');
     host.id = HOST_ID;
+    host.style.position = 'relative';
+    host.style.zIndex = '10000000';
     if (!host.parentElement) {
       document.body.appendChild(host);
     }

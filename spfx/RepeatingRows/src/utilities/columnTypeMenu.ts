@@ -8,18 +8,29 @@ const KNOWN_TYPES = [
   'number',
   'yes/no',
   'person',
+  'person or group',
   'date and time',
   'lookup',
   'currency',
   'hyperlink'
 ];
 
+const IGNORE_ANCESTOR = [
+  '#repeating-rows-setup-host',
+  '[role="dialog"]',
+  '.ms-Dialog',
+  '.ms-Dropdown-callout',
+  '.ms-CommandBar',
+  '[data-automationid="CommandBar"]',
+  '[data-automationid="ListCommandBar"]'
+].join(', ');
+
 export function addRepeatingColumnType(root: ParentNode, onChoose: () => void): number {
   let added = 0;
   const groups = root.querySelectorAll('[role="menu"], [role="listbox"], [role="radiogroup"]');
   for (let index = 0; index < groups.length; index += 1) {
     const group = groups[index];
-    if (group.querySelector(`[${MARKER}]`) || !isColumnTypeList(group)) {
+    if (group.querySelector(`[${MARKER}]`) || isIgnored(group) || !isColumnTypeList(group)) {
       continue;
     }
     const sample = group.querySelector('[role="menuitem"], [role="option"], [role="radio"]');
@@ -29,12 +40,6 @@ export function addRepeatingColumnType(root: ParentNode, onChoose: () => void): 
     group.appendChild(cloneTypeChoice(sample, onChoose));
     added += 1;
   }
-  const selects = root.querySelectorAll('select');
-  for (let index = 0; index < selects.length; index += 1) {
-    if (addSelectOption(selects[index], onChoose)) {
-      added += 1;
-    }
-  }
   return added;
 }
 
@@ -42,36 +47,22 @@ export function isColumnTypeList(root: ParentNode): boolean {
   const labels = readLabels(root);
   let hits = 0;
   KNOWN_TYPES.forEach((name) => {
-    if (labels.some((label) => label === name || label.indexOf(name) === 0)) {
+    if (labels.indexOf(name) !== -1) {
       hits += 1;
     }
   });
-  return hits >= 2;
+  return hits >= 3;
 }
 
-function addSelectOption(select: HTMLSelectElement, onChoose: () => void): boolean {
-  if (select.querySelector(`[${MARKER}]`) || !isColumnTypeList(select)) {
-    return false;
-  }
-  const option = select.ownerDocument.createElement('option');
-  option.value = 'RepeatingRows';
-  option.text = REPEATING_TYPE_LABEL;
-  option.setAttribute(MARKER, 'true');
-  select.appendChild(option);
-  select.addEventListener('change', () => {
-    if (select.value !== 'RepeatingRows') {
-      return;
-    }
-    select.selectedIndex = 0;
-    onChoose();
-  });
-  return true;
+function isIgnored(element: Element): boolean {
+  return !!element.closest(IGNORE_ANCESTOR);
 }
 
 function cloneTypeChoice(sample: Element, onChoose: () => void): HTMLElement {
   const copy = sample.cloneNode(true) as HTMLElement;
   copy.setAttribute(MARKER, 'true');
   copy.removeAttribute('id');
+  copy.removeAttribute('onclick');
   const identified = copy.querySelectorAll('[id]');
   for (let index = 0; index < identified.length; index += 1) {
     identified[index].removeAttribute('id');
@@ -90,7 +81,7 @@ function replaceLabel(root: HTMLElement): void {
   let replaced = false;
   for (let index = 0; index < spans.length; index += 1) {
     const text = normalize(spans[index].textContent || '');
-    if (KNOWN_TYPES.some((name) => text === name || text.indexOf(name) === 0)) {
+    if (KNOWN_TYPES.indexOf(text) !== -1) {
       spans[index].textContent = REPEATING_TYPE_LABEL;
       replaced = true;
     }
@@ -104,7 +95,7 @@ function replaceLabel(root: HTMLElement): void {
 }
 
 function readLabels(root: ParentNode): string[] {
-  const nodes = root.querySelectorAll('[role="menuitem"], [role="option"], [role="radio"], option');
+  const nodes = root.querySelectorAll('[role="menuitem"], [role="option"], [role="radio"]');
   const labels: string[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
     labels.push(normalize(nodes[index].textContent || ''));
