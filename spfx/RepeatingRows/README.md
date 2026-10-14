@@ -6,11 +6,11 @@ This is the supported alternative to a native column type. SharePoint Online doe
 
 ## What you get
 
-On a generic list, **Repeating Rows** appears on the command bar. The owner sets:
+On a generic list, **Repeating Rows** appears on the command bar. Opening it again loads the column that is already on the list. The owner sets:
 
 - Child list name
 - Relationship field (default `ParentID`, a lookup back to the parent with cascade delete)
-- Columns, including required, choice, lookup, person, date, currency, number, note, and formula
+- Columns in a form, not JSON: display name, internal name, type, required, default, choices, lookup list, cascade, formula, and show-when
 - Default values, min rows, max rows
 - Allow row delete and allow row edit
 
@@ -150,7 +150,7 @@ The package is `sharepoint/solution/repeating-rows.sppkg`. Copy it to `deploy/re
 1. Upload `repeating-rows.sppkg` to the tenant app catalog and deploy it. This is a full-trust client-side solution in the same way other SPFx packages are: it asks for no extra Microsoft Graph permission. It uses the current user's SharePoint access.
 2. On the site, open **Site contents → Add an app → From your organization → Repeating Rows**.
 3. Open the parent list, for example Purchase Requests. Choose **Repeating Rows**.
-4. Set the child list name to Purchase Request Details. Leave the relationship field as ParentID. The column JSON already describes Description, Quantity, Unit Price, and Amount. Set min and max rows if you need them. Click **Create column**.
+4. Set the child list name to Purchase Request Details. Leave the relationship field as ParentID. The form already lists Description, Quantity, Unit Price, and Amount. Add or change columns there. Set min and max rows if you need them. Click **Create column**. Opening **Repeating Rows** again loads these settings so you can change them.
 5. Add **Requestor** and **Department** as normal SharePoint columns if they are not there yet. The form picks them up because they are ordinary fields.
 6. Choose **New**. The line-item grid is the form. Save. The view shows the row count in **Line Items**. Edit the item to change, reorder, or remove rows.
 

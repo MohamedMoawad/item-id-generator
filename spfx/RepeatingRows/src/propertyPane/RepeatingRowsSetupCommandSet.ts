@@ -4,6 +4,7 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { SetupPanel } from '../controls/SetupPanel';
 import { IRepeatingRowsConfig, RepeatingRowsError } from '../models/repeatingRows';
+import { loadExistingConfig } from '../services/loadExistingConfig';
 import { fieldHeaders, provisionRepeatingRows } from '../services/sharePointProvisioner';
 import { SpHttpGateway } from '../services/sharePointGateway';
 
@@ -13,6 +14,8 @@ export interface IRepeatingRowsSetupCommandSetProperties {
 const HOST_ID = 'repeating-rows-setup-host';
 
 export default class RepeatingRowsSetupCommandSet extends BaseListViewCommandSet<IRepeatingRowsSetupCommandSetProperties> {
+  private _session = 0;
+
   public onInit(): Promise<void> {
     const command = this.tryGetCommand('REPEATING_ROWS');
     if (command) {
@@ -37,18 +40,39 @@ export default class RepeatingRowsSetupCommandSet extends BaseListViewCommandSet
     if (!list) {
       return;
     }
-    const host = document.createElement('div');
-    host.id = HOST_ID;
-    document.body.appendChild(host);
-    const element = React.createElement(SetupPanel, {
-      listTitle: list.title,
-      onDismiss: () => this._close(),
-      onProvision: (config) => this._provision(list.id.toString(), config)
+    const session = this._session + 1;
+    this._session = session;
+    const listId = list.id.toString();
+    this._render(list.title, listId, undefined, false);
+    const gateway = new SpHttpGateway(this.context.spHttpClient, this.context.pageContext.web.absoluteUrl);
+    loadExistingConfig(gateway, listId, `${list.title} Details`).then((existing) => {
+      if (session === this._session) {
+        this._render(list.title, listId, existing, true);
+      }
+    }).catch(() => {
+      if (session === this._session) {
+        this._render(list.title, listId, undefined, true);
+      }
     });
-    ReactDOM.render(element, host);
+  }
+
+  private _render(listTitle: string, listId: string, existing: IRepeatingRowsConfig | undefined, ready: boolean): void {
+    const host = document.getElementById(HOST_ID) || document.createElement('div');
+    host.id = HOST_ID;
+    if (!host.parentElement) {
+      document.body.appendChild(host);
+    }
+    ReactDOM.render(React.createElement(SetupPanel, {
+      listTitle,
+      ready,
+      existing,
+      onDismiss: () => this._close(),
+      onProvision: (config) => this._provision(listId, config)
+    }), host);
   }
 
   private _close(): void {
+    this._session += 1;
     const host = document.getElementById(HOST_ID);
     if (!host) {
       return;

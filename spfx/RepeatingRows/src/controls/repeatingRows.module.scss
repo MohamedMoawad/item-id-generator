@@ -115,7 +115,32 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: min(720px, 80vw);
+  min-width: min(760px, 86vw);
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.columnList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.columnCard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.columnHead {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 720px) {
