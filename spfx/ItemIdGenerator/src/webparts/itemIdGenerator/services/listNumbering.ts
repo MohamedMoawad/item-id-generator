@@ -14,6 +14,7 @@ import {
   itemQueryParts,
   planNextCode
 } from './formula';
+import { counterIsCurrent, planContinuousNumbers } from './sequencePlan';
 import {
   columnValuesFromCreateBody,
   createSaveFailed,
@@ -68,6 +69,8 @@ export interface IAssignedNumber {
 interface INumberLock {
   busy: boolean;
   pending: boolean;
+  followUp: boolean;
+  quietUntil: number;
 }
 
 interface INumberWindow extends Window {
@@ -77,12 +80,16 @@ interface INumberWindow extends Window {
 function numberLock(): INumberLock {
   const host = window as INumberWindow;
   if (!host.__autogenNumberLock) {
-    host.__autogenNumberLock = { busy: false, pending: false };
+    host.__autogenNumberLock = { busy: false, pending: false, followUp: false, quietUntil: 0 };
   }
   return host.__autogenNumberLock;
 }
 
-const CREATE_LOCK_WAIT_MS = 8000;
+const CREATE_LOCK_WAIT_MS = 60000;
+const ITEM_PAGE_SIZE = 200;
+const ITEM_PAGE_LIMIT = 50;
+const WRITE_CHUNK = 8;
+const QUIET_MS = 10000;
 
 export async function embedNumberInCreate(
   spHttpClient: SPHttpClient,
@@ -270,7 +277,7 @@ function releaseNumberLock(
     return;
   }
   lock.pending = false;
-  numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid).catch(() => undefined);
+  numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid, true).catch(() => undefined);
 }
 
 function delay(ms: number): Promise<void> {
@@ -284,25 +291,32 @@ export async function numberBlankItems(
   siteAbsoluteUrl: string,
   configListTitle: string,
   webAbsoluteUrl: string,
-  listGuid: string
+  listGuid: string,
+  force = false,
+  pass = 0
 ): Promise<IAssignedNumber[]> {
   const lock = numberLock();
   if (lock.busy) {
     lock.pending = true;
     return [];
   }
+  if (!force && !lock.pending && Date.now() < lock.quietUntil) {
+    return [];
+  }
   lock.busy = true;
+  lock.pending = false;
   let assigned: IAssignedNumber[] = [];
   try {
     assigned = await numberBlankItemsNow(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid);
   } finally {
     lock.busy = false;
   }
-  if (!lock.pending) {
+  const again = lock.pending || lock.followUp;
+  lock.followUp = false;
+  if (!again || pass >= 3) {
     return assigned;
   }
-  lock.pending = false;
-  const more = await numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid);
+  const more = await numberBlankItems(spHttpClient, siteAbsoluteUrl, configListTitle, webAbsoluteUrl, listGuid, true, pass + 1);
   return assigned.concat(more);
 }
 
@@ -328,134 +342,80 @@ async function numberBlankItemsNow(
   }
   const columns = await loadFormulaColumns(spHttpClient, webAbsoluteUrl, guid);
   const columnNames = columnNamesInFormula(config.formula);
-  const items = await readRecentItems(spHttpClient, webAbsoluteUrl, guid, fieldName);
-  const blanks = items.filter((item) => item.Id !== undefined && isBlankNumber(item[fieldName])).slice(0, 20);
+  const padLength = Number(config.padLength);
+  const now = new Date();
+  const loaded = await readItemsInOrder(spHttpClient, webAbsoluteUrl, guid, fieldName, columnNames, columns);
+  if (!loaded) {
+    markFollowUp();
+    return [];
+  }
+  let planned: ReturnType<typeof planContinuousNumbers>;
+  try {
+    planned = planContinuousNumbers({
+      items: loaded.items,
+      formula: config.formula,
+      resetPeriod: config.resetPeriod,
+      padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
+      now
+    });
+  } catch {
+    markFollowUp();
+    return [];
+  }
+  const changed = planned.plans.filter((item) => item.changed);
   const assigned: IAssignedNumber[] = [];
-  for (const item of blanks) {
-    const code = await reserveAndWrite(
+  let failed = false;
+  for (let index = 0; index < changed.length; index += WRITE_CHUNK) {
+    const chunk = changed.slice(index, index + WRITE_CHUNK);
+    const writes: Array<Promise<'wrote' | 'conflict' | 'failed'>> = [];
+    for (let itemIndex = 0; itemIndex < chunk.length; itemIndex += 1) {
+      const item = chunk[itemIndex];
+      writes.push(writeNumber(spHttpClient, webAbsoluteUrl, guid, item.id, fieldName, item.code, '*'));
+    }
+    const results = await Promise.all(writes);
+    for (let itemIndex = 0; itemIndex < chunk.length; itemIndex += 1) {
+      if (results[itemIndex] === 'wrote') {
+        assigned.push({ itemId: chunk[itemIndex].id, fieldName, code: chunk[itemIndex].code });
+      } else {
+        failed = true;
+      }
+    }
+  }
+  const counter = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, config.id);
+  const aligned = !!counter && counterIsCurrent(
+    Number(counter.CurrentCount) || 0,
+    counter.LastResetDate,
+    planned.currentCount,
+    config.resetPeriod,
+    now
+  );
+  if (!counter) {
+    failed = true;
+  } else if (!aligned) {
+    const saved = await setCounterTo(
       spHttpClient,
       siteAbsoluteUrl,
       configListTitle,
-      webAbsoluteUrl,
-      guid,
       config.id,
-      fieldName,
-      item.Id as number,
-      columnNames,
-      columns
+      planned.currentCount,
+      planned.lastResetDate,
+      config.resetPeriod,
+      now
     );
-    if (!code) {
-      continue;
+    if (!saved) {
+      failed = true;
     }
-    assigned.push({ itemId: item.Id as number, fieldName, code });
   }
+  const lock = numberLock();
+  lock.followUp = failed || !loaded.complete || assigned.length > 0;
+  lock.quietUntil = lock.followUp ? 0 : Date.now() + QUIET_MS;
   return assigned;
 }
 
-async function reserveAndWrite(
-  spHttpClient: SPHttpClient,
-  siteAbsoluteUrl: string,
-  configListTitle: string,
-  webAbsoluteUrl: string,
-  listGuid: string,
-  configItemId: number,
-  fieldName: string,
-  itemId: number,
-  columnNames: string[],
-  columns: IFormulaColumn[]
-): Promise<string | undefined> {
-  const item = await readItemForFormula(spHttpClient, webAbsoluteUrl, listGuid, itemId, fieldName, columnNames, columns);
-  if (!item || !isBlankNumber(item[fieldName])) {
-    return '';
-  }
-  const columnValues = columnMapForItem(item, columnNames, columns);
-  for (let attempt = 1; attempt <= 8; attempt += 1) {
-    const fresh = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
-    if (!fresh || !isBlankNumber(fresh[fieldName])) {
-      return '';
-    }
-    const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, configItemId);
-    if (!current || !isActiveValue(current.IsActive) || !current.Formula) {
-      return undefined;
-    }
-    const previousCount = Number(current.CurrentCount) || 0;
-    const previousReset = current.LastResetDate || '';
-    const padLength = Number(current.PadLength);
-    const planned = planNextCode({
-      formula: current.Formula,
-      resetPeriod: current.ResetPeriod || 'None',
-      lastResetDate: current.LastResetDate,
-      currentCount: previousCount,
-      padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
-      now: new Date(),
-      columns: columnValues
-    });
-    const swapped = await swapCounter(
-      spHttpClient,
-      siteAbsoluteUrl,
-      configListTitle,
-      configItemId,
-      etagOf(current),
-      planned.sequence,
-      planned.lastResetDate
-    );
-    if (swapped === 'conflict') {
-      continue;
-    }
-    if (swapped === 'failed') {
-      return undefined;
-    }
-    const wrote = await writeNumber(
-      spHttpClient,
-      webAbsoluteUrl,
-      listGuid,
-      itemId,
-      fieldName,
-      planned.code,
-      etagOf(fresh)
-    );
-    if (wrote === 'wrote') {
-      return planned.code;
-    }
-    if (wrote === 'conflict') {
-      const again = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
-      if (again && !isBlankNumber(again[fieldName])) {
-        await releaseReservedCount(
-          spHttpClient,
-          siteAbsoluteUrl,
-          configListTitle,
-          configItemId,
-          planned.sequence,
-          previousCount,
-          previousReset
-        );
-        return '';
-      }
-      const retry = await writeNumber(
-        spHttpClient,
-        webAbsoluteUrl,
-        listGuid,
-        itemId,
-        fieldName,
-        planned.code,
-        again ? etagOf(again) : '*'
-      );
-      if (retry === 'wrote') {
-        return planned.code;
-      }
-    }
-    await releaseReservedCount(
-      spHttpClient,
-      siteAbsoluteUrl,
-      configListTitle,
-      configItemId,
-      planned.sequence,
-      previousCount,
-      previousReset
-    );
-    return undefined;
-  }
-  return undefined;
+function markFollowUp(): void {
+  const lock = numberLock();
+  lock.followUp = true;
+  lock.quietUntil = 0;
 }
 
 async function loadRows(
@@ -466,55 +426,109 @@ async function loadRows(
   return loadConfigRows(spHttpClient, siteAbsoluteUrl, configListTitle);
 }
 
-async function readRecentItems(
-  spHttpClient: SPHttpClient,
-  webAbsoluteUrl: string,
-  listGuid: string,
-  fieldName: string
-): Promise<IListItemRow[]> {
-  const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items?$select=Id,${fieldName}&$orderby=Id desc&$top=30`;
-  const response = await spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: metadataHeaders });
-  if (!response.ok) {
-    return [];
-  }
-  const payload = await response.json() as { value?: IListItemRow[] };
-  return payload.value || [];
+interface IOrderedItems {
+  items: Array<{ id: number; created: string; current: string; columns: { [token: string]: string } }>;
+  complete: boolean;
 }
 
-async function readItemForFormula(
+async function readItemsInOrder(
   spHttpClient: SPHttpClient,
   webAbsoluteUrl: string,
   listGuid: string,
-  itemId: number,
   fieldName: string,
   columnNames: string[],
   columns: IFormulaColumn[]
-): Promise<IListItemRow | undefined> {
+): Promise<IOrderedItems | undefined> {
   const parts = itemQueryParts(fieldName, columnNames, columns);
-  const rich = await readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, parts.select, parts.expand);
-  if (rich) {
-    return rich;
+  if (parts.select.indexOf('Created') < 0) {
+    parts.select.push('Created');
   }
-  return readItem(spHttpClient, webAbsoluteUrl, listGuid, itemId, ['Id', fieldName], []);
+  const expandQuery = parts.expand.length > 0 ? `&$expand=${parts.expand.join(',')}` : '';
+  const items: IOrderedItems['items'] = [];
+  let lastId = 0;
+  for (let page = 0; page < ITEM_PAGE_LIMIT; page += 1) {
+    const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items?$select=${parts.select.join(',')}&$orderby=Id asc&$filter=Id gt ${lastId}&$top=${ITEM_PAGE_SIZE}${expandQuery}`;
+    const response = await spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: metadataHeaders });
+    if (!response.ok) {
+      return page === 0 ? undefined : { items, complete: false };
+    }
+    const payload = await response.json() as { value?: IListItemRow[] };
+    const rows = payload.value || [];
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const id = Number(row.Id);
+      if (!Number.isInteger(id) || id <= lastId) {
+        continue;
+      }
+      items.push({
+        id,
+        created: sharePointDate(row.Created),
+        current: cellText(row[fieldName]),
+        columns: columnMapForItem(row, columnNames, columns)
+      });
+      lastId = id;
+    }
+    if (rows.length < ITEM_PAGE_SIZE) {
+      return { items, complete: true };
+    }
+  }
+  return { items, complete: false };
 }
 
-async function readItem(
+async function setCounterTo(
   spHttpClient: SPHttpClient,
-  webAbsoluteUrl: string,
-  listGuid: string,
+  siteAbsoluteUrl: string,
+  configListTitle: string,
   itemId: number,
-  select: string[],
-  expand: string[]
-): Promise<IListItemRow | undefined> {
-  const expandQuery = expand.length > 0 ? `&$expand=${expand.join(',')}` : '';
-  const url = `${trimSlash(webAbsoluteUrl)}/_api/web/lists(guid'${listGuid}')/items(${itemId})?$select=${select.join(',')}${expandQuery}`;
-  const response = await spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: metadataHeaders });
-  if (!response.ok) {
-    return undefined;
+  sequence: number,
+  lastResetDate: string,
+  resetPeriod: string,
+  now: Date
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const current = await readCounter(spHttpClient, siteAbsoluteUrl, configListTitle, itemId);
+    if (!current) {
+      return false;
+    }
+    if (counterIsCurrent(Number(current.CurrentCount) || 0, current.LastResetDate, sequence, resetPeriod, now)) {
+      return true;
+    }
+    const swapped = await swapCounter(
+      spHttpClient,
+      siteAbsoluteUrl,
+      configListTitle,
+      itemId,
+      etagOf(current),
+      sequence,
+      lastResetDate
+    );
+    if (swapped === 'swapped') {
+      return true;
+    }
+    if (swapped === 'failed') {
+      return false;
+    }
   }
-  const payload = await response.json() as IListItemRow;
-  rememberEtag(response, payload);
-  return payload;
+  return false;
+}
+
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return String(value).trim();
+}
+
+function sharePointDate(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  const ticks = /^\/Date\((-?\d+)\)\/$/.exec(value);
+  if (!ticks) {
+    return value;
+  }
+  const parsed = new Date(Number(ticks[1]));
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 }
 
 async function readCounter(

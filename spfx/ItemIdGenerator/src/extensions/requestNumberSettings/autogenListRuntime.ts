@@ -92,7 +92,7 @@ function startWork(next: IAutogenListTarget): void {
     (itemId) => numberAfterCreate(itemId)
   );
   showNumberColumn(next).catch(() => undefined);
-  numberList().catch(() => undefined);
+  numberList(true).catch(() => undefined);
   removeInjectedButton();
   const host = window as IAutogenWindow;
   if (host.__autogenNumberTimer === undefined) {
@@ -145,14 +145,14 @@ function embedOnCreate(body: string): Promise<IPreparedCreate | undefined> {
 }
 
 async function numberAfterCreate(itemId?: number): Promise<void> {
-  await numberList();
+  await numberList(true);
   if (itemId) {
     revealAssignedNumbers([itemId]);
   }
   refreshOpenList();
 }
 
-async function numberList(): Promise<boolean> {
+async function numberList(force = false): Promise<boolean> {
   if (!target) {
     return false;
   }
@@ -164,7 +164,8 @@ async function numberList(): Promise<boolean> {
       current.siteAbsoluteUrl,
       current.configListTitle,
       current.webAbsoluteUrl,
-      current.listId
+      current.listId,
+      force
     );
   } catch {
     assigned = [];

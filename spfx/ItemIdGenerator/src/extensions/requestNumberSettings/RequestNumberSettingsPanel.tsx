@@ -512,7 +512,8 @@ export default class RequestNumberSettingsPanel
           this.props.siteAbsoluteUrl,
           listTitle,
           webUrl,
-          this.state.draft.targetListGuid
+          this.state.draft.targetListGuid,
+          true
         );
         if (written.length > 0) {
           statusMessage = `Saved. ${written.length} item${written.length === 1 ? '' : 's'} received a number.`;
