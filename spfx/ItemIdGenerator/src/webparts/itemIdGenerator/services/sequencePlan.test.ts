@@ -69,6 +69,38 @@ describe('continuous request numbers', () => {
     expect(plan.plans.map((item) => item.code)).toEqual(['Desk-01', 'Chair-02']);
   });
 
+  it('rewrites 00011, 00022, and 00033 as 00001, 00002, and 00003', () => {
+    const plan = planContinuousNumbers({
+      items: [
+        { id: 1, created: '2026-10-15T08:00:00Z', current: '00011' },
+        { id: 2, created: '2026-10-15T08:01:00Z', current: '00022' },
+        { id: 3, created: '2026-10-15T08:02:00Z', current: '00033' }
+      ],
+      formula: '{counter:5}',
+      resetPeriod: 'None',
+      padLength: 0,
+      now
+    });
+    expect(plan.plans.map((item) => item.code)).toEqual(['00001', '00002', '00003']);
+    expect(plan.plans.every((item) => item.changed)).toBe(true);
+    expect(plan.currentCount).toBe(3);
+  });
+
+  it('does not append the item id or a second counter token', () => {
+    const plan = planContinuousNumbers({
+      items: [
+        { id: 1, created: '2026-10-15T08:00:00Z', current: '00011', columns: { Id: '1' } },
+        { id: 2, created: '2026-10-15T08:01:00Z', current: '00022', columns: { Id: '2' } },
+        { id: 3, created: '2026-10-15T08:02:00Z', current: '00033', columns: { Id: '3' } }
+      ],
+      formula: '{counter:4}{Id}{counter}',
+      resetPeriod: 'None',
+      padLength: 0,
+      now
+    });
+    expect(plan.plans.map((item) => item.code)).toEqual(['0001', '0002', '0003']);
+  });
+
   it('pulls a counter back when it has moved past the items', () => {
     expect(counterIsCurrent(5, now.toISOString(), 3, 'None', now)).toBe(false);
     expect(counterIsCurrent(3, now.toISOString(), 3, 'None', now)).toBe(true);

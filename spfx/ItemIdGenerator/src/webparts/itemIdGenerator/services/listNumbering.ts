@@ -200,7 +200,7 @@ async function reserveOneCreate(
   let planned: { code: string; sequence: number; lastResetDate: string };
   try {
     planned = planNextCode({
-      formula: current.Formula,
+      formula: formulaForCode(current.Formula, fieldName),
       resetPeriod: current.ResetPeriod || 'None',
       lastResetDate: current.LastResetDate,
       currentCount: previousCount,
@@ -353,7 +353,7 @@ async function numberBlankItemsNow(
   try {
     planned = planContinuousNumbers({
       items: loaded.items,
-      formula: config.formula,
+      formula: formulaForCode(config.formula, fieldName),
       resetPeriod: config.resetPeriod,
       padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
       now
@@ -697,4 +697,12 @@ function configItems(siteAbsoluteUrl: string, configListTitle: string): string {
 
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, '');
+}
+
+function formulaForCode(formula: string, fieldName: string): string {
+  const wanted = fieldName.toLowerCase();
+  return formula.replace(/[-_/.\s]*\{([^{}]+)\}/g, (match: string, raw: string) => {
+    const name = raw.trim().split('.')[0].toLowerCase();
+    return name === wanted ? '' : match;
+  });
 }

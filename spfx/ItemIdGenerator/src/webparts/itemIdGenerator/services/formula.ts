@@ -27,6 +27,18 @@ export function periodRolledOver(resetPeriod: string, lastResetDate: string | un
   return periodKeyFor(period, last) !== periodKeyFor(period, now);
 }
 
+export function normalizeFormula(formula: string): string {
+  let text = formula.replace(/[-_/.\s]*\{id\}/gi, '');
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = text.replace(/(\{(?:counter|seq)(?::\d+)?\})\s*(\{(?:counter|seq)(?::\d+)?\})/gi, '$1');
+    if (next === text) {
+      break;
+    }
+    text = next;
+  }
+  return text;
+}
+
 export function applyFormula(
   formula: string,
   sequence: number,
@@ -34,7 +46,8 @@ export function applyFormula(
   padLength: number,
   columns?: { [token: string]: string }
 ): string {
-  if (!formula || !hasCounterToken(formula)) {
+  const source = normalizeFormula(formula);
+  if (!source || !hasCounterToken(source)) {
     throw new Error('Formula must include {counter} or {counter:n} so each item gets a distinct code.');
   }
   if (padLength < 0 || padLength > 12) {
@@ -49,7 +62,7 @@ export function applyFormula(
     HH: formatUtc(utc, 'HH'),
     mm: formatUtc(utc, 'mm')
   };
-  return formula.replace(/\{([^{}]+)\}/g, (match: string, raw: string) => {
+  return source.replace(/\{([^{}]+)\}/g, (match: string, raw: string) => {
     const token = raw.trim();
     const counter = /^(counter|seq)(?::(\d+))?$/i.exec(token);
     if (counter) {
@@ -82,7 +95,7 @@ export function planNextCode(input: {
   columns?: { [token: string]: string };
 }): { code: string; sequence: number; lastResetDate: string } {
   const rolled = periodRolledOver(input.resetPeriod, input.lastResetDate, input.now);
-  const sequence = (rolled ? 0 : input.currentCount) + 1;
+  const sequence = (rolled ? 0 : wholeNumber(input.currentCount)) + 1;
   return {
     code: applyFormula(input.formula, sequence, input.now, input.padLength, input.columns),
     sequence,
@@ -328,6 +341,14 @@ function normalizePeriod(value: string): 'none' | 'day' | 'month' | 'year' {
     return text;
   }
   return 'none';
+}
+
+function wholeNumber(value: number): number {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
 }
 
 function pad(sequence: number, width: number): string {

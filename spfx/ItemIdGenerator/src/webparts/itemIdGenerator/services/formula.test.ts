@@ -48,6 +48,14 @@ describe('formula', () => {
     expect(periodRolledOver('Month', '2026-10-01T00:00:00.000Z', october)).toBe(false);
   });
 
+  it('uses the sequence once when the formula repeats the counter or the item id', () => {
+    expect(applyFormula('{counter:4}{counter}', 1, october, 0)).toBe('0001');
+    expect(applyFormula('{counter:4}{Id}', 2, october, 0)).toBe('0002');
+    expect(applyFormula('{counter:4}{ID}', 3, october, 0)).toBe('0003');
+    expect(applyFormula('{counter:5}', 1, october, 0)).toBe('00001');
+    expect(applyFormula('{counter}', 2, october, 5)).toBe('00002');
+  });
+
   it('plans the next code from the current count', () => {
     const next = planNextCode({
       formula: 'REQ-{seq}',
@@ -62,6 +70,15 @@ describe('formula', () => {
       sequence: 5,
       lastResetDate: october.toISOString()
     });
+    const fromText = planNextCode({
+      formula: '{counter:5}',
+      resetPeriod: 'None',
+      currentCount: '1' as unknown as number,
+      padLength: 0,
+      now: october
+    });
+    expect(fromText.sequence).toBe(2);
+    expect(fromText.code).toBe('00002');
   });
 
   it('builds a lookup token and reads the lookup title from the item', () => {

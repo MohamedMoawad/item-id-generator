@@ -1105,19 +1105,26 @@ function hasOwnFormValues(record: IRecord): boolean {
 
 function upsertFormRow(rows: unknown[], fieldName: string, value: string): boolean {
   const wanted = fieldName.toLowerCase();
-  for (let index = 0; index < rows.length; index += 1) {
+  let found = false;
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = asRecord(rows[index]);
     if (!stringProp(row, 'FieldName') || stringProp(row, 'FieldName').toLowerCase() !== wanted) {
       continue;
     }
-    if (Object.prototype.hasOwnProperty.call(row, 'fieldValue') && !Object.prototype.hasOwnProperty.call(row, 'FieldValue')) {
-      row.fieldValue = value;
+    if (!found) {
+      if (Object.prototype.hasOwnProperty.call(row, 'fieldValue') && !Object.prototype.hasOwnProperty.call(row, 'FieldValue')) {
+        row.fieldValue = value;
+      } else {
+        row.FieldValue = value;
+      }
+      found = true;
     } else {
-      row.FieldValue = value;
+      rows.splice(index, 1);
     }
-    return true;
   }
-  rows.push({ FieldName: fieldName, FieldValue: value });
+  if (!found) {
+    rows.push({ FieldName: fieldName, FieldValue: value });
+  }
   return true;
 }
 
