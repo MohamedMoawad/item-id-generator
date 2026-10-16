@@ -1,0 +1,24 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "autogen-flow-command-set": {
+      "components": [
+        {
+          "entrypoint": "./lib/extensions/flowSettings/FlowSettingsCommandSet.js",
+          "manifest": "./src/extensions/flowSettings/FlowSettingsCommandSet.manifest.json"
+        }
+      ]
+    },
+    "autogen-flow-provisioner": {
+      "components": [
+        {
+          "entrypoint": "./lib/extensions/flowProvisioner/FlowProvisionerApplicationCustomizer.js",
+          "manifest": "./src/extensions/flowProvisioner/FlowProvisionerApplicationCustomizer.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {}
+}

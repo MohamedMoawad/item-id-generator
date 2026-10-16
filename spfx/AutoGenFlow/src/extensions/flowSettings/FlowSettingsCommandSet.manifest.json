@@ -1,0 +1,17 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/command-set-extension-manifest.schema.json",
+  "id": "e3a7c5d8-1b24-4f66-8d90-6c4a2e8b1f33",
+  "alias": "FlowSettingsCommandSet",
+  "componentType": "Extension",
+  "extensionType": "ListViewCommandSet",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "items": {
+    "AUTOGEN_FLOW": {
+      "title": { "default": "AutoGen Flow" },
+      "ariaLabel": { "default": "Save the AutoGen Flow rule for this list" },
+      "type": "command"
+    }
+  }
+}

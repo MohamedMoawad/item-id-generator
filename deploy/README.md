@@ -16,6 +16,10 @@ Later versions are the same upload. Replace the package in the app catalog and d
 
 List owners set the formula, the number column, and the reset. Saving an active rule is enough. Opening the list fills blank number columns.
 
+## AutoGen Flow
+
+`autogen-flow.sppkg` is a separate app from AutoGen Feature. Upload it to the app catalog and add **AutoGen Flow** to the site. Open a list, choose **AutoGen Flow**, and save the rule. Then create the Power Automate flow in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). The flow trigger is **When an item is created**, with concurrency 1. The master list is `AutoGenFlowConfiguration`. This package does not number items in the browser. Leave the AutoGen Feature rule inactive on a list that uses this flow.
+
 ## Repeating Rows
 
 `repeating-rows.sppkg` is a separate app. Upload it to the app catalog, add **Repeating Rows** to the site, open a generic list, and choose **Repeating Rows** on the command bar. The steps and the platform limits are in [spfx/RepeatingRows/README.md](../spfx/RepeatingRows/README.md).

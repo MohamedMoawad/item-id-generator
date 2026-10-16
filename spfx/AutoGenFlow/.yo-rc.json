@@ -1,0 +1,23 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "AutoGenFlow",
+    "environment": "spo",
+    "packageManager": "npm",
+    "skipFeatureDeployment": false,
+    "useGulp": false,
+    "componentType": "extension",
+    "template": "react",
+    "componentName": "AutoGenFlow",
+    "componentDescription": "Save AutoGen rules to a master list. Power Automate writes the number.",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.14.0",
+    "sdksVersions": {},
+    "version": "1.23.2",
+    "libraryName": "autogen-flow",
+    "libraryId": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
+    "solutionShortDescription": "AutoGen Flow configuration",
+    "isDomainIsolated": false
+  }
+}

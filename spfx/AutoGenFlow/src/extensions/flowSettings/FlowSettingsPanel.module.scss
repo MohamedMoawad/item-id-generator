@@ -1,0 +1,72 @@
+:global(.ms-Dialog-main).dialogHost {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 16px)) !important;
+  max-width: min(640px, calc(100vw - 16px)) !important;
+  min-width: 0 !important;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lead,
+.hint,
+.preview {
+  margin: 0;
+  color: #323130;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.hint,
+.preview {
+  color: #605e5c;
+}
+
+.tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.token {
+  border: 1px solid #c8c6c4;
+  background: #faf9f8;
+  color: #323130;
+  border-radius: 2px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.flow {
+  border-top: 1px solid #edebe9;
+  padding-top: 8px;
+}
+
+.flow summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.step {
+  margin: 0 0 8px;
+  color: #323130;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.expression {
+  margin-bottom: 8px;
+}

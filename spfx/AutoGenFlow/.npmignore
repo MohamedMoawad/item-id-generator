@@ -1,0 +1,10 @@
+**
+!/bin/**
+!/dist/**
+!/EULA/**
+!/lib/**
+!ThirdPartyNotice.txt
+/dist/*.stats.*
+/dist/**/*.js.map
+/lib/**/*.js.map
+/lib/**/test/**

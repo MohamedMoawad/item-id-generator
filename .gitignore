@@ -26,6 +26,7 @@ release/
 *.sppkg
 !deploy/item-id-generator.sppkg
 !deploy/repeating-rows.sppkg
+!deploy/autogen-flow.sppkg
 coverage/
 jest-output/
 *.scss.ts

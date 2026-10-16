@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "AutoGen Flow",
+    "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": false,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "Mohamed Moawad",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.23.2"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "Saves AutoGen rules in a master list. Power Automate writes the number."
+      },
+      "longDescription": {
+        "default": "Adds AutoGenFlowConfiguration and an AutoGen Flow command. The command saves the formula and counter. A Power Automate flow numbers each new item."
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "AutoGen Flow",
+        "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
+        "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
+        "version": "1.0.0.0",
+        "assets": {
+          "elementManifests": [
+            "elements.xml",
+            "clientsideinstance.xml"
+          ]
+        }
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/autogen-flow.sppkg"
+  }
+}
