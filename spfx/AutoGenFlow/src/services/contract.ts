@@ -29,6 +29,8 @@ export interface IConfigDraft {
   flowEnvironment: string;
   flowConnection: string;
   flowState: string;
+  modified?: string;
+  modifiedBy?: string;
 }
 
 export interface ISharePointConfigItem {
@@ -52,6 +54,8 @@ export interface ISharePointConfigItem {
   FlowEnvironment?: string;
   FlowConnection?: string;
   FlowState?: string;
+  Modified?: string;
+  Editor?: { Title?: string };
 }
 
 export interface IListLocation {
@@ -159,7 +163,9 @@ export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
     flowId: item.FlowId || '',
     flowEnvironment: item.FlowEnvironment || '',
     flowConnection: item.FlowConnection || '',
-    flowState: item.FlowState || ''
+    flowState: item.FlowState || '',
+    modified: item.Modified || '',
+    modifiedBy: item.Editor && item.Editor.Title ? item.Editor.Title : ''
   };
 }
 
@@ -278,7 +284,7 @@ export function deriveWebFromListUrl(listUrl: string): IListLocation {
 }
 
 export function buildListItemsUrl(siteAbsoluteUrl: string, listTitle: string): string {
-  return `${listApi(siteAbsoluteUrl, listTitle)}/items?$select=${SELECT_FIELDS.join(',')}&$top=200`;
+  return `${listApi(siteAbsoluteUrl, listTitle)}/items?$select=${SELECT_FIELDS.join(',')},Modified,Editor/Title&$expand=Editor&$top=200`;
 }
 
 export function buildCreateItemUrl(siteAbsoluteUrl: string, listTitle: string): string {

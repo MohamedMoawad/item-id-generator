@@ -1,4 +1,4 @@
 {
   "title": "AutoGen list numbering",
-  "note": "The AutoGen dialog creates one flow per list. The trigger is When an item is created. The flow reads that list's row in AutoGenFlowConfiguration on the site collection. The admin chooses the environment and the SharePoint connection. The definition is built by src/services/siteFlow.ts."
+  "note": "Saving an active AutoGen rule creates one flow per list. The trigger is When an item is created. The flow reads that list's row in AutoGenFlowConfiguration on the site collection. The app selects the default environment and the account's SharePoint connection. The definition is built by src/services/siteFlow.ts."
 }

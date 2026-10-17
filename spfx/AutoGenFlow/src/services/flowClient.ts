@@ -1,6 +1,7 @@
 import { AadHttpClient, AadHttpClientFactory } from '@microsoft/sp-http';
 import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
 import {
+  connectionListUrls,
   FlowConsentError,
   FlowRunState,
   FlowStartError,
@@ -54,12 +55,133 @@ export async function listEnvironments(factory: AadHttpClientFactory): Promise<I
 
 export async function listConnections(factory: AadHttpClientFactory, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
   const client = await openClient(factory);
-  const payload = await sendJson<Parameters<typeof readConnections>[0]>(
-    client,
-    'GET',
-    `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/connections?api-version=${API_VERSION}`
-  );
-  return readConnections(payload);
+  const urls = connectionListUrls(environment);
+  let consentOnFlowHost = false;
+  for (let index = 0; index < urls.length; index += 1) {
+    const url = urls[index];
+    try {
+      const payload = await sendJson<Parameters<typeof readConnections>[0]>(client, 'GET', url);
+      const rows = readConnections(payload, url.indexOf('shared_sharepointonline') >= 0, environment.id);
+      if (rows.length > 0) {
+        return rows;
+      }
+    } catch (error) {
+      if (error instanceof FlowConsentError && isFlowHost(url)) {
+        consentOnFlowHost = true;
+      }
+    }
+  }
+  if (consentOnFlowHost) {
+    throw new FlowConsentError();
+  }
+  return [];
+}
+
+export interface ISyncedFlow {
+  flowId: string;
+  flowEnvironment: string;
+  flowConnection: string;
+  flowState: string;
+  note: string;
+}
+
+export async function syncListFlow(
+  factory: AadHttpClientFactory,
+  target: IListFlowTarget,
+  current: ISyncedFlow,
+  active: boolean
+): Promise<ISyncedFlow> {
+  const environments = await listEnvironments(factory);
+  const environment = environments.filter((item) => item.id === current.flowEnvironment)[0] || environments[0];
+  if (!active) {
+    if (current.flowId && environment) {
+      const stopAt = environments.filter((item) => item.id === current.flowEnvironment)[0] || environment;
+      try {
+        await setRemoteFlowState(factory, stopAt, current.flowId, 'Stopped');
+      } catch (error) {
+        if (error instanceof FlowConsentError) {
+          throw error;
+        }
+      }
+    }
+    return {
+      flowId: current.flowId,
+      flowEnvironment: current.flowEnvironment,
+      flowConnection: current.flowConnection,
+      flowState: current.flowId ? 'Stopped' : '',
+      note: ''
+    };
+  }
+  if (!environment) {
+    return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.' };
+  }
+  const connections = await listConnections(factory, environment);
+  const connection = connections.filter((item) => item.name === current.flowConnection)[0] || connections[0];
+  if (!connection) {
+    return {
+      flowId: current.flowId,
+      flowEnvironment: environment.id,
+      flowConnection: current.flowConnection,
+      flowState: current.flowState,
+      note: 'Saved the rule. Add a SharePoint connection for this account in Power Automate, then save again.'
+    };
+  }
+  const sameEnvironment = current.flowEnvironment === environment.id;
+  const sameConnection = current.flowConnection === connection.name;
+  if (current.flowId && sameEnvironment && sameConnection && current.flowState === 'Started') {
+    return { flowId: current.flowId, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
+  }
+  if (current.flowId && sameEnvironment && sameConnection) {
+    await setRemoteFlowState(factory, environment, current.flowId, 'Started');
+    return { flowId: current.flowId, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
+  }
+  if (current.flowId && sameEnvironment) {
+    const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connection.name);
+    return { flowId: remote.id, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
+  }
+  if (current.flowId) {
+    const previous = environments.filter((item) => item.id === current.flowEnvironment)[0];
+    if (previous) {
+      try {
+        await setRemoteFlowState(factory, previous, current.flowId, 'Stopped');
+      } catch (error) {
+        if (error instanceof FlowConsentError) {
+          throw error;
+        }
+      }
+    }
+  }
+  const created = await createRemoteFlow(factory, environment, target, connection.name);
+  return { flowId: created.id, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
+}
+
+export async function removeListFlow(factory: AadHttpClientFactory, flowId: string, environmentId: string): Promise<void> {
+  if (!flowId) {
+    return;
+  }
+  const environments = await listEnvironments(factory);
+  const environment = environments.filter((item) => item.id === environmentId)[0] || environments[0];
+  if (!environment) {
+    return;
+  }
+  try {
+    await setRemoteFlowState(factory, environment, flowId, 'Stopped');
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
+  const client = await openClient(factory);
+  try {
+    await sendJson(client, 'DELETE', flowUrl(environment, flowId));
+  } catch (error) {
+    if (error instanceof FlowRequestError && error.status === 404) {
+      return;
+    }
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
 }
 
 export async function loadFlowContext(factory: AadHttpClientFactory): Promise<IFlowContext> {
@@ -191,6 +313,10 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   } catch {
     throw new Error('Power Automate returned a response that was not JSON.');
   }
+}
+
+function isFlowHost(url: string): boolean {
+  return url.indexOf('api.flow.microsoft.com') >= 0;
 }
 
 function flowPath(environment: IFlowEnvironment, flowId: string): string {

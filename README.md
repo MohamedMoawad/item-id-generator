@@ -43,4 +43,4 @@ npm start
 
 ## AutoGen Flow
 
-[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app. Open a list, choose **AutoGen Flow**, pick the environment and SharePoint connection, and turn numbering on for that list. The flow reads `AutoGenFlowConfiguration` on the site collection. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. On a list numbered by AutoGen Flow, clear **Active** on that list’s Autogen Feature rule.
+[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app. Open a list, choose **AutoGen Flow**, and add, edit, or delete that list’s rule. Saving an active rule creates the numbering flow in the default Power Automate environment. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. On a list numbered by AutoGen Flow, clear **Active** on that list’s Autogen Feature rule.
