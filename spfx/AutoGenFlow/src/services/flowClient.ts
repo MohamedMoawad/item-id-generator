@@ -55,13 +55,15 @@ export async function listEnvironments(factory: AadHttpClientFactory): Promise<I
 
 export async function listConnections(factory: AadHttpClientFactory, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
   const client = await openClient(factory);
-  const urls = connectionListUrls(environment);
+  const resolved = await resolvePowerAppsHost(client, environment);
+  const urls = connectionListUrls(resolved);
   let consentOnFlowHost = false;
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index];
     try {
       const payload = await sendJson<Parameters<typeof readConnections>[0]>(client, 'GET', url);
-      const rows = readConnections(payload, url.indexOf('shared_sharepointonline') >= 0, environment.id);
+      const filtered = url.indexOf('$filter=') >= 0;
+      const rows = readConnections(payload, url.indexOf('shared_sharepointonline') >= 0, filtered ? '' : resolved.id);
       if (rows.length > 0) {
         return rows;
       }
@@ -75,6 +77,32 @@ export async function listConnections(factory: AadHttpClientFactory, environment
     throw new FlowConsentError();
   }
   return [];
+}
+
+async function resolvePowerAppsHost(client: AadHttpClient, environment: IFlowEnvironment): Promise<IFlowEnvironment> {
+  if (environment.powerAppsEndpoint !== 'https://api.powerapps.com') {
+    return environment;
+  }
+  try {
+    const detail = await sendJson<IRawEnvironmentRecord>(
+      client,
+      'GET',
+      `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}?api-version=${API_VERSION}`
+    );
+    const refreshed = readEnvironments({ value: [detail] })[0];
+    return refreshed || environment;
+  } catch {
+    return environment;
+  }
+}
+
+interface IRawEnvironmentRecord {
+  name?: string;
+  properties?: {
+    displayName?: string;
+    isDefault?: boolean;
+    runtimeEndpoints?: { [name: string]: string };
+  };
 }
 
 export interface ISyncedFlow {
@@ -116,14 +144,17 @@ export async function syncListFlow(
     return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.' };
   }
   const connections = await listConnections(factory, environment);
-  const connection = connections.filter((item) => item.name === current.flowConnection)[0] || connections[0];
+  const selected = connections.filter((item) => item.name === current.flowConnection)[0];
+  const connection = selected || (current.flowConnection ? undefined : connections[0]);
   if (!connection) {
     return {
       flowId: current.flowId,
       flowEnvironment: environment.id,
       flowConnection: current.flowConnection,
       flowState: current.flowState,
-      note: 'Saved the rule. Add a SharePoint connection for this account in Power Automate, then save again.'
+      note: connections.length === 0
+        ? 'Choose an environment that has a SharePoint connection user.'
+        : 'Choose the connection user, then save.'
     };
   }
   const sameEnvironment = current.flowEnvironment === environment.id;

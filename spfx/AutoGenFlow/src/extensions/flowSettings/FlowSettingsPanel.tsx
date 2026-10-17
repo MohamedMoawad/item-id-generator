@@ -37,8 +37,8 @@ import {
   saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { FlowConsentError } from '../../services/flowModel';
-import { listEnvironments, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
+import { FlowConsentError, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { listConnections, listEnvironments, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { IListFlowTarget } from '../../services/siteFlow';
@@ -68,6 +68,12 @@ interface IFlowSettingsPanelState {
   draft?: IConfigDraft;
   legacySite?: IConfigDraft;
   columns: IFormulaColumn[];
+  environments: IFlowEnvironment[];
+  environmentId: string;
+  connections: IFlowConnection[];
+  connectionName: string;
+  connectionsLoading: boolean;
+  flowHint: string;
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
@@ -83,6 +89,8 @@ const RESET_OPTIONS: IDropdownOption[] = [
 export default class FlowSettingsPanel
   extends React.Component<IFlowSettingsPanelProps, IFlowSettingsPanelState> {
 
+  private _connectionRequest = 0;
+
   public constructor(props: IFlowSettingsPanelProps) {
     super(props);
     this.state = {
@@ -94,6 +102,12 @@ export default class FlowSettingsPanel
       confirmDelete: false,
       countEdited: false,
       columns: [],
+      environments: [],
+      environmentId: '',
+      connections: [],
+      connectionName: '',
+      connectionsLoading: false,
+      flowHint: '',
       errorMessage: '',
       warningMessage: '',
       statusMessage: ''
@@ -196,6 +210,7 @@ export default class FlowSettingsPanel
             <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
           </div>
         )}
+        {draft.flowState !== 'Started' && this._flowPickers(true)}
       </div>
     );
   }
@@ -222,8 +237,9 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Choose a single line of text column. Create that column in the list first if it is not listed. Saving an active rule creates the numbering flow for this list.
+          Choose the environment and the connection user. Saving an active rule creates the numbering flow for this list.
         </p>
+        {this._flowPickers(false)}
         {!this.state.canEdit && (
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.info}>
@@ -283,13 +299,57 @@ export default class FlowSettingsPanel
         <p className={styles.preview}>{this._preview(draft)}</p>
         <div className={styles.actions}>
           {editing && (
-            <PrimaryButton text={this.state.saving ? 'Saving' : 'Save settings'} onClick={this._onSave} disabled={this.state.saving} />
+            <PrimaryButton
+              text={this.state.saving ? 'Saving' : 'Save settings'}
+              onClick={this._onSave}
+              disabled={this.state.saving || this.state.connectionsLoading || (draft.isActive && !this.state.connectionName)}
+            />
           )}
           {draft.id !== undefined && (
             <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
           )}
           <DefaultButton text="Close" onClick={this.props.onDismiss} disabled={this.state.saving} />
         </div>
+      </div>
+    );
+  }
+
+  private _flowPickers(createButton: boolean): React.ReactElement {
+    const environmentKey = this.state.environments.some((item) => item.id === this.state.environmentId)
+      ? this.state.environmentId
+      : undefined;
+    const connectionKey = this.state.connections.some((item) => item.name === this.state.connectionName)
+      ? this.state.connectionName
+      : undefined;
+    const locked = !this.state.canEdit || this.state.saving || this.state.connectionsLoading;
+    return (
+      <div className={styles.pickers}>
+        <Dropdown
+          label="Environment"
+          placeholder={this.state.connectionsLoading ? 'Loading environments' : 'Choose an environment'}
+          options={this.state.environments.map((item) => ({ key: item.id, text: item.displayName }))}
+          selectedKey={environmentKey}
+          disabled={locked || this.state.environments.length === 0}
+          onChange={this._onEnvironmentChange}
+        />
+        <Dropdown
+          label="Connection user"
+          placeholder={this.state.connectionsLoading ? 'Loading connection users' : 'Choose a connection user'}
+          options={this.state.connections.map((item) => ({ key: item.name, text: item.displayName }))}
+          selectedKey={connectionKey}
+          disabled={locked || this.state.connections.length === 0}
+          onChange={this._onConnectionChange}
+        />
+        {this.state.flowHint && <p className={styles.intro}>{this.state.flowHint}</p>}
+        {createButton && (
+          <div className={styles.actions}>
+            <PrimaryButton
+              text={this.state.saving ? 'Creating the flow' : 'Create flow'}
+              onClick={this._onCreateFlow}
+              disabled={locked || !this.state.connectionName}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -418,6 +478,57 @@ export default class FlowSettingsPanel
     });
   };
 
+  private _onEnvironmentChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
+      return;
+    }
+    const environmentId = String(option.key);
+    const environment = this.state.environments.filter((item) => item.id === environmentId)[0];
+    if (!environment) {
+      return;
+    }
+    const request = this._connectionRequest + 1;
+    this._connectionRequest = request;
+    this.setState({ environmentId, connectionsLoading: true, connectionName: '', connections: [], flowHint: '' });
+    listConnections(this.props.aadHttpClientFactory, environment)
+      .then((connections) => {
+        if (request !== this._connectionRequest) {
+          return;
+        }
+        this.setState({
+          connectionsLoading: false,
+          connections,
+          connectionName: connections[0] ? connections[0].name : '',
+          flowHint: connections.length === 0 ? 'This environment has no SharePoint connection user. Choose another environment.' : ''
+        });
+      })
+      .catch((error: unknown) => {
+        if (request !== this._connectionRequest) {
+          return;
+        }
+        this.setState({ connectionsLoading: false, connections: [], connectionName: '', flowHint: messageOf(error) });
+      });
+  };
+
+  private _onConnectionChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
+      return;
+    }
+    this.setState({ connectionName: String(option.key), flowHint: '' });
+  };
+
+  private _onCreateFlow = (): void => {
+    const draft = this.state.draft;
+    if (!draft) {
+      return;
+    }
+    this.setState({ draft: { ...draft, isActive: true } }, () => {
+      this._save().catch((error: unknown) => {
+        this.setState({ saving: false, errorMessage: messageOf(error) });
+      });
+    });
+  };
+
   private _onColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
     if (!option) {
       return;
@@ -489,6 +600,39 @@ export default class FlowSettingsPanel
       editing: false,
       errorMessage: ''
     });
+    if (canEdit) {
+      this._loadFlowChoices(draft.flowEnvironment, draft.flowConnection).catch((error: unknown) => {
+        this.setState({ connectionsLoading: false, flowHint: messageOf(error) });
+      });
+    }
+  }
+
+  private async _loadFlowChoices(preferredEnvironment: string, preferredConnection: string): Promise<void> {
+    this.setState({ connectionsLoading: true, flowHint: '' });
+    const environments = await listEnvironments(this.props.aadHttpClientFactory);
+    const environment = environments.filter((item) => item.id === preferredEnvironment)[0]
+      || environments.filter((item) => item.id === this.state.environmentId)[0]
+      || environments[0];
+    if (!environment) {
+      this.setState({
+        connectionsLoading: false,
+        environments,
+        flowHint: 'Power Automate did not return an environment for this account.'
+      });
+      return;
+    }
+    const connections = await listConnections(this.props.aadHttpClientFactory, environment);
+    const connectionName = connections.some((item) => item.name === preferredConnection)
+      ? preferredConnection
+      : (connections[0] ? connections[0].name : '');
+    this.setState({
+      connectionsLoading: false,
+      environments,
+      environmentId: environment.id,
+      connections,
+      connectionName,
+      flowHint: connections.length === 0 ? 'This environment has no SharePoint connection user. Choose another environment.' : ''
+    });
   }
 
   private async _save(): Promise<void> {
@@ -535,8 +679,8 @@ export default class FlowSettingsPanel
     try {
       const synced = await syncListFlow(this.props.aadHttpClientFactory, this._target(), {
         flowId: saved.flowId,
-        flowEnvironment: saved.flowEnvironment,
-        flowConnection: saved.flowConnection,
+        flowEnvironment: this.state.environmentId || saved.flowEnvironment,
+        flowConnection: this.state.connectionName || saved.flowConnection,
         flowState: saved.flowState,
         note: ''
       }, saved.isActive);

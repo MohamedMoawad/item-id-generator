@@ -6,14 +6,14 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.3.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.4.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. In the SharePoint admin center, open **Advanced → API access** and approve **AutoGen Flow**. This approval is once for the tenant.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
-6. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**.
+6. Choose **Environment** and **Connection user**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates the flow.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**. The flow is named **AutoGen ·** and the list name, in the default Power Automate environment. The SharePoint connection needs Contribute on this list and on the site collection.
 
@@ -37,8 +37,8 @@ Date tokens use the item’s Created time in UTC. `{Department.title}` uses the 
 ## What happens on save
 
 1. The dialog writes one row in `AutoGenFlowConfiguration` on the site collection.
-2. It asks Power Automate for environments and uses the default environment.
-3. It asks for this account’s SharePoint connections. The first request uses the Power Apps connection route. If that route is missing, it tries the environment route.
+2. The dialog lists Power Automate environments. Choose one. The default environment is selected first.
+3. It lists SharePoint connection users for that environment from the environment’s Power Apps host. Choose the user. The app creates the flow with that connection.
 4. It creates a flow whose trigger is **When an item is created** on this list, bound to that connection, and turns the flow on.
 5. The flow id and connection are stored on the same row. The dialog does not ask the admin to pick them.
 

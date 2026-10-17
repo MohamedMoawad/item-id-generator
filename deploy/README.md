@@ -18,7 +18,7 @@ List owners set the formula, the number column, and the reset. Saving an active 
 
 ## AutoGen Flow
 
-`autogen-flow.sppkg` is package **1.3.0.0**, separate from AutoGen Feature. Upload it, approve **AutoGen Flow** under SharePoint admin center **Advanced → API access**, and add the app to the site. Open a list, choose **AutoGen Flow**, add the column and formula, and save. The app creates that list’s flow in the default Power Automate environment. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
+`autogen-flow.sppkg` is package **1.4.0.0**, separate from AutoGen Feature. Upload it, approve **AutoGen Flow** under SharePoint admin center **Advanced → API access**, and add the app to the site. Open a list, choose **AutoGen Flow**, choose the environment and connection user, set the column and formula, and save. The app creates that list’s flow. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
 
 ## Repeating Rows
 

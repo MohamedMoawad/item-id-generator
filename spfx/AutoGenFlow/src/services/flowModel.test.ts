@@ -32,8 +32,9 @@ describe('flow model', () => {
       }]
     });
     const urls = environment ? connectionListUrls(environment) : [];
-    expect(urls[0]).toContain('/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections');
+    expect(urls[0]).toContain('https://api.powerapps.com/providers/Microsoft.PowerApps/connections?');
     expect(urls[0]).toContain('Default-tenant');
+    expect(urls[0]).not.toContain('/apis/shared_sharepointonline');
     expect(urls[urls.length - 1]).toContain('/providers/Microsoft.ProcessSimple/environments/Default-tenant/connections');
     expect(readEnvironments({
       value: [
@@ -54,6 +55,17 @@ describe('flow model', () => {
         { name: 'sql-1', properties: { displayName: 'SQL', apiId: '/providers/Microsoft.PowerApps/apis/shared_sql' } }
       ]
     })).toEqual([{ name: 'shared-sharepointonl-1', displayName: 'SharePoint' }]);
+    expect(readConnections({
+      value: [{
+        name: 'shared-sharepointonl-2',
+        properties: {
+          displayName: 'SharePoint',
+          accountName: 'svc@contoso.com',
+          apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline',
+          statuses: [{ status: 'Error' }]
+        }
+      }]
+    })).toEqual([{ name: 'shared-sharepointonl-2', displayName: 'svc@contoso.com' }]);
   });
 
   it('reads the flow state and treats a missing approval as consent', () => {

@@ -46,8 +46,11 @@ interface IRawConnection {
   properties?: {
     displayName?: string;
     apiId?: string;
+    accountName?: string;
+    api?: { name?: string };
     statuses?: Array<{ status?: string }>;
     environment?: { name?: string };
+    createdBy?: { displayName?: string; email?: string };
   };
 }
 
@@ -87,23 +90,19 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
 const API_VERSION = '2016-11-01';
 
 export function connectionListUrls(environment: IFlowEnvironment): string[] {
-  const hosts = [
-    'https://api.flow.microsoft.com',
-    environment.endpoint,
-    environment.powerAppsEndpoint
-  ];
+  const powerApps = environment.powerAppsEndpoint.replace(/\/+$/, '');
+  const flow = environment.endpoint.replace(/\/+$/, '');
+  const filter = encodeURIComponent(`environment eq '${environment.id.replace(/'/g, "''")}'`);
+  const version = `api-version=${API_VERSION}`;
+  const id = encodeURIComponent(environment.id);
   const urls: string[] = [];
-  hosts.forEach((host) => {
-    pushUrl(urls, sharePointConnectionUrl(host, environment.id));
-  });
-  pushUrl(urls, `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/connections?api-version=${API_VERSION}`);
-  pushUrl(urls, `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/connections?api-version=${API_VERSION}`);
+  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/connections?${version}&$filter=${filter}`);
+  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/connections?${version}`);
+  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?${version}&$filter=${filter}`);
+  pushUrl(urls, `https://api.flow.microsoft.com/providers/Microsoft.PowerApps/connections?${version}&$filter=${filter}`);
+  pushUrl(urls, `${flow}/providers/Microsoft.ProcessSimple/environments/${id}/connections?${version}`);
+  pushUrl(urls, `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${id}/connections?${version}`);
   return urls;
-}
-
-function sharePointConnectionUrl(host: string, environmentId: string): string {
-  const filter = encodeURIComponent(`environment eq '${environmentId.replace(/'/g, "''")}'`);
-  return `${host.replace(/\/+$/, '')}/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?api-version=${API_VERSION}&$filter=${filter}`;
 }
 
 function pushUrl(urls: string[], url: string): void {
@@ -113,26 +112,61 @@ function pushUrl(urls: string[], url: string): void {
 }
 
 export function readConnections(payload: { value?: IRawConnection[] }, sharePointScoped = false, environmentId = ''): IFlowConnection[] {
-  return (payload.value || [])
+  const rows = (payload.value || [])
     .filter((row) => {
-      const api = ((row.properties && row.properties.apiId) || '').toLowerCase();
+      const api = connectionApi(row);
       const name = (row.name || '').toLowerCase();
       const rowEnvironment = row.properties && row.properties.environment && row.properties.environment.name;
-      const connected = !row.properties || !row.properties.statuses || row.properties.statuses.length === 0
-        || row.properties.statuses.some((status) => (status.status || '').toLowerCase() === 'connected');
       const sharePoint = sharePointScoped
         || api.indexOf('shared_sharepointonline') >= 0
         || api.indexOf('sharepoint') >= 0
         || name.indexOf('shared-sharepointonl') === 0;
       const otherApi = api.length > 0 && api.indexOf('sharepoint') < 0;
       const sameEnvironment = !environmentId || !rowEnvironment || rowEnvironment === environmentId;
-      return connected && sharePoint && !otherApi && sameEnvironment;
+      return sharePoint && !otherApi && sameEnvironment;
     })
     .map((row) => ({
       name: row.name || '',
-      displayName: (row.properties && row.properties.displayName) || row.name || 'SharePoint'
+      displayName: connectionUser(row),
+      connected: connectionIsReady(row)
     }))
     .filter((row) => row.name.length > 0);
+  rows.sort((left, right) => {
+    if (left.connected === right.connected) {
+      return left.displayName.localeCompare(right.displayName);
+    }
+    return left.connected ? -1 : 1;
+  });
+  return rows.map((row) => ({ name: row.name, displayName: row.displayName }));
+}
+
+function connectionApi(row: IRawConnection): string {
+  const properties = row.properties;
+  const apiId = (properties && properties.apiId) || '';
+  const apiName = properties && properties.api && properties.api.name;
+  return (apiName || apiId).toLowerCase();
+}
+
+function connectionIsReady(row: IRawConnection): boolean {
+  const properties = row.properties;
+  if (!properties || !properties.statuses || properties.statuses.length === 0) {
+    return true;
+  }
+  return properties.statuses.some((status) => {
+    const value = (status.status || '').toLowerCase();
+    return value === 'connected' || value === 'ready' || value === 'ok';
+  });
+}
+
+function connectionUser(row: IRawConnection): string {
+  const properties = row.properties;
+  const createdBy = properties && properties.createdBy;
+  return (properties && properties.accountName)
+    || (createdBy && createdBy.email)
+    || (createdBy && createdBy.displayName)
+    || (properties && properties.displayName)
+    || row.name
+    || 'SharePoint';
 }
 
 export function readFlowState(payload: { name?: string; properties?: { state?: string } } | undefined): FlowRunState {

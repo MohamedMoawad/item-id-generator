@@ -108,6 +108,13 @@
   color: #107c10;
 }
 
+.pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .intro {
   margin: 0 0 12px;
 }
