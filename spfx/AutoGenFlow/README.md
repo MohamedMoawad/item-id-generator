@@ -1,103 +1,42 @@
-# AutoGen Flow
+# AutoGen
 
-AutoGen Flow stores the numbering rule in the master list `AutoGenFlowConfiguration`. Power Automate writes the number when an item is created.
+AutoGen gives every list on a site collection its own running number. Open a list, choose **AutoGen Flow**, set the column and the formula, and turn numbering on once. The same numbering service covers every other list on that site collection.
 
-The existing **AutoGen Feature** app is unchanged. It still numbers items from the open list page. Install this package beside it. On a list that Power Automate creates, save the rule here and leave the AutoGen Feature rule for that list inactive.
-
-This package does not hook the browser, and it does not number items by itself.
+Numbers are written within a minute, in the order the items were created. A person, a grid edit, and another flow all receive the next number. The counter moves only after the item is updated, and the service runs one pass at a time, so the sequence stays continuous.
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.0.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.1.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
-2. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
-3. Open the list. On the command bar choose **AutoGen Flow**.
-4. Choose the single-line text column, set the formula, and save. The first save creates `AutoGenFlowConfiguration` on the site collection if it is not there yet.
-5. Build the flow below. One flow handles one list. Clone it for the next list.
+2. In the SharePoint admin center, open **Advanced → API access** and approve **AutoGen Flow**. This approval is once for the tenant. It lets the app create the numbering flow.
+3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
+4. Open any list or library. On the command bar choose **AutoGen Flow**.
+5. Choose the single-line text column and the formula. **Save**.
+6. Choose **Turn on numbering**. Pick the SharePoint connection when the account has more than one. That connection needs Contribute on the site collection.
 
-`AutoGenFlowConfiguration` stays visible in site contents. Each list has one row. The row holds the formula, the number column, the reset period, the current count, and the column tokens the flow replaces.
+`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The site has one numbering flow, named **AutoGen ·** and the site name, in the default Power Automate environment.
 
-## What the master list stores
+## A list rule
 
-| Column | How the flow uses it |
+| Setting | Meaning |
 | --- | --- |
-| TargetListGuid | Filter query finds the row for this list. |
-| NumberColumnInternalName | The text column the flow updates. |
-| Formula | The pattern, with `{counter}` written once. |
-| CounterToken | The exact token to replace, such as `{counter:4}`. |
-| CounterWidth | Digits to pad. `{counter:4}` stores 4. A plain `{counter}` uses Pad length. |
-| FormulaColumns | Comma-separated tokens such as `Title,Department.title`. |
-| CurrentCount | The last number used. The next item adds one. |
-| ResetPeriod | `None`, `Day`, `Month`, or `Year`. |
-| LastResetDate | The flow sets this to the item Created time after a successful number. |
-| IsActive | The filter keeps inactive rows out of the flow. |
+| Number column | The single line of text that receives the code. |
+| Formula | `{counter}` or `{counter:4}`, plus `{yyyy}` `{MM}` `{dd}` and columns such as `{Title}`. |
+| Digits | Used when the formula says `{counter}` without a width. |
+| Start again | Never, every day, every month, or every year. |
+| Last number used | The next item adds one. `0` starts at `1`. |
+| This list | Paused lists keep their rule and receive no new numbers. |
 
-Tokens:
+`REQ-{counter}` with 5 digits and a last number of 0 shows **REQ-00001**. A formula typed as `{counter:4}{counter}` is saved as `{counter:4}`, so the digit is written once.
 
-| Token | Value |
-| --- | --- |
-| `{yyyy}` `{yy}` `{MM}` `{dd}` `{HH}` `{mm}` | Item Created time, UTC |
-| `{counter}` | Next integer, padded with Pad length |
-| `{counter:4}` | Next integer, padded to that width |
-| `{Title}` | Text column from the created item |
-| `{Department.title}` | Lookup or person display text |
+Date tokens use the item’s Created time in UTC. `{Department.title}` uses the lookup or person display text.
 
-`{counter:4}{counter}` is saved as `{counter:4}` so the digit is written once. A current count of 0 produces 1.
+## What the numbering service does
 
-## Build the flow
+Once a minute it reads the active rows in `AutoGenFlowConfiguration`, skips the site row, and for each list loads blank number columns in Id order. It assigns the next integer, writes the code, then stores the new count. Up to 100 blank items on a list are numbered in one pass. The rest continue on the next minute.
 
-Create an automated cloud flow.
-
-1. Trigger: **When an item is created** (SharePoint). Site and list are the list you just configured.
-2. Open the trigger settings.
-   - Concurrency control: **On**
-   - Degree of parallelism: **1**
-   - Trigger condition, pasted from the AutoGen Flow dialog:
-     `@empty(triggerOutputs()?['body/RequestNumber'])`
-     Replace `RequestNumber` with the number column internal name.
-3. **Get item**. Same site and list. Id is the trigger **ID**.
-4. **Get items**.
-   - Site: the master list site shown in the dialog (the site collection).
-   - List: `AutoGenFlowConfiguration`
-   - Filter query from the dialog, for example `TargetListGuid eq 'guid' and IsActive eq 1`
-   - Top Count: `1`
-5. **Initialize variable**. Name `Code`, type String, value empty. This action stays outside the condition.
-6. **Condition**. Paste the condition expression from the dialog. It continues only when the fresh item has an empty number column and a master row exists. Put the actions below in **Yes**.
-7. Add a **Compose** for each name. Rename the action to that name, then paste the expression from the dialog into the expression editor.
-
-| Compose name | Role |
-| --- | --- |
-| Config | First master row |
-| ResetPeriod | None, Day, Month, or Year |
-| LastResetDate | Previous numbered item |
-| CurrentCount | Integer last value, or 0 |
-| CounterWidth | Pad width |
-| CounterToken | `{counter}` or `{counter:4}` |
-| FormulaColumns | Column tokens, or empty |
-| Rolled | True when the reset period changed |
-| Next | 1 after a reset, otherwise current count plus 1 |
-| Padded | Next, padded with twelve zeros to CounterWidth |
-| CodeStart | Formula with the counter and the UTC date tokens replaced |
-
-8. **Set variable** `Code` to the output of `CodeStart`.
-9. When FormulaColumns is not empty, add **Apply to each**.
-   - Select: `split(outputs('FormulaColumns'), ',')`
-   - Inside the loop, **Set variable** `Code` to the column expression from the dialog.
-   - The expression reads `Value` or `Title` for a lookup or person, and the plain value for text.
-10. **Update item** on the created item. Set the number column to `variables('Code')`.
-11. **Update item** on `AutoGenFlowConfiguration`.
-    - Id: `outputs('Config')?['ID']` (if that is empty, use `Id`)
-    - Current count: output of `Next`
-    - Last reset date: **Created** from the trigger
-
-The counter moves only after the item update succeeds. Concurrency 1 keeps one hundred creates in one line: 0001, 0002, 0003, with no skipped values.
-
-If the item update succeeds and the master-list update fails, open that master row and set **Current count** to the number just used. The next run then continues from there.
-
-## One flow for each list
-
-The SharePoint trigger is bound to one list. For a second list, save its AutoGen Flow rule, clone the flow, and change three things: the trigger list, the trigger condition column, and the filter query. The master list can live on the site collection while the target list is in a subsite.
+Turn off stops the service and leaves the saved rules in place. Redeploy replaces the service after an app upgrade. Adding another list is only a new rule. The same service picks it up.
 
 ## Local development
 

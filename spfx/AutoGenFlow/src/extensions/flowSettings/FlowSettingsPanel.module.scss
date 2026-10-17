@@ -1,72 +1,153 @@
 :global(.ms-Dialog-main).dialogHost {
   box-sizing: border-box;
-  width: min(640px, calc(100vw - 16px)) !important;
-  max-width: min(640px, calc(100vw - 16px)) !important;
+  width: min(520px, calc(100vw - 16px)) !important;
+  max-width: min(520px, calc(100vw - 16px)) !important;
   min-width: 0 !important;
+  border-radius: 4px;
+
+  :global(.ms-Dialog-title) {
+    color: #0f6cbd;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 28px;
+    padding: 20px 24px 0;
+  }
+
+  :global(.ms-Dialog-subText) {
+    margin: 2px 24px 0;
+    color: #605e5c;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  :global(.ms-Dialog-content) {
+    max-height: calc(100vh - 180px);
+    overflow: auto;
+    padding-top: 8px;
+  }
 }
 
 .panel {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #faf9f8;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.lead,
-.hint,
-.preview {
+.cardTitle {
   margin: 0;
   color: #323130;
   font-size: 14px;
-  line-height: 1.45;
+  font-weight: 600;
+  line-height: 20px;
 }
 
+.cardCopy,
 .hint,
-.preview {
+.previewLabel {
+  margin: 4px 0 0;
   color: #605e5c;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  padding: 2px 8px 2px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pillOn {
+  background: #dff6dd;
+  color: #0b6a0b;
+}
+
+.pillOff {
+  background: #f3f2f1;
+  color: #605e5c;
+}
+
+.pillWait {
+  background: #fff4ce;
+  color: #8a6116;
 }
 
 .tokens {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 92px;
+  overflow: auto;
 }
 
 .token {
   border: 1px solid #c8c6c4;
-  background: #faf9f8;
+  background: #ffffff;
   color: #323130;
   border-radius: 2px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   font: inherit;
   font-size: 12px;
+  line-height: 16px;
   cursor: pointer;
+}
+
+.token:hover {
+  background: #f3f2f1;
+}
+
+.preview {
+  border-top: 1px solid #edebe9;
+  padding-top: 12px;
+}
+
+.previewValue {
+  margin: 2px 0 0;
+  color: #201f1e;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 28px;
+  overflow-wrap: anywhere;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 12px;
 }
 
-.flow {
-  border-top: 1px solid #edebe9;
-  padding-top: 8px;
-}
-
-.flow summary {
-  cursor: pointer;
+.insertLabel {
+  margin: 0;
+  color: #605e5c;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.step {
-  margin: 0 0 8px;
-  color: #323130;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.expression {
-  margin-bottom: 8px;
 }

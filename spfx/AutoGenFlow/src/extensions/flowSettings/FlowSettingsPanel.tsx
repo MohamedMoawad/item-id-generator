@@ -1,6 +1,5 @@
 import * as React from 'react';
 import {
-  Checkbox,
   DefaultButton,
   Dialog,
   DialogType,
@@ -11,16 +10,18 @@ import {
   PrimaryButton,
   Spinner,
   SpinnerSize,
-  TextField
+  TextField,
+  Toggle
 } from '@fluentui/react';
-import { SPHttpClient } from '@microsoft/sp-http';
+import { AadHttpClientFactory, SPHttpClient } from '@microsoft/sp-http';
 import {
   DEFAULT_CONFIG_LIST_TITLE,
   draftForCurrentList,
   findConfigForList,
+  findSiteFlow,
   IConfigDraft,
-  RESET_PERIODS,
   ResetPeriod,
+  siteFlowDraft,
   validateDraft,
   wholeCount
 } from '../../services/contract';
@@ -33,40 +34,59 @@ import {
   saveConfigRow,
   showConfigList
 } from '../../services/configListClient';
-import { IFormulaColumn, planNextCode, prepareRule, textColumns } from '../../services/formula';
 import {
-  blankGuardExpression,
-  configFilter,
-  FLOW_CONCURRENCY,
-  flowExpressions,
-  flowSteps,
-  triggerCondition
-} from '../../services/flowGuide';
+  createRemoteFlow,
+  loadFlowContext,
+  readRemoteFlow,
+  redeployRemoteFlow,
+  setRemoteFlowState
+} from '../../services/flowClient';
+import { FlowConsentError, FlowRunState, FlowStartError, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
+import { buildItemQuery } from '../../services/itemQuery';
 import styles from './FlowSettingsPanel.module.scss';
 
 export interface IFlowSettingsPanelProps {
   siteAbsoluteUrl: string;
+  siteTitle: string;
   webAbsoluteUrl: string;
   configListTitle: string;
   listTitle: string;
   listUrl: string;
   listGuid: string;
   spHttpClient: SPHttpClient;
+  aadHttpClientFactory: AadHttpClientFactory;
   onDismiss: () => void;
 }
 
 interface IFlowSettingsPanelState {
   loading: boolean;
   saving: boolean;
+  working: boolean;
   canEdit: boolean;
   countEdited: boolean;
+  consentRequired: boolean;
   draft?: IConfigDraft;
   columns: IFormulaColumn[];
   errorMessage: string;
   statusMessage: string;
+  flowMessage: string;
+  numbering: FlowRunState;
+  flowId: string;
+  siteRowId?: number;
+  environment?: IFlowEnvironment;
+  connections: IFlowConnection[];
+  connectionName: string;
 }
 
-const DATE_TOKENS = ['{yyyy}', '{yy}', '{MM}', '{dd}', '{HH}', '{mm}', '{counter}', '{counter:4}'];
+const DATE_TOKENS = ['{counter}', '{counter:4}', '{yyyy}', '{yy}', '{MM}', '{dd}'];
+
+const RESET_OPTIONS: IDropdownOption[] = [
+  { key: 'None', text: 'Never' },
+  { key: 'Day', text: 'Every day' },
+  { key: 'Month', text: 'Every month' },
+  { key: 'Year', text: 'Every year' }
+];
 
 export default class FlowSettingsPanel
   extends React.Component<IFlowSettingsPanelProps, IFlowSettingsPanelState> {
@@ -76,11 +96,18 @@ export default class FlowSettingsPanel
     this.state = {
       loading: true,
       saving: false,
+      working: false,
       canEdit: false,
       countEdited: false,
+      consentRequired: false,
       columns: [],
       errorMessage: '',
-      statusMessage: ''
+      statusMessage: '',
+      flowMessage: '',
+      numbering: 'Missing',
+      flowId: '',
+      connections: [],
+      connectionName: ''
     };
   }
 
@@ -97,10 +124,11 @@ export default class FlowSettingsPanel
         hidden={false}
         onDismiss={this.props.onDismiss}
         minWidth={280}
-        maxWidth={640}
+        maxWidth={520}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow',
+          title: 'AutoGen',
+          subText: `Sequential numbers for ${this.props.listTitle}`,
           showCloseButton: true
         }}
         modalProps={{
@@ -109,128 +137,149 @@ export default class FlowSettingsPanel
         }}
       >
         <div className={styles.panel}>
-          <p className={styles.lead}>
-            This saves the rule for {this.props.listTitle}. Power Automate writes the number when an item is created.
-          </p>
-          {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading the master list" />}
+          {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading numbering" />}
           {this.state.errorMessage && <MessageBar messageBarType={MessageBarType.error}>{this.state.errorMessage}</MessageBar>}
           {this.state.statusMessage && <MessageBar messageBarType={MessageBarType.success}>{this.state.statusMessage}</MessageBar>}
-          {draft && this._form(draft)}
+          {!this.state.loading && this._flowCard()}
+          {draft && !this.state.loading && this._form(draft)}
         </div>
       </Dialog>
     );
   }
 
-  private _form(draft: IConfigDraft): React.ReactElement {
-    const numberOptions = this._numberOptions(draft);
-    const prepared = prepareRule(draft.formula, draft.padLength);
+  private _flowCard(): React.ReactElement {
+    const on = this.state.numbering === 'Started';
+    const pillClass = on ? styles.pillOn : (this.state.numbering === 'Stopped' ? styles.pillOff : styles.pillWait);
+    const pillText = on ? 'On' : (this.state.numbering === 'Stopped' ? 'Off' : 'Not created');
     return (
-      <>
+      <section className={styles.card}>
+        <div className={styles.cardHead}>
+          <div>
+            <p className={styles.cardTitle}>Site numbering</p>
+            <p className={styles.cardCopy}>
+              {on
+                ? 'Every list on this site collection is numbered from its saved rule.'
+                : 'Turn this on once. It covers every list on this site collection.'}
+            </p>
+          </div>
+          <span className={`${styles.pill} ${pillClass}`}>{pillText}</span>
+        </div>
+        {this.state.consentRequired && (
+          <MessageBar messageBarType={MessageBarType.warning}>
+            A SharePoint admin approves AutoGen Flow once under Admin center, Advanced, API access.
+          </MessageBar>
+        )}
+        {this.state.flowMessage && <p className={styles.cardCopy}>{this.state.flowMessage}</p>}
+        {this.state.connections.length > 1 && (
+          <Dropdown
+            label="SharePoint connection"
+            options={this.state.connections.map((item) => ({ key: item.name, text: item.displayName }))}
+            selectedKey={this.state.connectionName || undefined}
+            disabled={this.state.working || !this.state.canEdit}
+            onChange={this._onConnectionChange}
+          />
+        )}
+        {this.state.connections.length === 1 && (
+          <p className={styles.hint}>Connection: {this.state.connections[0].displayName}</p>
+        )}
+        <div className={styles.actions}>
+          {!on && (
+            <PrimaryButton
+              text={this.state.working ? 'Turning numbering on' : 'Turn on numbering'}
+              disabled={this.state.working || this.state.saving || !this.state.canEdit}
+              onClick={this._turnOn}
+            />
+          )}
+          {on && (
+            <DefaultButton text="Turn off" disabled={this.state.working || !this.state.canEdit} onClick={this._turnOff} />
+          )}
+          {this.state.flowId && (
+            <DefaultButton text="Redeploy" disabled={this.state.working || this.state.saving || !this.state.canEdit} onClick={this._redeploy} />
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  private _form(draft: IConfigDraft): React.ReactElement {
+    const options = numberColumnChoices(this.state.columns).map((column) => ({
+      key: column.internalName,
+      text: column.title === column.internalName ? column.title : `${column.title} (${column.internalName})`
+    }));
+    if (draft.numberColumnInternalName && !options.some((option) => option.key === draft.numberColumnInternalName)) {
+      options.unshift({ key: draft.numberColumnInternalName, text: draft.numberColumnInternalName });
+    }
+    const inserts = formulaInserts(this.state.columns, draft.numberColumnInternalName);
+    return (
+      <section>
         <Dropdown
           label="Number column"
-          placeholder="Single line of text"
-          options={numberOptions}
+          placeholder={options.length === 0 ? 'Add a single line of text column first' : 'Choose a column'}
+          options={options}
           selectedKey={draft.numberColumnInternalName || undefined}
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onColumnChange}
         />
         <TextField
           label="Formula"
-          description="Use {counter} or {counter:4}. Dates use the item Created time in UTC."
+          description="Example: REQ-{yyyy}{MM}-{counter:4}"
           multiline
-          rows={3}
+          rows={2}
           value={draft.formula}
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onFormulaChange}
         />
+        <p className={styles.insertLabel}>Insert</p>
         <div className={styles.tokens}>
           {DATE_TOKENS.map((token) => (
             <button key={token} type="button" className={styles.token} data-token={token} onClick={this._onInsertToken}>{token}</button>
           ))}
-          {this.state.columns.slice(0, 8).map((column) => (
+          {inserts.map((column) => (
             <button key={column.internalName} type="button" className={styles.token} data-token={column.token} onClick={this._onInsertToken}>
               {column.token}
             </button>
           ))}
         </div>
         <TextField
-          label="Pad length"
+          label="Digits"
           description="Used when the formula says {counter} without a width."
           value={String(draft.padLength)}
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onPadChange}
         />
         <Dropdown
-          label="Reset period"
-          options={RESET_PERIODS.map((period) => ({ key: period, text: period }))}
+          label="Start again"
+          options={RESET_OPTIONS}
           selectedKey={draft.resetPeriod}
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onResetChange}
         />
         <TextField
-          label="Current count"
-          description="The last number used. The next item adds one. Set 0 to start at 1. Leave it unchanged and a save keeps the live counter."
+          label="Last number used"
+          description="The next item adds one. Use 0 to start at 1."
           value={String(draft.currentCount)}
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onCountChange}
         />
-        <Checkbox
-          label="Active"
+        <Toggle
+          label="This list"
           checked={draft.isActive}
+          onText="Numbering"
+          offText="Paused"
           disabled={!this.state.canEdit || this.state.saving}
           onChange={this._onActiveChange}
         />
-        <p className={styles.preview}>Next code from the saved counter: {this._preview(draft)}</p>
-        <p className={styles.hint}>
-          Stored for the flow: token {prepared.counterToken}, width {prepared.counterWidth}
-          {prepared.formulaColumns ? `, columns ${prepared.formulaColumns}` : ''}.
-        </p>
+        <div className={styles.preview}>
+          <p className={styles.previewLabel}>Next number</p>
+          <p className={styles.previewValue}>{this._preview(draft)}</p>
+          <p className={styles.hint}>Up to 100 blank items a minute, in the order they were created.</p>
+        </div>
         <div className={styles.actions}>
-          <PrimaryButton text="Save rule" disabled={!this.state.canEdit || this.state.saving || this.state.loading} onClick={this._save} />
+          <PrimaryButton text={this.state.saving ? 'Saving' : 'Save'} disabled={!this.state.canEdit || this.state.saving || this.state.working} onClick={this._onSave} />
           <DefaultButton text="Close" onClick={this.props.onDismiss} />
         </div>
-        {draft.id !== undefined && (
-          <details className={styles.flow} open>
-            <summary>Power Automate for this list</summary>
-            <p className={styles.step}>Master list site: {this.props.siteAbsoluteUrl}</p>
-            <p className={styles.step}>Master list: {this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE}</p>
-            <p className={styles.step}>Trigger list: {this.props.listUrl}</p>
-            <p className={styles.step}>Concurrency: {FLOW_CONCURRENCY}</p>
-            <TextField label="Filter query" readOnly multiline rows={2} value={configFilter(draft.targetListGuid)} />
-            <TextField label="Trigger condition" readOnly multiline rows={2} value={triggerCondition(draft.numberColumnInternalName)} />
-            <TextField label="Condition expression" readOnly multiline rows={3} value={blankGuardExpression(draft.numberColumnInternalName)} />
-            {flowSteps().map((step, index) => (
-              <p key={step} className={styles.step}>{index + 1}. {step}</p>
-            ))}
-            {flowExpressions(draft.numberColumnInternalName).map((item) => (
-              <TextField
-                key={item.action}
-                className={styles.expression}
-                label={item.action}
-                readOnly
-                multiline
-                rows={3}
-                value={item.expression}
-              />
-            ))}
-          </details>
-        )}
-      </>
+      </section>
     );
-  }
-
-  private _numberOptions(draft: IConfigDraft): IDropdownOption[] {
-    const options = textColumns(this.state.columns).map((column) => ({
-      key: column.internalName,
-      text: `${column.title} (${column.internalName})`
-    }));
-    if (draft.numberColumnInternalName && !options.some((option) => option.key === draft.numberColumnInternalName)) {
-      options.unshift({
-        key: draft.numberColumnInternalName,
-        text: draft.numberColumnInternalName
-      });
-    }
-    return options;
   }
 
   private _preview(draft: IConfigDraft): string {
@@ -254,10 +303,7 @@ export default class FlowSettingsPanel
     if (!draft || !this.state.canEdit || !token) {
       return;
     }
-    this.setState({
-      draft: { ...draft, formula: `${draft.formula}${token}` },
-      statusMessage: ''
-    });
+    this.setState({ draft: { ...draft, formula: `${draft.formula}${token}` }, statusMessage: '' });
   };
 
   private _onColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
@@ -282,10 +328,7 @@ export default class FlowSettingsPanel
       return;
     }
     const padLength = Math.floor(Number(value));
-    this.setState({
-      draft: { ...draft, padLength: Number.isFinite(padLength) ? padLength : 0 },
-      statusMessage: ''
-    });
+    this.setState({ draft: { ...draft, padLength: Number.isFinite(padLength) ? padLength : 0 }, statusMessage: '' });
   };
 
   private _onResetChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
@@ -308,7 +351,7 @@ export default class FlowSettingsPanel
     });
   };
 
-  private _onActiveChange = (_event?: React.FormEvent<HTMLElement | HTMLInputElement>, checked?: boolean): void => {
+  private _onActiveChange = (_event: React.MouseEvent<HTMLElement>, checked?: boolean): void => {
     const draft = this.state.draft;
     if (!draft) {
       return;
@@ -316,14 +359,39 @@ export default class FlowSettingsPanel
     this.setState({ draft: { ...draft, isActive: checked === true }, statusMessage: '' });
   };
 
-  private _save = (): void => {
-    this._saveAsync().catch((error: unknown) => {
+  private _onConnectionChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
+      return;
+    }
+    this.setState({ connectionName: String(option.key) });
+  };
+
+  private _onSave = (): void => {
+    this._save(true).catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error) });
     });
   };
 
+  private _turnOn = (): void => {
+    this._changeFlow('on').catch((error: unknown) => {
+      this._failFlow(error);
+    });
+  };
+
+  private _turnOff = (): void => {
+    this._changeFlow('off').catch((error: unknown) => {
+      this._failFlow(error);
+    });
+  };
+
+  private _redeploy = (): void => {
+    this._changeFlow('redeploy').catch((error: unknown) => {
+      this._failFlow(error);
+    });
+  };
+
   private async _load(): Promise<void> {
-    const listTitle = this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
+    const listTitle = this._listTitle();
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     await showConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const [rows, columns, canEdit] = await Promise.all([
@@ -333,19 +401,66 @@ export default class FlowSettingsPanel
     ]);
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
+    const site = findSiteFlow(rows);
     this.setState({
       loading: false,
       canEdit,
       columns,
       draft,
+      siteRowId: site && site.id,
+      flowId: site ? site.flowId : '',
+      connectionName: site ? site.flowConnection : '',
+      numbering: site && site.flowState === 'Started' ? 'Started' : (site && site.flowState === 'Stopped' ? 'Stopped' : 'Missing'),
       errorMessage: canEdit ? '' : 'You can view this rule. Edit permission on the master list is required to save it.'
     });
+    if (!canEdit) {
+      return;
+    }
+    await this._refreshFlow(
+      site ? site.flowId : '',
+      site ? site.flowEnvironment : '',
+      site ? site.flowConnection : ''
+    );
   }
 
-  private async _saveAsync(): Promise<void> {
+  private async _refreshFlow(flowId: string, environmentId: string, savedConnection: string): Promise<void> {
+    try {
+      const context = await loadFlowContext(this.props.aadHttpClientFactory);
+      const environment = context.environment.id === environmentId || !environmentId
+        ? context.environment
+        : { ...context.environment, id: environmentId };
+      let numbering: FlowRunState = flowId ? 'Stopped' : 'Missing';
+      let id = flowId;
+      if (flowId) {
+        const remote = await readRemoteFlow(this.props.aadHttpClientFactory, environment, flowId);
+        numbering = remote.state;
+        id = remote.state === 'Missing' ? '' : remote.id;
+      }
+      const connectionName = savedConnection || (context.connections[0] ? context.connections[0].name : '');
+      this.setState({
+        consentRequired: false,
+        environment,
+        connections: context.connections,
+        connectionName,
+        flowId: id,
+        numbering,
+        flowMessage: context.connections.length === 0
+          ? 'Add a SharePoint connection in Power Automate, then turn numbering on.'
+          : ''
+      });
+    } catch (error) {
+      if (error instanceof FlowConsentError) {
+        this.setState({ consentRequired: true, flowMessage: '' });
+        return;
+      }
+      this.setState({ flowMessage: messageOf(error) });
+    }
+  }
+
+  private async _save(announce: boolean): Promise<boolean> {
     const draft = this.state.draft;
     if (!draft) {
-      return;
+      return false;
     }
     const prepared = prepareRule(draft.formula, draft.padLength);
     const next: IConfigDraft = {
@@ -354,22 +469,24 @@ export default class FlowSettingsPanel
       title: draft.title.trim() || this.props.listTitle,
       targetListTitle: this.props.listTitle,
       targetListUrl: this.props.listUrl,
-      targetListGuid: this.props.listGuid
+      targetListGuid: this.props.listGuid,
+      itemQuery: buildItemQuery(this.props.listGuid, draft.numberColumnInternalName, prepared.formulaColumns)
     };
     const problem = validateDraft(next);
     if (problem) {
-      this.setState({ errorMessage: problem });
-      return;
+      this.setState({ errorMessage: problem, statusMessage: '' });
+      return false;
     }
     this.setState({ saving: true, errorMessage: '' });
-    const listTitle = this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
+    const listTitle = this._listTitle();
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     const id = await saveConfigRow(
       this.props.spHttpClient,
       this.props.siteAbsoluteUrl,
       listTitle,
       next,
-      next.id === undefined || this.state.countEdited
+      next.id === undefined || this.state.countEdited,
+      false
     );
     await ensureTargetNumberColumn(
       this.props.spHttpClient,
@@ -377,16 +494,137 @@ export default class FlowSettingsPanel
       this.props.listGuid,
       next.numberColumnInternalName
     );
+    const running = this.state.numbering === 'Started';
     this.setState({
       saving: false,
       countEdited: false,
       draft: { ...next, id },
-      statusMessage: 'Saved. Create the Power Automate flow below. This page does not number items.'
+      statusMessage: announce
+        ? (running
+          ? 'Saved. The next item on this list is numbered within a minute.'
+          : 'Saved. Turn on site numbering to start writing numbers.')
+        : this.state.statusMessage
     });
+    return true;
+  }
+
+  private async _changeFlow(action: 'on' | 'off' | 'redeploy'): Promise<void> {
+    if (action !== 'off') {
+      const saved = await this._save(false);
+      if (!saved) {
+        return;
+      }
+    }
+    this.setState({ working: true, flowMessage: '', errorMessage: '' });
+    const context = this.state.environment
+      ? { environment: this.state.environment, connections: this.state.connections }
+      : await loadFlowContext(this.props.aadHttpClientFactory);
+    const connection = this.state.connectionName || (context.connections[0] ? context.connections[0].name : '');
+    if (action !== 'off' && !connection) {
+      this.setState({
+        working: false,
+        environment: context.environment,
+        connections: context.connections,
+        flowMessage: 'Add a SharePoint connection in Power Automate, then turn numbering on.'
+      });
+      return;
+    }
+    const listTitle = this._listTitle();
+    let flowId = this.state.flowId;
+    let numbering: FlowRunState = this.state.numbering;
+    if (action === 'off') {
+      if (flowId) {
+        await setRemoteFlowState(this.props.aadHttpClientFactory, context.environment, flowId, 'Stopped');
+      }
+      numbering = 'Stopped';
+    } else if (action === 'redeploy' && flowId) {
+      const remote = await redeployRemoteFlow(
+        this.props.aadHttpClientFactory,
+        context.environment,
+        flowId,
+        this.props.siteAbsoluteUrl,
+        listTitle,
+        connection
+      );
+      flowId = remote.id;
+      numbering = 'Started';
+    } else if (flowId && numbering === 'Stopped') {
+      await setRemoteFlowState(this.props.aadHttpClientFactory, context.environment, flowId, 'Started');
+      numbering = 'Started';
+    } else if (!flowId) {
+      const remote = await createRemoteFlow(
+        this.props.aadHttpClientFactory,
+        context.environment,
+        this.props.siteAbsoluteUrl,
+        listTitle,
+        connection
+      );
+      flowId = remote.id;
+      numbering = 'Started';
+    }
+    const siteId = await this._persistSite(flowId, context.environment.id, connection, numbering === 'Started' ? 'Started' : 'Stopped');
+    this.setState({
+      working: false,
+      consentRequired: false,
+      environment: context.environment,
+      connections: context.connections,
+      connectionName: connection,
+      flowId,
+      siteRowId: siteId,
+      numbering,
+      statusMessage: numbering === 'Started'
+        ? 'Numbering is on for every list on this site collection.'
+        : 'Numbering is off. Saved rules stay in place.'
+    });
+  }
+
+  private async _persistSite(flowId: string, environmentId: string, connectionName: string, state: string): Promise<number> {
+    const listTitle = this._listTitle();
+    const draft: IConfigDraft = {
+      ...siteFlowDraft(this.props.siteAbsoluteUrl, this.props.siteTitle),
+      id: this.state.siteRowId,
+      flowId,
+      flowEnvironment: environmentId,
+      flowConnection: connectionName,
+      flowState: state
+    };
+    return saveConfigRow(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, draft, false, true);
+  }
+
+  private _failFlow(error: unknown): void {
+    if (error instanceof FlowConsentError) {
+      this.setState({ working: false, saving: false, consentRequired: true, flowMessage: '' });
+      return;
+    }
+    if (error instanceof FlowStartError) {
+      this._persistSite(error.flowId, this.state.environment ? this.state.environment.id : '', this.state.connectionName, 'Stopped')
+        .then((siteId) => {
+          this.setState({
+            working: false,
+            saving: false,
+            flowId: error.flowId,
+            siteRowId: siteId,
+            numbering: 'Stopped',
+            flowMessage: error.message
+          });
+        })
+        .catch(() => {
+          this.setState({ working: false, saving: false, flowId: error.flowId, numbering: 'Stopped', flowMessage: error.message });
+        });
+      return;
+    }
+    this.setState({ working: false, saving: false, flowMessage: messageOf(error) });
+  }
+
+  private _listTitle(): string {
+    return this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
   }
 }
 
 function messageOf(error: unknown): string {
+  if (error instanceof FlowConsentError) {
+    return error.message;
+  }
   if (error instanceof Error) {
     return error.message;
   }

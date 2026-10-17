@@ -71,6 +71,31 @@ export const CONFIG_FIELD_DEFINITIONS: IConfigFieldDefinition[] = [
     internalName: 'PadLength',
     displayName: 'Pad length',
     schemaXml: '<Field Type="Number" Name="PadLength" StaticName="PadLength" DisplayName="Pad length" Decimals="0" Min="0" Max="12"><Default>4</Default></Field>'
+  },
+  {
+    internalName: 'ItemQuery',
+    displayName: 'Item query',
+    schemaXml: '<Field Type="Note" Name="ItemQuery" StaticName="ItemQuery" DisplayName="Item query" NumLines="4" RichText="FALSE" />'
+  },
+  {
+    internalName: 'FlowId',
+    displayName: 'Flow id',
+    schemaXml: '<Field Type="Text" Name="FlowId" StaticName="FlowId" DisplayName="Flow id" />'
+  },
+  {
+    internalName: 'FlowEnvironment',
+    displayName: 'Flow environment',
+    schemaXml: '<Field Type="Text" Name="FlowEnvironment" StaticName="FlowEnvironment" DisplayName="Flow environment" />'
+  },
+  {
+    internalName: 'FlowConnection',
+    displayName: 'Flow connection',
+    schemaXml: '<Field Type="Text" Name="FlowConnection" StaticName="FlowConnection" DisplayName="Flow connection" />'
+  },
+  {
+    internalName: 'FlowState',
+    displayName: 'Flow state',
+    schemaXml: '<Field Type="Text" Name="FlowState" StaticName="FlowState" DisplayName="Flow state" />'
   }
 ];
 

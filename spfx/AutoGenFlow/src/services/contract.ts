@@ -2,6 +2,8 @@ import { CONFIG_FIELD_DEFINITIONS } from './fields';
 
 export const DEFAULT_CONFIG_LIST_TITLE = 'AutoGenFlowConfiguration';
 
+export const SITE_FLOW_SENTINEL = 'site';
+
 export type ResetPeriod = 'None' | 'Day' | 'Month' | 'Year';
 
 export const RESET_PERIODS: ResetPeriod[] = ['None', 'Day', 'Month', 'Year'];
@@ -22,6 +24,11 @@ export interface IConfigDraft {
   padLength: number;
   currentCount: number;
   lastResetDate: string;
+  itemQuery: string;
+  flowId: string;
+  flowEnvironment: string;
+  flowConnection: string;
+  flowState: string;
 }
 
 export interface ISharePointConfigItem {
@@ -40,6 +47,11 @@ export interface ISharePointConfigItem {
   LastResetDate?: string;
   IsActive?: boolean | string | number;
   PadLength?: number | string;
+  ItemQuery?: string;
+  FlowId?: string;
+  FlowEnvironment?: string;
+  FlowConnection?: string;
+  FlowState?: string;
 }
 
 export interface IListLocation {
@@ -71,7 +83,12 @@ export function emptyDraft(): IConfigDraft {
     isActive: true,
     padLength: 4,
     currentCount: 0,
-    lastResetDate: ''
+    lastResetDate: '',
+    itemQuery: '',
+    flowId: '',
+    flowEnvironment: '',
+    flowConnection: '',
+    flowState: ''
   };
 }
 
@@ -137,7 +154,12 @@ export function mapConfigRow(item: ISharePointConfigItem): IConfigDraft {
     isActive: isActiveValue(item.IsActive),
     padLength: Number.isInteger(padLength) && padLength >= 0 ? padLength : 0,
     currentCount: wholeCount(item.CurrentCount),
-    lastResetDate: item.LastResetDate || ''
+    lastResetDate: item.LastResetDate || '',
+    itemQuery: item.ItemQuery || '',
+    flowId: item.FlowId || '',
+    flowEnvironment: item.FlowEnvironment || '',
+    flowConnection: item.FlowConnection || '',
+    flowState: item.FlowState || ''
   };
 }
 
@@ -154,6 +176,39 @@ export function buildUpdateBody(draft: IConfigDraft, writeCount: boolean): Recor
     body.CurrentCount = wholeCount(draft.currentCount);
   }
   return body;
+}
+
+export function buildSiteFlowBody(draft: IConfigDraft): Record<string, string | number | boolean> {
+  return {
+    ...sharedBody(draft),
+    CurrentCount: 0,
+    FlowId: draft.flowId.trim(),
+    FlowEnvironment: draft.flowEnvironment.trim(),
+    FlowConnection: draft.flowConnection.trim(),
+    FlowState: draft.flowState.trim()
+  };
+}
+
+export function findSiteFlow(rows: IConfigDraft[]): IConfigDraft | undefined {
+  for (let index = 0; index < rows.length; index += 1) {
+    if (rows[index].targetListGuid.trim().toLowerCase() === SITE_FLOW_SENTINEL) {
+      return rows[index];
+    }
+  }
+  return undefined;
+}
+
+export function siteFlowDraft(siteUrl: string, siteTitle: string): IConfigDraft {
+  return {
+    ...emptyDraft(),
+    title: 'Site numbering',
+    targetListTitle: siteTitle,
+    targetListUrl: siteUrl,
+    targetListGuid: SITE_FLOW_SENTINEL,
+    numberColumnInternalName: 'Site',
+    formula: '{counter}',
+    isActive: true
+  };
 }
 
 export const PERMISSION_EDIT_LIST_ITEMS = 4;
@@ -289,6 +344,7 @@ function sharedBody(draft: IConfigDraft): Record<string, string | number | boole
     FormulaColumns: draft.formulaColumns.trim(),
     CounterToken: draft.counterToken.trim(),
     CounterWidth: draft.counterWidth,
+    ItemQuery: draft.itemQuery.trim(),
     ResetPeriod: draft.resetPeriod,
     IsActive: draft.isActive,
     PadLength: draft.padLength

@@ -1,6 +1,7 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import {
   buildCreateBody,
+  buildSiteFlowBody,
   buildCreateFieldUrl,
   buildCreateItemUrl,
   buildCreateListBody,
@@ -174,7 +175,8 @@ export async function saveConfigRow(
   siteAbsoluteUrl: string,
   listTitle: string,
   draft: IConfigDraft,
-  writeCount: boolean
+  writeCount: boolean,
+  siteRow: boolean = false
 ): Promise<number> {
   const itemId = draft.id;
   const creating = itemId === undefined;
@@ -190,7 +192,7 @@ export async function saveConfigRow(
         'X-HTTP-Method': 'MERGE',
         'odata-version': ''
       },
-    body: JSON.stringify(creating ? buildCreateBody(draft) : buildUpdateBody(draft, writeCount))
+    body: JSON.stringify(rowBody(draft, writeCount, siteRow, creating))
   });
 
   if (!response.ok) {
@@ -304,6 +306,18 @@ async function addFieldToDefaultView(
   if (isExistingColumnError(text)) {
     return;
   }
+}
+
+function rowBody(
+  draft: IConfigDraft,
+  writeCount: boolean,
+  siteRow: boolean,
+  creating: boolean
+): Record<string, string | number | boolean> {
+  if (siteRow) {
+    return buildSiteFlowBody(draft);
+  }
+  return creating ? buildCreateBody(draft) : buildUpdateBody(draft, writeCount);
 }
 
 function readInternalNames(payload: { value?: { InternalName?: string }[]; d?: { results?: { InternalName?: string }[] } }): string[] {

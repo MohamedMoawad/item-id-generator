@@ -3,10 +3,16 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.0.0.0",
+    "version": "1.1.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
+    "webApiPermissionRequests": [
+      {
+        "resource": "Flow Service",
+        "scope": "User"
+      }
+    ],
     "developer": {
       "name": "Mohamed Moawad",
       "websiteUrl": "",
@@ -16,10 +22,10 @@
     },
     "metadata": {
       "shortDescription": {
-        "default": "Saves AutoGen rules in a master list. Power Automate writes the number."
+        "default": "Sequential numbers for every list. One switch covers the site collection."
       },
       "longDescription": {
-        "default": "Adds AutoGenFlowConfiguration and an AutoGen Flow command. The command saves the formula and counter. A Power Automate flow numbers each new item."
+        "default": "Open AutoGen on a list, choose the column and formula, and turn numbering on. One flow writes the next number for every list on the site collection."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -30,7 +36,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.0.0.0",
+        "version": "1.1.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

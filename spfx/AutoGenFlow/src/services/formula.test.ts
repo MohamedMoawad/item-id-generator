@@ -1,6 +1,7 @@
 import {
   applyFormula,
   columnTokensInFormula,
+  formulaInserts,
   padForFlow,
   padSequence,
   periodRolledOver,
@@ -53,5 +54,18 @@ describe('formula', () => {
       columns: { Title: 'Desk', 'Department.title': 'IT' }
     })).toMatchObject({ sequence: 1, code: 'REQ-202610-Desk-IT-0001' });
     expect(periodRolledOver('None', '2020-01-01T00:00:00Z', october)).toBe(false);
+  });
+
+  it('offers list columns and hides system fields', () => {
+    const names = formulaInserts([
+      { internalName: 'Title', title: 'Title', type: 'Text', token: '{Title}' },
+      { internalName: 'Created', title: 'Created', type: 'DateTime', token: '{Created}' },
+      { internalName: 'Author', title: 'Author', type: 'User', token: '{Author.title}' },
+      { internalName: 'ID', title: 'ID', type: 'Counter', token: '{ID}' },
+      { internalName: '_ComplianceFlags', title: 'Flags', type: 'Text', token: '{_ComplianceFlags}' },
+      { internalName: 'autogenflow', title: 'autogenflow', type: 'Text', token: '{autogenflow}' },
+      { internalName: 'ColorTag', title: 'Color', type: 'Text', token: '{ColorTag}' }
+    ], 'autogenflow').map((column) => column.internalName);
+    expect(names).toEqual(['Title', 'ColorTag']);
   });
 });

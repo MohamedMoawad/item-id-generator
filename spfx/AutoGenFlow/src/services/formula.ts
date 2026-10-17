@@ -252,6 +252,56 @@ export function textColumns(columns: IFormulaColumn[]): IFormulaColumn[] {
   return columns.filter((column) => column.type === 'Text');
 }
 
+const SYSTEM_FIELDS: { [name: string]: boolean } = {
+  id: true,
+  created: true,
+  modified: true,
+  author: true,
+  editor: true,
+  contenttype: true,
+  attachments: true,
+  complianceassetid: true,
+  fileleafref: true,
+  linkfilename: true,
+  linkfilenamenomenu: true,
+  guid: true
+};
+
+const INSERT_TYPES: { [type: string]: boolean } = {
+  Text: true,
+  Note: true,
+  Choice: true,
+  MultiChoice: true,
+  Number: true,
+  Currency: true,
+  Boolean: true,
+  Lookup: true,
+  LookupMulti: true,
+  User: true,
+  UserMulti: true
+};
+
+export function isSystemField(internalName: string): boolean {
+  const name = internalName.trim().toLowerCase();
+  if (!name || name.charAt(0) === '_') {
+    return true;
+  }
+  return SYSTEM_FIELDS[name] === true;
+}
+
+export function numberColumnChoices(columns: IFormulaColumn[]): IFormulaColumn[] {
+  return columns.filter((column) => column.type === 'Text' && !isSystemField(column.internalName));
+}
+
+export function formulaInserts(columns: IFormulaColumn[], numberField: string): IFormulaColumn[] {
+  const skip = numberField.trim().toLowerCase();
+  return columns.filter((column) => {
+    return INSERT_TYPES[column.type] === true
+      && !isSystemField(column.internalName)
+      && column.internalName.toLowerCase() !== skip;
+  });
+}
+
 function isReservedToken(token: string): boolean {
   return /^(counter|seq)(?::\d+)?$/i.test(token) || DATE_TOKENS[token] === true;
 }

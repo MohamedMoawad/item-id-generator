@@ -19,7 +19,7 @@ An item created while nobody has the list open stays blank until the next person
 | Path | Role |
 | --- | --- |
 | `spfx/ItemIdGenerator` | The SharePoint Framework app: settings dialog, config list, and numbering on the open list. |
-| `spfx/AutoGenFlow` | A separate app. It saves the rule in `AutoGenFlowConfiguration`. Power Automate writes the number. See [spfx/AutoGenFlow/README.md](spfx/AutoGenFlow/README.md). |
+| `spfx/AutoGenFlow` | Sequential numbers for every list. One site numbering flow writes the code. See [spfx/AutoGenFlow/README.md](spfx/AutoGenFlow/README.md). |
 | `spfx/RepeatingRows` | Repeating line items stored in a child list. See [spfx/RepeatingRows/README.md](spfx/RepeatingRows/README.md). |
 
 ## Versions
@@ -43,4 +43,4 @@ npm start
 
 ## AutoGen Flow
 
-[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app. AutoGen Feature still numbers from the open list. AutoGen Flow only saves the formula in `AutoGenFlowConfiguration`, and a Power Automate flow with concurrency 1 writes the number when an item is created. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. Use one app on a given list.
+[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app. Open any list, choose **AutoGen Flow**, and turn numbering on once for the site collection. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. On a list numbered by AutoGen Flow, clear **Active** on that list’s Autogen Feature rule.

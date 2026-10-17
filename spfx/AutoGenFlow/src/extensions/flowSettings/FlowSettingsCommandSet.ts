@@ -64,6 +64,8 @@ export default class FlowSettingsCommandSet
       listUrl: buildListAbsoluteUrl(this.context.pageContext.web.absoluteUrl, list.serverRelativeUrl),
       listGuid: list.id.toString(),
       spHttpClient: this.context.spHttpClient,
+      aadHttpClientFactory: this.context.aadHttpClientFactory,
+      siteTitle: this.context.pageContext.web.title,
       onDismiss: this._onDismiss
     });
     ReactDom.render(element, this._host);
