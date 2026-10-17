@@ -1,7 +1,4 @@
-import { normalizeGuid } from './contract';
-
-export function buildItemQuery(listGuid: string, numberColumn: string, formulaColumns: string): string {
-  const guid = normalizeGuid(listGuid);
+export function buildItemQuery(numberColumn: string, formulaColumns: string): string {
   const column = numberColumn.trim();
   const select = ['Id', 'Created', column];
   const expand: string[] = [];
@@ -27,7 +24,7 @@ export function buildItemQuery(listGuid: string, numberColumn: string, formulaCo
     }
     select.push(name);
   });
-  let query = `_api/web/lists(guid'${guid}')/items?$select=${unique(select).join(',')}&$filter=${column}+eq+null&$orderby=Id+asc&$top=100`;
+  let query = `$select=${unique(select).join(',')}`;
   if (expand.length > 0) {
     query += `&$expand=${expand.join(',')}`;
   }

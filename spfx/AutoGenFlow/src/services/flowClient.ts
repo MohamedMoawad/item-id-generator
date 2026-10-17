@@ -1,7 +1,6 @@
 import { AadHttpClient, AadHttpClientFactory } from '@microsoft/sp-http';
-import { buildCreateFlowPayload } from './siteFlow';
+import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
 import {
-  chooseEnvironment,
   FlowConsentError,
   FlowRunState,
   FlowStartError,
@@ -9,6 +8,7 @@ import {
   IFlowEnvironment,
   isConsentFailure,
   readConnections,
+  readEnvironments,
   readFlowState
 } from './flowModel';
 
@@ -16,6 +16,7 @@ const FLOW_RESOURCE = 'https://service.flow.microsoft.com/';
 const API_VERSION = '2016-11-01';
 
 export interface IFlowContext {
+  environments: IFlowEnvironment[];
   environment: IFlowEnvironment;
   connections: IFlowConnection[];
 }
@@ -41,25 +42,36 @@ class FlowRequestError extends Error {
   }
 }
 
-export async function loadFlowContext(factory: AadHttpClientFactory): Promise<IFlowContext> {
+export async function listEnvironments(factory: AadHttpClientFactory): Promise<IFlowEnvironment[]> {
   const client = await openClient(factory);
-  const environments = await sendJson<Parameters<typeof chooseEnvironment>[0]>(
+  const payload = await sendJson<Parameters<typeof readEnvironments>[0]>(
     client,
     'GET',
     `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments?api-version=${API_VERSION}`
   );
-  const environment = chooseEnvironment(environments);
-  if (!environment) {
-    throw new Error('Power Automate did not return an environment for this account.');
-  }
-  const connections = await sendJson<Parameters<typeof readConnections>[0]>(
+  return readEnvironments(payload);
+}
+
+export async function listConnections(factory: AadHttpClientFactory, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
+  const client = await openClient(factory);
+  const payload = await sendJson<Parameters<typeof readConnections>[0]>(
     client,
     'GET',
     `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/connections?api-version=${API_VERSION}`
   );
+  return readConnections(payload);
+}
+
+export async function loadFlowContext(factory: AadHttpClientFactory): Promise<IFlowContext> {
+  const environments = await listEnvironments(factory);
+  const environment = environments[0];
+  if (!environment) {
+    throw new Error('Power Automate did not return an environment for this account.');
+  }
   return {
+    environments,
     environment,
-    connections: readConnections(connections)
+    connections: await listConnections(factory, environment)
   };
 }
 
@@ -87,8 +99,7 @@ export async function readRemoteFlow(
 export async function createRemoteFlow(
   factory: AadHttpClientFactory,
   environment: IFlowEnvironment,
-  siteUrl: string,
-  listTitle: string,
+  target: IListFlowTarget,
   connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
@@ -96,21 +107,13 @@ export async function createRemoteFlow(
     client,
     'POST',
     `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}`,
-    buildCreateFlowPayload(siteUrl, listTitle, connectionName)
+    buildCreateFlowPayload(target, connectionName)
   );
   const id = created.name || '';
   if (!id) {
     throw new Error('Power Automate did not return the new numbering flow.');
   }
-  try {
-    await sendJson(client, 'POST', `${flowPath(environment, id)}/start?api-version=${API_VERSION}`);
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-    const message = error instanceof Error ? error.message : 'The numbering flow was created and did not start.';
-    throw new FlowStartError(id, message);
-  }
+  await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
   return { id, state: 'Started' };
 }
 
@@ -118,8 +121,7 @@ export async function redeployRemoteFlow(
   factory: AadHttpClientFactory,
   environment: IFlowEnvironment,
   flowId: string,
-  siteUrl: string,
-  listTitle: string,
+  target: IListFlowTarget,
   connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
@@ -127,9 +129,9 @@ export async function redeployRemoteFlow(
     client,
     'PATCH',
     flowUrl(environment, flowId),
-    buildCreateFlowPayload(siteUrl, listTitle, connectionName)
+    buildCreateFlowPayload(target, connectionName)
   );
-  await sendJson(client, 'POST', `${flowPath(environment, flowId)}/start?api-version=${API_VERSION}`);
+  await startFlow(client, environment, flowId, 'The numbering flow was updated and did not start.');
   return { id: flowId, state: 'Started' };
 }
 
@@ -142,6 +144,18 @@ export async function setRemoteFlowState(
   const client = await openClient(factory);
   const action = state === 'Started' ? 'start' : 'stop';
   await sendJson(client, 'POST', `${flowPath(environment, flowId)}/${action}?api-version=${API_VERSION}`);
+}
+
+async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string): Promise<void> {
+  try {
+    await sendJson(client, 'POST', `${flowPath(environment, flowId)}/start?api-version=${API_VERSION}`);
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : fallback;
+    throw new FlowStartError(flowId, message);
+  }
 }
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {

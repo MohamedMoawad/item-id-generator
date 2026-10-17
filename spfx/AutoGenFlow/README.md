@@ -1,26 +1,30 @@
 # AutoGen
 
-AutoGen gives every list on a site collection its own running number. Open a list, choose **AutoGen Flow**, set the column and the formula, and turn numbering on once. The same numbering service covers every other list on that site collection.
+AutoGen gives each list its own running number. Open a list, choose **AutoGen Flow**, set the column and the formula, then choose the Power Automate environment and the SharePoint connection. Turning numbering on creates a flow for that list only.
 
-Numbers are written within a minute, in the order the items were created. A person, a grid edit, and another flow all receive the next number. The counter moves only after the item is updated, and the service runs one pass at a time, so the sequence stays continuous.
+The flow reads that list’s row in `AutoGenFlowConfiguration` on the site collection and writes the next number when an item is created. A person, a grid edit, and another flow all receive the next number. The counter moves only after the item is updated, and the flow runs one item at a time, so the sequence stays continuous.
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.1.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.2.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
-2. In the SharePoint admin center, open **Advanced → API access** and approve **AutoGen Flow**. This approval is once for the tenant. It lets the app create the numbering flow.
+2. In the SharePoint admin center, open **Advanced → API access** and approve **AutoGen Flow**. This approval is once for the tenant. It lets the app create the flow.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
-4. Open any list or library. On the command bar choose **AutoGen Flow**.
+4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose the single-line text column and the formula. **Save**.
-6. Choose **Turn on numbering**. Pick the SharePoint connection when the account has more than one. That connection needs Contribute on the site collection.
+6. Choose the environment and the SharePoint connection, then **Turn on numbering**. The connection needs Contribute on this list and on the site collection.
 
-`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The site has one numbering flow, named **AutoGen ·** and the site name, in the default Power Automate environment.
+`AutoGenFlowConfiguration` appears in site contents. Each list has one row. Each list also has its own flow, named **AutoGen ·** and the list name, in the environment you chose.
+
+If an older site-wide flow named **AutoGen ·** and the site name is still turned on, turn it off in Power Automate. Otherwise that flow and the list flow both write numbers. Turning numbering on for a list also turns that older site flow off when this account can reach it.
 
 ## A list rule
 
 | Setting | Meaning |
 | --- | --- |
+| Environment | The Power Automate environment that hosts this list’s flow. |
+| SharePoint connection | The connection the flow uses. Change it, then choose **Redeploy**. |
 | Number column | The single line of text that receives the code. |
 | Formula | `{counter}` or `{counter:4}`, plus `{yyyy}` `{MM}` `{dd}` and columns such as `{Title}`. |
 | Digits | Used when the formula says `{counter}` without a width. |
@@ -30,13 +34,13 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 
 `REQ-{counter}` with 5 digits and a last number of 0 shows **REQ-00001**. A formula typed as `{counter:4}{counter}` is saved as `{counter:4}`, so the digit is written once.
 
-Date tokens use the item’s Created time in UTC. `{Department.title}` uses the lookup or person display text.
+Date tokens use the item’s Created time in UTC. `{Department.title}` uses the lookup or person display text. Changing the formula, the column, or the count is picked up on the next item. Choose **Redeploy** after an app upgrade, or after you change the environment or the connection.
 
-## What the numbering service does
+## What the list flow does
 
-Once a minute it reads the active rows in `AutoGenFlowConfiguration`, skips the site row, and for each list loads blank number columns in Id order. It assigns the next integer, writes the code, then stores the new count. Up to 100 blank items on a list are numbered in one pass. The rest continue on the next minute.
+When an item is created, the flow loads that list’s active row from `AutoGenFlowConfiguration` on the site collection. If the number column is still empty, it reserves the next integer, writes the code, and stores the new count. A failed write puts the count back. Runs wait in line, so two items created together keep a continuous sequence.
 
-Turn off stops the service and leaves the saved rules in place. Redeploy replaces the service after an app upgrade. Adding another list is only a new rule. The same service picks it up.
+Turn off stops this list’s flow and leaves the saved rule in place. Another list is another flow. Its admin chooses the environment and connection for that list.
 
 ## Local development
 

@@ -305,7 +305,7 @@ export function buildCreateListBody(listTitle: string): { BaseTemplate: number; 
   return {
     BaseTemplate: 100,
     Title: listTitle,
-    Description: 'AutoGen rules for Power Automate. The AutoGen Flow command writes one row per list. The flow reads the row and writes the number.',
+    Description: 'AutoGen rules for Power Automate. Each list has one row on this site collection. That list’s flow reads the row and writes the number.',
     Hidden: false
   };
 }

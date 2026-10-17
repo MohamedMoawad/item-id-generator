@@ -7,6 +7,7 @@ export interface IFlowEnvironment {
   id: string;
   endpoint: string;
   displayName: string;
+  isDefault: boolean;
 }
 
 export type FlowRunState = 'Started' | 'Stopped' | 'Missing';
@@ -48,18 +49,34 @@ interface IRawConnection {
   };
 }
 
+export function readEnvironments(payload: { value?: IRawEnvironment[] }): IFlowEnvironment[] {
+  const rows = (payload.value || [])
+    .map(toEnvironment)
+    .filter((row): row is IFlowEnvironment => row !== undefined);
+  rows.sort((left, right) => {
+    if (left.isDefault !== right.isDefault) {
+      return left.isDefault ? -1 : 1;
+    }
+    return left.displayName.localeCompare(right.displayName);
+  });
+  return rows;
+}
+
 export function chooseEnvironment(payload: { value?: IRawEnvironment[] }): IFlowEnvironment | undefined {
-  const rows = payload.value || [];
-  const preferred = rows.filter((row) => row.properties && row.properties.isDefault)[0] || rows[0];
-  if (!preferred || !preferred.name) {
+  return readEnvironments(payload)[0];
+}
+
+function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
+  if (!row.name) {
     return undefined;
   }
-  const endpoints = preferred.properties && preferred.properties.runtimeEndpoints;
+  const endpoints = row.properties && row.properties.runtimeEndpoints;
   const endpoint = endpoints && endpoints['microsoft.Flow'] ? endpoints['microsoft.Flow'] : 'https://api.flow.microsoft.com';
   return {
-    id: preferred.name,
+    id: row.name,
     endpoint: endpoint.replace(/\/+$/, ''),
-    displayName: (preferred.properties && preferred.properties.displayName) || 'Default'
+    displayName: (row.properties && row.properties.displayName) || 'Default',
+    isDefault: !!(row.properties && row.properties.isDefault)
   };
 }
 

@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.1.0.0",
+    "version": "1.2.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -22,10 +22,10 @@
     },
     "metadata": {
       "shortDescription": {
-        "default": "Sequential numbers for every list. One switch covers the site collection."
+        "default": "One flow per list. The admin chooses the environment and connection."
       },
       "longDescription": {
-        "default": "Open AutoGen on a list, choose the column and formula, and turn numbering on. One flow writes the next number for every list on the site collection."
+        "default": "Open AutoGen on a list, choose the column and formula, then pick the Power Automate environment and SharePoint connection. That list gets its own flow. The flow reads AutoGenFlowConfiguration on the site collection and writes the next number."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -36,7 +36,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.1.0.0",
+        "version": "1.2.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

@@ -1,4 +1,4 @@
-import { chooseEnvironment, isConsentFailure, readConnections, readFlowState } from './flowModel';
+import { chooseEnvironment, isConsentFailure, readConnections, readEnvironments, readFlowState } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -17,8 +17,22 @@ describe('flow model', () => {
     })).toEqual({
       id: 'Default-tenant',
       endpoint: 'https://unitedstates.api.flow.microsoft.com',
-      displayName: 'Default'
+      displayName: 'Default',
+      isDefault: true
     });
+    expect(readEnvironments({
+      value: [
+        { name: 'prd', properties: { isDefault: false, displayName: 'SharePoint (PRD)' } },
+        {
+          name: 'Default-tenant',
+          properties: {
+            isDefault: true,
+            displayName: 'Default',
+            runtimeEndpoints: { 'microsoft.Flow': 'https://unitedstates.api.flow.microsoft.com/' }
+          }
+        }
+      ]
+    }).map((item) => item.displayName)).toEqual(['Default', 'SharePoint (PRD)']);
     expect(readConnections({
       value: [
         { name: 'shared-sharepointonl-1', properties: { displayName: 'SharePoint', apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline', statuses: [{ status: 'Connected' }] } },

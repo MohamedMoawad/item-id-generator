@@ -170,6 +170,44 @@ export async function showConfigList(
   }
 }
 
+export interface IFlowBinding {
+  flowId: string;
+  flowEnvironment: string;
+  flowConnection: string;
+  flowState: string;
+}
+
+export async function saveFlowBinding(
+  spHttpClient: SPHttpClient,
+  siteAbsoluteUrl: string,
+  listTitle: string,
+  itemId: number,
+  binding: IFlowBinding
+): Promise<void> {
+  const response = await spHttpClient.post(
+    buildUpdateItemUrl(siteAbsoluteUrl, listTitle, itemId),
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        ...jsonHeaders,
+        'IF-MATCH': '*',
+        'X-HTTP-Method': 'MERGE',
+        'odata-version': ''
+      },
+      body: JSON.stringify({
+        FlowId: binding.flowId.trim(),
+        FlowEnvironment: binding.flowEnvironment.trim(),
+        FlowConnection: binding.flowConnection.trim(),
+        FlowState: binding.flowState.trim()
+      })
+    }
+  );
+  if (!response.ok) {
+    throw new ConfigListRequestError(sharePointError(response.status, await response.text(), listTitle), response.status);
+  }
+  await response.text();
+}
+
 export async function saveConfigRow(
   spHttpClient: SPHttpClient,
   siteAbsoluteUrl: string,
