@@ -1,4 +1,4 @@
 {
   "title": "AutoGen list numbering",
-  "note": "Saving an active AutoGen rule creates one flow per list. The trigger is When an item is created. The flow reads that list's row in AutoGenFlowConfiguration on the site collection. The app selects the default environment and the account's SharePoint connection. The definition is built by src/services/siteFlow.ts."
+  "note": "Saving an active AutoGen rule creates one flow per list. The trigger is When an item is created. The flow reads that list's row in AutoGenFlowConfiguration on the site collection. The app uses the environment and SharePoint connection the admin selects. API access is Microsoft Flow Service Flows.Read.All and Flows.Manage.All. The definition is built by src/services/siteFlow.ts."
 }

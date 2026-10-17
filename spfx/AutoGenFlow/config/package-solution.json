@@ -3,14 +3,18 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.4.0.0",
+    "version": "1.5.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
     "webApiPermissionRequests": [
       {
-        "resource": "Flow Service",
-        "scope": "User"
+        "resource": "Microsoft Flow Service",
+        "scope": "Flows.Read.All"
+      },
+      {
+        "resource": "Microsoft Flow Service",
+        "scope": "Flows.Manage.All"
       }
     ],
     "developer": {
@@ -25,7 +29,7 @@
         "default": "Add, edit, or delete a list rule. AutoGen creates the numbering flow."
       },
       "longDescription": {
-        "default": "Open AutoGen Flow on a list. Add a rule, choose the column and formula, and save. The app uses the default Power Automate environment and this account's SharePoint connection, then creates the flow. The flow reads AutoGenFlowConfiguration on the site collection."
+        "default": "Open AutoGen Flow on a list. Add a rule, choose the environment, connection user, column, and formula, and save. The app creates that list's flow. The flow reads AutoGenFlowConfiguration on the site collection. It uses the same Microsoft Flow Service permissions already granted to SharePoint."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -36,7 +40,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.4.0.0",
+        "version": "1.5.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",
