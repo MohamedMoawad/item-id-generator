@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, flowPortalUrl, isConsentFailure, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -85,6 +85,26 @@ describe('flow model', () => {
     expect(mine && mine.name).toBe('shared-sharepointonl-2');
     expect(first && first.name).toBe(connections[0].name);
     expect(flowPortalUrl('Default-tenant', 'flow-1')).toBe('https://make.powerautomate.com/environments/Default-tenant/flows/flow-1/details');
+    expect(readConnectionNamesFromFlows({
+      value: [{
+        properties: {
+          connectionReferences: {
+            shared_sharepointonline: {
+              connectionName: 'shared-sharepointonl-7',
+              id: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline'
+            },
+            shared_office365: { connectionName: 'shared-office365-1', id: '/providers/Microsoft.PowerApps/apis/shared_office365' }
+          }
+        }
+      }]
+    })).toEqual([{ name: 'shared-sharepointonl-7', displayName: 'shared-sharepointonl-7', accountName: '' }]);
+    expect(readConnectionNamesFromFlows({
+      properties: {
+        connectionReferences: {
+          shared_sharepointonline: { connection: { name: 'shared-sharepointonl-8' }, api: { name: 'shared_sharepointonline' } }
+        }
+      }
+    })[0].name).toBe('shared-sharepointonl-8');
     expect(readConnections({
       value: [{
         id: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections/shared-sharepointonl-9',

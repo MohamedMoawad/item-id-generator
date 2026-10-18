@@ -7,7 +7,9 @@ import {
   FlowStartError,
   IFlowConnection,
   IFlowEnvironment,
+  IRawListedFlow,
   isConsentFailure,
+  readConnectionNamesFromFlows,
   readConnections,
   readEnvironments,
   readFailedAction,
@@ -83,8 +85,56 @@ export async function listConnections(factory: AadHttpClientFactory, environment
   if (fallback.length > 0) {
     return fallback;
   }
+  const fromFlows = await connectionsFromExistingFlows(client, resolved);
+  if (fromFlows.length > 0) {
+    return fromFlows;
+  }
   if (consentOnFlowHost) {
     throw new FlowConsentError();
+  }
+  return [];
+}
+
+async function connectionsFromExistingFlows(client: AadHttpClient, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
+  const hosts = [environment.endpoint.replace(/\/+$/, ''), 'https://api.flow.microsoft.com'];
+  for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
+    const host = hosts[hostIndex];
+    if (hostIndex > 0 && host === hosts[0]) {
+      continue;
+    }
+    const listUrl = `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}&$top=50`;
+    try {
+      const listed = await sendJson<{ value?: IRawListedFlow[] }>(client, 'GET', listUrl);
+      const direct = readConnectionNamesFromFlows(listed);
+      if (direct.length > 0) {
+        return direct;
+      }
+      const ids = (listed.value || []).map((flow) => flow.name || '').filter((name) => name.length > 0).slice(0, 15);
+      const details = await Promise.all(ids.map((flowId) => {
+        const detailUrl = `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}?api-version=${API_VERSION}`;
+        return sendJson<Parameters<typeof readConnectionNamesFromFlows>[0]>(client, 'GET', detailUrl).catch(() => undefined);
+      }));
+      const collected: IFlowConnection[] = [];
+      const seen: { [name: string]: boolean } = {};
+      details.forEach((detail) => {
+        if (!detail) {
+          return;
+        }
+        readConnectionNamesFromFlows(detail).forEach((connection) => {
+          if (!seen[connection.name]) {
+            seen[connection.name] = true;
+            collected.push(connection);
+          }
+        });
+      });
+      if (collected.length > 0) {
+        return collected;
+      }
+    } catch (error) {
+      if (error instanceof FlowConsentError) {
+        throw error;
+      }
+    }
   }
   return [];
 }

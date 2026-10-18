@@ -6,7 +6,7 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.8.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.9.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those are the same two permissions an alert app already asks a Global Administrator to approve under **Advanced → API access**. If both rows are already under **Approved requests**, upload this package and leave that page alone.

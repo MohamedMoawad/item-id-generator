@@ -151,6 +151,58 @@ export function flowPortalUrl(environmentId: string, flowId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/flows/${flow}/details`;
 }
 
+export interface IRawListedFlow {
+  name?: string;
+  properties?: {
+    connectionReferences?: { [key: string]: IRawConnectionReference };
+  };
+}
+
+interface IRawConnectionReference {
+  connectionName?: string;
+  id?: string;
+  connection?: { name?: string };
+  api?: { name?: string };
+}
+
+export function readConnectionNamesFromFlows(payload: { value?: IRawListedFlow[]; properties?: IRawListedFlow['properties'] }): IFlowConnection[] {
+  const listed = payload.value || (payload.properties ? [payload] : []);
+  const found: IFlowConnection[] = [];
+  const seen: { [name: string]: boolean } = {};
+  listed.forEach((flow) => {
+    const references = flow.properties && flow.properties.connectionReferences;
+    if (!references) {
+      return;
+    }
+    Object.keys(references).forEach((key) => {
+      const reference = references[key];
+      const name = referenceConnectionName(reference);
+      if (!name || seen[name] || !isSharePointReference(key, reference)) {
+        return;
+      }
+      seen[name] = true;
+      found.push({ name, displayName: name, accountName: '' });
+    });
+  });
+  return found;
+}
+
+function referenceConnectionName(reference: IRawConnectionReference | undefined): string {
+  if (!reference) {
+    return '';
+  }
+  if (reference.connectionName) {
+    return reference.connectionName;
+  }
+  return reference.connection && reference.connection.name ? reference.connection.name : '';
+}
+
+function isSharePointReference(key: string, reference: IRawConnectionReference): boolean {
+  const api = reference.api && reference.api.name ? reference.api.name : '';
+  const text = `${key} ${reference.id || ''} ${api}`.toLowerCase();
+  return text.indexOf('sharepoint') >= 0;
+}
+
 function normalizeAccount(value: string): string {
   const trimmed = value.trim().toLowerCase();
   const parts = trimmed.split('|');
@@ -170,7 +222,8 @@ function isSharePointConnection(row: IRawConnection, sharePointScoped: boolean):
   const api = connectionApi(row);
   const name = connectionName(row).toLowerCase();
   const id = (row.id || '').toLowerCase();
-  const sharePoint = api.indexOf('sharepoint') >= 0 || name.indexOf('sharepoint') >= 0 || id.indexOf('sharepoint') >= 0;
+  const label = ((row.properties && row.properties.displayName) || '').toLowerCase();
+  const sharePoint = api.indexOf('sharepoint') >= 0 || name.indexOf('sharepoint') >= 0 || id.indexOf('sharepoint') >= 0 || label.indexOf('sharepoint') >= 0;
   if (sharePoint) {
     return true;
   }
