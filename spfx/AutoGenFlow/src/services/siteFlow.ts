@@ -21,7 +21,7 @@ export interface ICreateFlowPayload {
     displayName: string;
     definition: ISiteFlowDefinition;
     connectionReferences: {
-      shared_sharepointonline: {
+      shared_sharepointonline?: {
         connectionName: string;
         source: string;
         id: string;
@@ -39,18 +39,52 @@ export function flowDisplayName(listTitle: string): string {
 }
 
 export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: string): ICreateFlowPayload {
+  const connectionReferences: ICreateFlowPayload['properties']['connectionReferences'] = {};
+  if (connectionName.trim()) {
+    connectionReferences.shared_sharepointonline = {
+      connectionName,
+      source: 'Embedded',
+      id: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline',
+      tier: 'NotSpecified'
+    };
+  }
   return {
     properties: {
       displayName: flowDisplayName(target.listTitle),
       definition: buildSiteFlowDefinition(target),
-      connectionReferences: {
-        shared_sharepointonline: {
-          connectionName,
-          source: 'Embedded',
-          id: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline',
-          tier: 'NotSpecified'
+      connectionReferences,
+      state: 'Stopped',
+      flowFailureAlertSubscribed: false
+    }
+  };
+}
+
+export function buildShellFlowPayload(listTitle: string): ICreateFlowPayload {
+  return {
+    properties: {
+      displayName: flowDisplayName(listTitle),
+      definition: {
+        $schema: 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#',
+        contentVersion: '1.0.0.0',
+        parameters: {
+          $connections: { defaultValue: {}, type: 'Object' },
+          $authentication: { defaultValue: {}, type: 'SecureObject' }
+        },
+        triggers: {
+          Recurrence: {
+            type: 'Recurrence',
+            recurrence: { frequency: 'Day', interval: 1 }
+          }
+        },
+        actions: {
+          Compose: {
+            type: 'Compose',
+            inputs: 'AutoGen',
+            runAfter: {}
+          }
         }
       },
+      connectionReferences: {},
       state: 'Stopped',
       flowFailureAlertSubscribed: false
     }

@@ -1,4 +1,4 @@
-import { buildCreateFlowPayload, buildSiteFlowDefinition, flowDisplayName, IListFlowTarget } from './siteFlow';
+import { buildCreateFlowPayload, buildShellFlowPayload, buildSiteFlowDefinition, flowDisplayName, IListFlowTarget } from './siteFlow';
 
 const target: IListFlowTarget = {
   webUrl: 'https://contoso.sharepoint.com/sites/PortalTeam/subsite',
@@ -31,8 +31,16 @@ describe('list flow', () => {
 
   it('binds the SharePoint connection the person chose', () => {
     const payload = buildCreateFlowPayload(target, 'shared-sharepointonl-1');
-    expect(payload.properties.connectionReferences.shared_sharepointonline.connectionName).toBe('shared-sharepointonl-1');
+    const connection = payload.properties.connectionReferences.shared_sharepointonline;
+    expect(connection && connection.connectionName).toBe('shared-sharepointonl-1');
     expect(payload.properties.displayName).toBe('AutoGen · Requests');
     expect(payload.properties.state).toBe('Stopped');
+    const unbound = buildCreateFlowPayload(target, '');
+    expect(unbound.properties.connectionReferences.shared_sharepointonline).toBeUndefined();
+    const shell = JSON.stringify(buildShellFlowPayload('Requests'));
+    expect(shell).toContain('AutoGen · Requests');
+    expect(shell).toContain('"state":"Stopped"');
+    expect(shell).not.toContain('shared_sharepointonline');
+    expect(shell).not.toContain('GetOnUpdatedItems');
   });
 });

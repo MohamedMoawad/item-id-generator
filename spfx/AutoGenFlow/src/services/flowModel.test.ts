@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -116,6 +116,12 @@ describe('flow model', () => {
     expect(createUrls[1]).toBe('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
     expect(createUrls.join(' ')).not.toContain('scopes/admin');
     expect(createUrls.join(' ')).not.toContain('10.');
+    const fromGlobal = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01';
+    expect(publicFlowRedirect(fromGlobal, 'https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01'))
+      .toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01');
+    expect(publicFlowRedirect(fromGlobal, 'https://10.0.5.41:21497/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01')).toBe('');
+    expect(publicFlowRedirect('https://europe.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01', '/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01'))
+      .toBe('https://europe.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01');
     const located = chooseEnvironment({
       value: [{
         name: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',

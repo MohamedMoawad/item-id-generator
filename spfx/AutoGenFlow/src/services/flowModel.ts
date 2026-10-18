@@ -427,6 +427,26 @@ export function flowCreateUrl(host: string, environmentId: string): string {
   return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows?api-version=2016-11-01`;
 }
 
+export function publicFlowRedirect(fromUrl: string, locationHeader: string): string {
+  const raw = locationHeader.trim();
+  if (!raw) {
+    return '';
+  }
+  let absolute = raw;
+  if (raw.charAt(0) === '/') {
+    const origin = /^https:\/\/[^/]+/i.exec(fromUrl);
+    absolute = origin ? `${origin[0]}${raw}` : '';
+  }
+  if (!/^https:\/\//i.test(absolute)) {
+    return '';
+  }
+  const origin = /^https:\/\/[^/?#]+/i.exec(absolute);
+  if (!origin || !publicFlowHost(origin[0])) {
+    return '';
+  }
+  return absolute;
+}
+
 function addFlowHost(hosts: string[], value: string): void {
   const host = publicFlowHost(value);
   if (host && hosts.indexOf(host) === -1) {

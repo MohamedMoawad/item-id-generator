@@ -1,12 +1,12 @@
-import { AadHttpClient, AadHttpClientFactory } from '@microsoft/sp-http';
-import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
+import { AadHttpClient, AadHttpClientFactory, AadTokenProviderFactory } from '@microsoft/sp-http';
+import { buildCreateFlowPayload, buildShellFlowPayload, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
   flowApiHosts,
   flowCreateUrl,
-  flowGeoCandidates,
   flowHomeUrl,
+  publicFlowRedirect,
   FlowConsentError,
   FlowRunState,
   FlowStartError,
@@ -157,7 +157,8 @@ export async function syncListFlow(
   factory: AadHttpClientFactory,
   target: IListFlowTarget,
   current: ISyncedFlow,
-  active: boolean
+  active: boolean,
+  tokens?: AadTokenProviderFactory
 ): Promise<ISyncedFlow> {
   const environments = await listEnvironments(factory);
   const environment = environments.filter((item) => item.id === current.flowEnvironment)[0] || environments[0];
@@ -185,7 +186,7 @@ export async function syncListFlow(
     return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.', consentUrl: '' };
   }
   const ensured = await ensureSharePointConnection(factory, environment, current.flowConnection);
-  const names = ensured.connection ? [ensured.connection.name] : ['', newSharePointConnectionName()];
+  const names = ensured.connection ? [ensured.connection.name] : [''];
   let lastError = ensured.error;
   for (let index = 0; index < names.length; index += 1) {
     const connectionName = names[index];
@@ -204,10 +205,10 @@ export async function syncListFlow(
     }
     try {
       if (current.flowId && sameEnvironment) {
-        const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connectionName);
+        const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connectionName, tokens);
         return startedFlow(environment, remote.id, connectionName, ensured.consentUrl);
       }
-      const created = await createRemoteFlow(factory, environment, target, connectionName);
+      const created = await createRemoteFlow(factory, environment, target, connectionName, tokens);
       return startedFlow(environment, created.id, connectionName, ensured.consentUrl);
     } catch (error) {
       if (error instanceof FlowStartError) {
@@ -449,27 +450,25 @@ export async function createRemoteFlow(
   factory: AadHttpClientFactory,
   environment: IFlowEnvironment,
   target: IListFlowTarget,
-  connectionName: string
+  connectionName: string,
+  tokens?: AadTokenProviderFactory
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
-  const payload = buildCreateFlowPayload(target, connectionName);
-  const host = await resolveFlowHost(client, environment);
-  const globalUrl = flowCreateUrl('https://api.flow.microsoft.com', environment.id);
-  const urls = [globalUrl];
-  const regionalUrl = flowCreateUrl(host, environment.id);
-  if (regionalUrl !== globalUrl) {
-    urls.push(regionalUrl);
-  }
+  const token = await readFlowToken(tokens);
+  const hosts = flowApiHosts(environment);
+  const full = buildCreateFlowPayload(target, connectionName);
+  const shell = buildShellFlowPayload(target.listTitle);
   let lastError = '';
-  for (let index = 0; index < urls.length; index += 1) {
+  for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
+    const host = hosts[hostIndex];
+    const created = await createOnHost(client, token, environment, host, full, shell);
+    if (!created.id) {
+      lastError = preferFlowError(lastError, created.error);
+      continue;
+    }
     try {
-      const created = await sendJson<{ name?: string; properties?: { state?: string } }>(client, 'POST', urls[index], payload);
-      const id = created.name || '';
-      if (!id) {
-        throw new Error('Power Automate did not return the new numbering flow.');
-      }
-      await startFlow(client, environment, id, 'The numbering flow was created and did not start.', hostOf(urls[index]));
-      return { id, state: 'Started' };
+      await startFlow(client, environment, created.id, 'The numbering flow was created and did not start.', host, token);
+      return { id: created.id, state: 'Started' };
     } catch (error) {
       if (error instanceof FlowStartError) {
         throw error;
@@ -485,11 +484,14 @@ export async function redeployRemoteFlow(
   environment: IFlowEnvironment,
   flowId: string,
   target: IListFlowTarget,
-  connectionName: string
+  connectionName: string,
+  tokens?: AadTokenProviderFactory
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
+  const token = await readFlowToken(tokens);
+  const host = flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
   try {
-    await sendJson(client, 'POST', `${flowPath(environment, flowId)}/stop?api-version=${API_VERSION}`);
+    await sendJson(client, 'POST', `${flowPath(environment, flowId, host)}/stop?api-version=${API_VERSION}`, undefined, token);
   } catch (error) {
     if (error instanceof FlowConsentError) {
       throw error;
@@ -498,10 +500,11 @@ export async function redeployRemoteFlow(
   await sendJson(
     client,
     'PATCH',
-    flowUrl(environment, flowId),
-    buildCreateFlowPayload(target, connectionName)
+    flowUrlOn(environment, flowId, host),
+    buildCreateFlowPayload(target, connectionName),
+    token
   );
-  await startFlow(client, environment, flowId, 'The numbering flow was updated and did not start.');
+  await startFlow(client, environment, flowId, 'The numbering flow was updated and did not start.', host, token);
   return { id: flowId, state: 'Started' };
 }
 
@@ -562,13 +565,13 @@ export async function setRemoteFlowState(
   await sendJson(client, 'POST', `${flowPath(environment, flowId)}/${action}?api-version=${API_VERSION}`);
 }
 
-async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string, host?: string): Promise<void> {
+async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string, host?: string, token?: string): Promise<void> {
   const preferred = host || flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
   const hosts = [preferred].concat(flowApiHosts(environment).filter((item) => item !== preferred));
   let lastError = '';
   for (let index = 0; index < hosts.length; index += 1) {
     try {
-      await sendJson(client, 'POST', `${flowPath(environment, flowId, hosts[index])}/start?api-version=${API_VERSION}`);
+      await sendJson(client, 'POST', `${flowPath(environment, flowId, hosts[index])}/start?api-version=${API_VERSION}`, undefined, token);
       return;
     } catch (error) {
       if (error instanceof FlowConsentError) {
@@ -586,56 +589,110 @@ async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ p
 }
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {
-  try {
-    return await factory.getClient(FLOW_RESOURCE);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    if (needsFlowUserScope(message)) {
-      throw new Error(flowUserScopeMessage());
-    }
-    throw error;
-  }
+  return factory.getClient(FLOW_RESOURCE);
 }
 
-async function resolveFlowHost(client: AadHttpClient, environment: IFlowEnvironment): Promise<string> {
-  const hosts = flowGeoCandidates(environment);
-  if (hosts.length > 0 && await environmentLivesOn(client, environment.id, hosts[0])) {
-    return hosts[0];
+async function readFlowToken(tokens?: AadTokenProviderFactory): Promise<string> {
+  if (!tokens) {
+    return '';
   }
-  const answers = await Promise.all(hosts.slice(1).map(async (host) => {
-    const lives = await environmentLivesOn(client, environment.id, host);
-    return lives ? host : '';
-  }));
-  const found = answers.filter((host) => host.length > 0)[0];
-  return found || 'https://api.flow.microsoft.com';
-}
-
-async function environmentLivesOn(client: AadHttpClient, environmentId: string, host: string): Promise<boolean> {
   try {
-    const response = await client.fetch(
-      `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environmentId)}?api-version=${API_VERSION}`,
-      AadHttpClient.configurations.v1,
-      { method: 'GET', headers: { Accept: 'application/json' }, redirect: 'manual' }
-    );
-    if (!response.ok) {
-      return false;
-    }
-    if (response.url && !publicRegionalHost(response.url)) {
-      return false;
-    }
-    const text = await response.text();
-    return text.indexOf(environmentId) >= 0;
+    const provider = await tokens.getTokenProvider();
+    return await provider.getToken(FLOW_RESOURCE);
   } catch {
-    return false;
+    return '';
   }
 }
 
-function publicRegionalHost(url: string): boolean {
-  const host = hostOf(url);
-  return host !== 'https://api.flow.microsoft.com' && /^https:\/\/[a-z0-9]+\.api\.flow\.microsoft\.com$/i.test(host);
+interface IFlowWriteResult {
+  id: string;
+  error: string;
 }
 
-async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object): Promise<T> {
+interface IFlowWriteResponse {
+  name?: string;
+  id?: string;
+}
+
+async function createOnHost(
+  client: AadHttpClient,
+  token: string,
+  environment: IFlowEnvironment,
+  host: string,
+  full: object,
+  shell: object
+): Promise<IFlowWriteResult> {
+  const collection = flowCreateUrl(host, environment.id);
+  const shellResult = await writeFlow(client, token, 'POST', collection, shell);
+  if (shellResult.id) {
+    const patched = await writeFlow(client, token, 'PATCH', flowUrlOn(environment, shellResult.id, host), full);
+    if (!patched.error) {
+      return { id: shellResult.id, error: '' };
+    }
+    await deleteFlowQuiet(client, token, environment, shellResult.id, host);
+    shellResult.error = preferFlowError(shellResult.error, patched.error);
+  }
+  const flowId = newFlowId();
+  const put = await writeFlow(client, token, 'PUT', flowUrlOn(environment, flowId, host), full);
+  if (!put.error) {
+    return { id: put.id || flowId, error: '' };
+  }
+  const posted = await writeFlow(client, token, 'POST', collection, full);
+  if (!posted.error && posted.id) {
+    return { id: posted.id, error: '' };
+  }
+  return {
+    id: '',
+    error: preferFlowError(preferFlowError(shellResult.error, put.error), posted.error)
+  };
+}
+
+async function writeFlow(client: AadHttpClient, token: string, method: string, url: string, body: object): Promise<IFlowWriteResult> {
+  try {
+    const payload = await sendJson<IFlowWriteResponse>(client, method, url, body, token);
+    return { id: createdFlowId(payload), error: '' };
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+    return { id: '', error: error instanceof Error ? error.message : '' };
+  }
+}
+
+async function deleteFlowQuiet(client: AadHttpClient, token: string, environment: IFlowEnvironment, flowId: string, host: string): Promise<void> {
+  try {
+    await sendJson(client, 'DELETE', flowUrlOn(environment, flowId, host), undefined, token);
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
+}
+
+function createdFlowId(payload: IFlowWriteResponse): string {
+  if (payload.name) {
+    return payload.name;
+  }
+  const match = /\/flows\/([^/?]+)/i.exec(payload.id || '');
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function newFlowId(): string {
+  const source = typeof crypto !== 'undefined' ? crypto : undefined;
+  if (source && typeof source.randomUUID === 'function') {
+    return source.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random % 4) + 8;
+    return value.toString(16);
+  });
+}
+
+async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object, token?: string): Promise<T> {
+  if (token) {
+    return sendWithToken<T>(token, method, url, body);
+  }
   const response = await client.fetch(url, AadHttpClient.configurations.v1, {
     method,
     headers: jsonHeaders,
@@ -644,8 +701,40 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${redactPrivateUrls(shorten(text, response.status))}`);
+    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
   }
+  return parseJson<T>(text);
+}
+
+async function sendWithToken<T>(token: string, method: string, url: string, body?: object, hop = 0): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: 'manual'
+  });
+  if (response.type === 'opaqueredirect' || response.status === 0) {
+    throw new FlowRequestError(0, `${hostOf(url)} redirected away from the public Flow service.`);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    const next = hop < 1 ? publicFlowRedirect(url, response.headers.get('Location') || '') : '';
+    if (next) {
+      return sendWithToken<T>(token, method, next, body, hop + 1);
+    }
+    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}.`);
+  }
+  const text = await response.text();
+  if (!response.ok) {
+    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
+  }
+  return parseJson<T>(text);
+}
+
+function parseJson<T>(text: string): T {
   if (!text.trim()) {
     return {} as T;
   }
@@ -680,32 +769,20 @@ function flowErrorRank(message: string): number {
 }
 
 function publicFlowError(environmentId: string, message: string): string {
-  if (needsFlowUserScope(message)) {
-    return flowUserScopeMessage();
-  }
-  const detail = redactPrivateUrls(message);
+  const detail = cleanFlowError(message);
   if (detail) {
     return detail;
   }
   return `The numbering flow was not created in ${flowHomeUrl(environmentId)}.`;
 }
 
-function needsFlowUserScope(message: string): boolean {
-  const text = message.toLowerCase();
-  return text.indexOf('does not have permission to perform post') >= 0
-    || text.indexOf('internal service address') >= 0
-    || text.indexOf('aadsts65001') >= 0
-    || text.indexOf('aadsts65002') >= 0
-    || text.indexOf('has not consented') >= 0
-    || text.indexOf('admin consent') >= 0;
-}
-
-function flowUserScopeMessage(): string {
-  return 'Approve Microsoft Flow Service, scope User, under Admin center, Advanced, API access. Flows.Read.All and Flows.Manage.All are already approved. Update the app on the site, then choose Manage flow again.';
-}
-
-function redactPrivateUrls(message: string): string {
-  return message.replace(/https:\/\/10\.[0-9.]+(?::[0-9]+)?[^'"\s]*/g, 'the internal service address');
+function cleanFlowError(message: string): string {
+  return message
+    .replace(/https:\/\/10\.[0-9.]+(?::[0-9]+)?[^'"\s]*/g, '')
+    .replace(/The caller does not have permission to perform [A-Za-z]+ on api '[^']*'\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+\./g, '.')
+    .trim();
 }
 
 function hostOf(url: string): string {
@@ -720,6 +797,10 @@ function flowPath(environment: IFlowEnvironment, flowId: string, host?: string):
 
 function flowUrl(environment: IFlowEnvironment, flowId: string): string {
   return `${flowPath(environment, flowId)}?api-version=${API_VERSION}`;
+}
+
+function flowUrlOn(environment: IFlowEnvironment, flowId: string, host: string): string {
+  return `${flowPath(environment, flowId, host)}?api-version=${API_VERSION}`;
 }
 
 function shorten(text: string, status: number): string {

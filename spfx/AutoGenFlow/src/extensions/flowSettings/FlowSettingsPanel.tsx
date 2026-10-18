@@ -15,7 +15,7 @@ import {
   SpinnerSize,
   TextField
 } from '@fluentui/react';
-import { AadHttpClientFactory, SPHttpClient } from '@microsoft/sp-http';
+import { AadHttpClientFactory, AadTokenProviderFactory, SPHttpClient } from '@microsoft/sp-http';
 import {
   DEFAULT_CONFIG_LIST_TITLE,
   draftForCurrentList,
@@ -54,6 +54,7 @@ export interface IFlowSettingsPanelProps {
   listGuid: string;
   spHttpClient: SPHttpClient;
   aadHttpClientFactory: AadHttpClientFactory;
+  aadTokenProviderFactory: AadTokenProviderFactory;
   userEmail: string;
   onDismiss: () => void;
 }
@@ -134,7 +135,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.20',
+          title: 'AutoGen Flow 1.21',
           showCloseButton: true
         }}
         modalProps={{
@@ -360,7 +361,7 @@ export default class FlowSettingsPanel
         flowState: draft.flowState,
         note: '',
         consentUrl: ''
-      }, true);
+      }, true, this.props.aadTokenProviderFactory);
       await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id, {
         flowId: synced.flowId,
         flowEnvironment: synced.flowEnvironment,
@@ -756,7 +757,7 @@ export default class FlowSettingsPanel
         flowState: saved.flowState,
         note: '',
         consentUrl: ''
-      }, saved.isActive);
+      }, saved.isActive, this.props.aadTokenProviderFactory);
       await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, id, {
         flowId: synced.flowId,
         flowEnvironment: synced.flowEnvironment,
