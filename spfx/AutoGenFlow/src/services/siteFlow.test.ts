@@ -1,4 +1,4 @@
-import { buildCreateFlowPayload, buildDataverseWorkflowBody, buildShellFlowPayload, buildSiteFlowDefinition, flowDisplayName, IListFlowTarget } from './siteFlow';
+import { buildCreateFlowPayload, buildDataverseWorkflowBody, buildPortalTemplate, buildShellFlowPayload, buildSiteFlowDefinition, flowDisplayName, IListFlowTarget } from './siteFlow';
 
 const target: IListFlowTarget = {
   webUrl: 'https://contoso.sharepoint.com/sites/PortalTeam/subsite',
@@ -49,5 +49,9 @@ describe('list flow', () => {
     expect(row.name).toBe('AutoGen · Requests');
     expect(JSON.stringify(clientdata.properties.definition)).toContain('GetOnUpdatedItems');
     expect(clientdata.properties.connectionReferences.shared_sharepointonline.connection.name).toBe('shared-sharepointonl-1');
+    const portal = JSON.parse(buildPortalTemplate(target, 'shared-sharepointonl-1')) as { displayName: string; properties: { definition: object; connectionReferences: { shared_sharepointonline: { connectionName: string } } } };
+    expect(portal.displayName).toBe('AutoGen · Requests');
+    expect(JSON.stringify(portal.properties.definition)).toContain('GetOnUpdatedItems');
+    expect(portal.properties.connectionReferences.shared_sharepointonline.connectionName).toBe('shared-sharepointonl-1');
   });
 });

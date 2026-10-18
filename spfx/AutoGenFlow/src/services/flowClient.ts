@@ -1,12 +1,12 @@
 import { AadHttpClient, AadHttpClientFactory, AadTokenProviderFactory } from '@microsoft/sp-http';
-import { buildCreateFlowPayload, buildDataverseWorkflowBody, buildShellFlowPayload, IListFlowTarget } from './siteFlow';
+import { createFlowThroughPortal } from './flowPortal';
+import { buildCreateFlowPayload, buildPortalTemplate, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
   flowApiHosts,
   flowCreateUrl,
   flowHomeUrl,
-  publicFlowRedirect,
   FlowConsentError,
   FlowRunState,
   FlowStartError,
@@ -44,14 +44,6 @@ export interface IRemoteFlow {
 const jsonHeaders: { [name: string]: string } = {
   Accept: 'application/json',
   'Content-Type': 'application/json'
-};
-
-const dataverseHeaders: { [name: string]: string } = {
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-  'OData-MaxVersion': '4.0',
-  'OData-Version': '4.0',
-  Prefer: 'return=representation'
 };
 
 class FlowRequestError extends Error {
@@ -440,19 +432,30 @@ export async function readRemoteFlow(
   flowId: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
-  try {
-    const payload = await sendJson<{ name?: string; properties?: { state?: string } }>(
-      client,
-      'GET',
-      flowUrl(environment, flowId)
-    );
-    return { id: payload.name || flowId, state: readFlowState(payload) };
-  } catch (error) {
-    if (error instanceof FlowRequestError && error.status === 404) {
-      return { id: '', state: 'Missing' };
+  const hosts = flowApiHosts(environment);
+  let missing = false;
+  for (let index = 0; index < hosts.length; index += 1) {
+    try {
+      const payload = await sendJson<{ name?: string; properties?: { state?: string } }>(
+        client,
+        'GET',
+        flowUrlOn(environment, flowId, hosts[index])
+      );
+      return { id: payload.name || flowId, state: readFlowState(payload) };
+    } catch (error) {
+      if (error instanceof FlowRequestError && error.status === 404) {
+        missing = true;
+        continue;
+      }
+      if (error instanceof FlowConsentError) {
+        throw error;
+      }
     }
-    throw error;
   }
+  if (missing) {
+    return { id: '', state: 'Missing' };
+  }
+  return { id: flowId, state: 'Missing' };
 }
 
 export async function createRemoteFlow(
@@ -463,32 +466,22 @@ export async function createRemoteFlow(
   tokens?: AadTokenProviderFactory
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
-  const token = await readFlowToken(tokens);
-  const located = await environmentForWrite(client, token, environment);
+  const located = await environmentForWrite(client, environment);
   const hosts = flowApiHosts(located);
-  const full = buildCreateFlowPayload(target, connectionName);
-  const shell = buildShellFlowPayload(target.listTitle);
+  const full = buildCreateFlowPayload(target, connectionName, 'Started');
   let lastError = '';
-  try {
-    const dataverse = await createDataverseFlow(factory, located, target, connectionName);
-    if (dataverse) {
-      return dataverse;
-    }
-  } catch (error) {
-    if (error instanceof FlowStartError) {
-      throw error;
-    }
-    lastError = error instanceof Error ? error.message : lastError;
-  }
   for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
     const host = hosts[hostIndex];
-    const created = await createOnHost(client, token, environment, host, full, shell);
+    const created = await postFlow(client, flowCreateUrl(host, located.id), full);
     if (!created.id) {
       lastError = preferFlowError(lastError, created.error);
       continue;
     }
+    if (created.state === 'Started') {
+      return { id: created.id, state: 'Started' };
+    }
     try {
-      await startFlow(client, environment, created.id, 'The numbering flow was created and did not start.', host, token);
+      await startFlow(client, located, created.id, 'The numbering flow was created and did not start.', host);
       return { id: created.id, state: 'Started' };
     } catch (error) {
       if (error instanceof FlowStartError) {
@@ -496,6 +489,9 @@ export async function createRemoteFlow(
       }
       lastError = preferFlowError(lastError, error instanceof Error ? error.message : lastError);
     }
+  }
+  if (portalFallback(lastError)) {
+    return createThroughPortal(factory, client, tokens, located, target, connectionName);
   }
   throw new Error(publicFlowError(environment.id, lastError));
 }
@@ -509,29 +505,44 @@ export async function redeployRemoteFlow(
   tokens?: AadTokenProviderFactory
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
-  const token = await readFlowToken(tokens);
-  const located = await environmentForWrite(client, token, environment);
-  const dataverse = await redeployDataverseFlow(factory, located, flowId, target, connectionName);
-  if (dataverse) {
-    return dataverse;
-  }
+  const located = await environmentForWrite(client, environment);
   const host = flowApiHosts(located)[0] || 'https://api.flow.microsoft.com';
   try {
-    await sendJson(client, 'POST', `${flowPath(environment, flowId, host)}/stop?api-version=${API_VERSION}`, undefined, token);
+    await sendJson(client, 'POST', `${flowPath(environment, flowId, host)}/stop?api-version=${API_VERSION}`);
   } catch (error) {
     if (error instanceof FlowConsentError) {
       throw error;
     }
   }
-  await sendJson(
-    client,
-    'PATCH',
-    flowUrlOn(environment, flowId, host),
-    buildCreateFlowPayload(target, connectionName),
-    token
-  );
-  await startFlow(client, environment, flowId, 'The numbering flow was updated and did not start.', host, token);
-  return { id: flowId, state: 'Started' };
+  try {
+    await sendJson(
+      client,
+      'PATCH',
+      flowUrlOn(environment, flowId, host),
+      buildCreateFlowPayload(target, connectionName, 'Started')
+    );
+    await startFlow(client, located, flowId, 'The numbering flow was updated and did not start.', host);
+    return { id: flowId, state: 'Started' };
+  } catch (error) {
+    if (error instanceof FlowConsentError || error instanceof FlowStartError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : '';
+    if (message.indexOf('HTTP 404') >= 0 || portalFallback(message)) {
+      const created = await createRemoteFlow(factory, located, target, connectionName, tokens);
+      if (created.id && created.id !== flowId) {
+        try {
+          await setRemoteFlowState(factory, located, flowId, 'Stopped');
+        } catch (stopError) {
+          if (stopError instanceof FlowConsentError) {
+            throw stopError;
+          }
+        }
+      }
+      return created;
+    }
+    throw error;
+  }
 }
 
 export async function readFlowProblem(
@@ -591,13 +602,13 @@ export async function setRemoteFlowState(
   await sendJson(client, 'POST', `${flowPath(environment, flowId)}/${action}?api-version=${API_VERSION}`);
 }
 
-async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string, host?: string, token?: string): Promise<void> {
+async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string, host?: string): Promise<void> {
   const preferred = host || flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
   const hosts = [preferred].concat(flowApiHosts(environment).filter((item) => item !== preferred));
   let lastError = '';
   for (let index = 0; index < hosts.length; index += 1) {
     try {
-      await sendJson(client, 'POST', `${flowPath(environment, flowId, hosts[index])}/start?api-version=${API_VERSION}`, undefined, token);
+      await sendJson(client, 'POST', `${flowPath(environment, flowId, hosts[index])}/start?api-version=${API_VERSION}`);
       return;
     } catch (error) {
       if (error instanceof FlowConsentError) {
@@ -618,14 +629,12 @@ async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient>
   return factory.getClient(FLOW_RESOURCE);
 }
 
-async function environmentForWrite(client: AadHttpClient, token: string, environment: IFlowEnvironment): Promise<IFlowEnvironment> {
+async function environmentForWrite(client: AadHttpClient, environment: IFlowEnvironment): Promise<IFlowEnvironment> {
   try {
     const detail = await sendJson<NonNullable<Parameters<typeof chooseEnvironment>[0]['value']>[number]>(
       client,
       'GET',
-      `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}?api-version=${API_VERSION}`,
-      undefined,
-      token
+      `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}?api-version=${API_VERSION}`
     );
     const refreshed = chooseEnvironment({ value: [detail] });
     if (refreshed && refreshed.id === environment.id && refreshed.location) {
@@ -651,161 +660,65 @@ async function readFlowToken(tokens?: AadTokenProviderFactory): Promise<string> 
   }
 }
 
-interface IFlowWriteResult {
-  id: string;
-  error: string;
-}
-
 interface IFlowWriteResponse {
   name?: string;
   id?: string;
+  properties?: { state?: string };
 }
 
-async function createDataverseFlow(
+async function postFlow(client: AadHttpClient, url: string, body: object): Promise<{ id: string; state: FlowRunState; error: string }> {
+  try {
+    const payload = await sendJson<IFlowWriteResponse>(client, 'POST', url, body);
+    return { id: createdFlowId(payload), state: readFlowState(payload), error: '' };
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+    return { id: '', state: 'Missing', error: error instanceof Error ? error.message : '' };
+  }
+}
+
+async function createThroughPortal(
   factory: AadHttpClientFactory,
+  client: AadHttpClient,
+  tokens: AadTokenProviderFactory | undefined,
   environment: IFlowEnvironment,
   target: IListFlowTarget,
   connectionName: string
-): Promise<IRemoteFlow | undefined> {
-  const client = await openDataverseClient(factory, environment.instanceUrl);
-  if (!client) {
-    return undefined;
+): Promise<IRemoteFlow> {
+  const token = await readFlowToken(tokens);
+  if (!token) {
+    throw new Error('Power Automate did not create the numbering flow.');
   }
-  const response = await client.fetch(`${environment.instanceUrl}/api/data/v9.2/workflows`, AadHttpClient.configurations.v1, {
-    method: 'POST',
-    headers: dataverseHeaders,
-    body: JSON.stringify(buildDataverseWorkflowBody(target, connectionName))
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new FlowRequestError(response.status, `${environment.instanceUrl} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
+  const id = await createFlowThroughPortal(token, environment.id, buildPortalTemplate(target, connectionName));
+  let state: FlowRunState = 'Started';
+  try {
+    const remote = await readRemoteFlow(factory, environment, id);
+    state = remote.state === 'Missing' ? 'Started' : remote.state;
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
   }
-  const body = text.trim() ? parseJson<{ workflowid?: string }>(text) : {};
-  const id = body.workflowid || workflowIdFromHeader(response.headers.get('OData-EntityId') || '');
-  if (!id) {
-    throw new Error('Dataverse did not return the new numbering flow.');
+  if (state === 'Started') {
+    return { id, state: 'Started' };
   }
-  await activateDataverseFlow(client, environment.instanceUrl, id);
+  try {
+    await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
   return { id, state: 'Started' };
 }
 
-async function redeployDataverseFlow(
-  factory: AadHttpClientFactory,
-  environment: IFlowEnvironment,
-  flowId: string,
-  target: IListFlowTarget,
-  connectionName: string
-): Promise<IRemoteFlow | undefined> {
-  const client = await openDataverseClient(factory, environment.instanceUrl);
-  if (!client) {
-    return undefined;
-  }
-  const row = buildDataverseWorkflowBody(target, connectionName);
-  const url = `${environment.instanceUrl}/api/data/v9.2/workflows(${flowId})`;
-  try {
-    await dataverseSend(client, 'PATCH', url, { statecode: 0 });
-    await dataverseSend(client, 'PATCH', url, { clientdata: row.clientdata, name: row.name });
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-    return undefined;
-  }
-  await activateDataverseFlow(client, environment.instanceUrl, flowId);
-  return { id: flowId, state: 'Started' };
-}
-
-async function openDataverseClient(factory: AadHttpClientFactory, orgUrl: string): Promise<AadHttpClient | undefined> {
-  if (!orgUrl) {
-    return undefined;
-  }
-  try {
-    return await factory.getClient(orgUrl);
-  } catch {
-    return undefined;
-  }
-}
-
-async function activateDataverseFlow(client: AadHttpClient, orgUrl: string, flowId: string): Promise<void> {
-  try {
-    await dataverseSend(client, 'PATCH', `${orgUrl}/api/data/v9.2/workflows(${flowId})`, { statecode: 1 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'The numbering flow was created and did not start.';
-    throw new FlowStartError(flowId, message);
-  }
-}
-
-async function dataverseSend(client: AadHttpClient, method: string, url: string, body: object): Promise<void> {
-  const response = await client.fetch(url, AadHttpClient.configurations.v1, {
-    method,
-    headers: dataverseHeaders,
-    body: JSON.stringify(body)
-  });
-  if (response.ok) {
-    return;
-  }
-  const text = await response.text();
-  throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
-}
-
-function workflowIdFromHeader(value: string): string {
-  const match = /workflows\(([0-9a-f-]{36})\)/i.exec(value);
-  return match ? match[1] : '';
-}
-
-async function createOnHost(
-  client: AadHttpClient,
-  token: string,
-  environment: IFlowEnvironment,
-  host: string,
-  full: object,
-  shell: object
-): Promise<IFlowWriteResult> {
-  const collection = flowCreateUrl(host, environment.id);
-  const shellResult = await writeFlow(client, token, 'POST', collection, shell);
-  if (shellResult.id) {
-    const patched = await writeFlow(client, token, 'PATCH', flowUrlOn(environment, shellResult.id, host), full);
-    if (!patched.error) {
-      return { id: shellResult.id, error: '' };
-    }
-    await deleteFlowQuiet(client, token, environment, shellResult.id, host);
-    shellResult.error = preferFlowError(shellResult.error, patched.error);
-  }
-  const flowId = newFlowId();
-  const put = await writeFlow(client, token, 'PUT', flowUrlOn(environment, flowId, host), full);
-  if (!put.error) {
-    return { id: put.id || flowId, error: '' };
-  }
-  const posted = await writeFlow(client, token, 'POST', collection, full);
-  if (!posted.error && posted.id) {
-    return { id: posted.id, error: '' };
-  }
-  return {
-    id: '',
-    error: preferFlowError(preferFlowError(shellResult.error, put.error), posted.error)
-  };
-}
-
-async function writeFlow(client: AadHttpClient, token: string, method: string, url: string, body: object): Promise<IFlowWriteResult> {
-  try {
-    const payload = await sendJson<IFlowWriteResponse>(client, method, url, body, token);
-    return { id: createdFlowId(payload), error: '' };
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-    return { id: '', error: error instanceof Error ? error.message : '' };
-  }
-}
-
-async function deleteFlowQuiet(client: AadHttpClient, token: string, environment: IFlowEnvironment, flowId: string, host: string): Promise<void> {
-  try {
-    await sendJson(client, 'DELETE', flowUrlOn(environment, flowId, host), undefined, token);
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-  }
+function portalFallback(message: string): boolean {
+  return message.indexOf('HTTP 401') >= 0
+    || message.indexOf('HTTP 403') >= 0
+    || message.indexOf('Failed to fetch') >= 0
+    || message.indexOf('NetworkError') >= 0
+    || message.indexOf('redirected') >= 0;
 }
 
 function createdFlowId(payload: IFlowWriteResponse): string {
@@ -816,22 +729,8 @@ function createdFlowId(payload: IFlowWriteResponse): string {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
-function newFlowId(): string {
-  const source = typeof crypto !== 'undefined' ? crypto : undefined;
-  if (source && typeof source.randomUUID === 'function') {
-    return source.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? random : (random % 4) + 8;
-    return value.toString(16);
-  });
-}
 
-async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object, token?: string): Promise<T> {
-  if (token) {
-    return sendWithToken<T>(token, method, url, body);
-  }
+async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object): Promise<T> {
   const response = await client.fetch(url, AadHttpClient.configurations.v1, {
     method,
     headers: jsonHeaders,
@@ -845,33 +744,6 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   return parseJson<T>(text);
 }
 
-async function sendWithToken<T>(token: string, method: string, url: string, body?: object, hop = 0): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    redirect: 'manual'
-  });
-  if (response.type === 'opaqueredirect' || response.status === 0) {
-    throw new FlowRequestError(0, `${hostOf(url)} redirected away from the public Flow service.`);
-  }
-  if (response.status >= 300 && response.status < 400) {
-    const next = hop < 1 ? publicFlowRedirect(url, response.headers.get('Location') || '') : '';
-    if (next) {
-      return sendWithToken<T>(token, method, next, body, hop + 1);
-    }
-    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}.`);
-  }
-  const text = await response.text();
-  if (!response.ok) {
-    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
-  }
-  return parseJson<T>(text);
-}
 
 function parseJson<T>(text: string): T {
   if (!text.trim()) {

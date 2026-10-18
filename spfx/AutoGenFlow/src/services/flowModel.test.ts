@@ -115,7 +115,8 @@ describe('flow model', () => {
       location: 'unitedarabemirates',
       endpoint: 'https://api.flow.microsoft.com'
     });
-    expect(createUrls).toEqual(['https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01']);
+    expect(createUrls[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
+    expect(createUrls[1]).toContain('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?');
     expect(createUrls.join(' ')).not.toContain('europe.api');
     expect(createUrls.join(' ')).not.toContain('scopes/admin');
     expect(createUrls.join(' ')).not.toContain('10.');
@@ -180,8 +181,10 @@ describe('flow model', () => {
       }]
     });
     expect(europeLabel && europeLabel.location).toBe('europe');
-    expect(europeLabel && flowCreateUrls(europeLabel)[0]).toContain('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
+    expect(europeLabel && flowCreateUrls(europeLabel)[0]).toContain('https://emea.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
+    expect(europeLabel && flowCreateUrls(europeLabel)[1]).toContain('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
     expect(europeLabel && flowCreateUrls(europeLabel).join(' ')).not.toContain('europe.api');
+    expect(europeLabel && flowCreateUrls(europeLabel).join(' ')).not.toContain('unitedarabemirates');
     expect(qatar && flowGeoCandidates(qatar)[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');

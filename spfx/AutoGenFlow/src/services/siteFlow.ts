@@ -28,7 +28,7 @@ export interface ICreateFlowPayload {
         tier: string;
       };
     };
-    state: 'Stopped';
+    state: 'Started' | 'Stopped';
     flowFailureAlertSubscribed: boolean;
   };
 }
@@ -38,7 +38,7 @@ export function flowDisplayName(listTitle: string): string {
   return `AutoGen · ${leaf}`.slice(0, 80);
 }
 
-export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: string): ICreateFlowPayload {
+export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: string, state: 'Started' | 'Stopped' = 'Stopped'): ICreateFlowPayload {
   const connectionReferences: ICreateFlowPayload['properties']['connectionReferences'] = {};
   if (connectionName.trim()) {
     connectionReferences.shared_sharepointonline = {
@@ -53,10 +53,23 @@ export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: 
       displayName: flowDisplayName(target.listTitle),
       definition: buildSiteFlowDefinition(target),
       connectionReferences,
-      state: 'Stopped',
+      state,
       flowFailureAlertSubscribed: false
     }
   };
+}
+
+export function buildPortalTemplate(target: IListFlowTarget, connectionName: string): string {
+  const flow = buildCreateFlowPayload(target, connectionName, 'Started');
+  return JSON.stringify({
+    displayName: flow.properties.displayName,
+    description: 'AutoGen numbering flow for this list.',
+    properties: {
+      definition: flow.properties.definition,
+      connectionReferences: flow.properties.connectionReferences,
+      flowFailureAlertSubscribed: false
+    }
+  });
 }
 
 export function buildDataverseWorkflowBody(target: IListFlowTarget, connectionName: string): {

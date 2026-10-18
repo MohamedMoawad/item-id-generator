@@ -6,10 +6,10 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.24.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.25.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
-2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**, and creates the flow through **Dynamics CRM** / **user_impersonation**. Approve that Dynamics CRM row under **API access** if it is new, then update the app on the site.
+2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those two permissions are already enough. Update the app on the site after the catalog deploy.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
