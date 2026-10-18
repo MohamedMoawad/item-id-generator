@@ -43,7 +43,9 @@ interface IRawEnvironment {
     location?: string;
     region?: string;
     azureRegion?: string;
+    azureRegionHint?: string;
     runtimeEndpoints?: { [name: string]: string };
+    linkedEnvironmentMetadata?: { instanceUrl?: string };
   };
 }
 
@@ -92,18 +94,141 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
     powerAppsEndpoint: publicServiceUrl(powerAppsRuntime, 'https://api.powerapps.com', '.powerapps.com'),
     displayName: (row.properties && row.properties.displayName) || 'Default',
     isDefault: !!(row.properties && row.properties.isDefault),
-    location: environmentLocation(row)
+    location: canonicalFlowGeo(row)
   };
 }
 
-function environmentLocation(row: IRawEnvironment): string {
+const FLOW_GEOS = [
+  'unitedstates', 'europe', 'asia', 'australia', 'india', 'japan', 'canada', 'unitedkingdom',
+  'france', 'unitedarabemirates', 'germany', 'switzerland', 'norway', 'korea', 'southafrica',
+  'sweden', 'singapore', 'poland', 'italy', 'israel', 'spain', 'mexico', 'southamerica', 'qatar'
+];
+
+const REGION_GEOS: { [name: string]: string } = {
+  uaenorth: 'unitedarabemirates',
+  uaecentral: 'unitedarabemirates',
+  qatarcentral: 'unitedarabemirates',
+  westeurope: 'europe',
+  northeurope: 'europe',
+  francecentral: 'france',
+  francesouth: 'france',
+  germanywestcentral: 'germany',
+  germanynorth: 'germany',
+  norwayeast: 'norway',
+  norwaywest: 'norway',
+  uksouth: 'unitedkingdom',
+  ukwest: 'unitedkingdom',
+  switzerlandnorth: 'switzerland',
+  switzerlandwest: 'switzerland',
+  swedencentral: 'sweden',
+  southafricanorth: 'southafrica',
+  southafricawest: 'southafrica',
+  westus: 'unitedstates',
+  westus2: 'unitedstates',
+  westus3: 'unitedstates',
+  eastus: 'unitedstates',
+  eastus2: 'unitedstates',
+  centralus: 'unitedstates',
+  northcentralus: 'unitedstates',
+  southcentralus: 'unitedstates',
+  westcentralus: 'unitedstates',
+  canadaeast: 'canada',
+  canadacentral: 'canada',
+  brazilsouth: 'southamerica',
+  australiaeast: 'australia',
+  australiasoutheast: 'australia',
+  australiacentral: 'australia',
+  eastasia: 'asia',
+  southeastasia: 'asia',
+  japaneast: 'japan',
+  japanwest: 'japan',
+  centralindia: 'india',
+  southindia: 'india',
+  westindia: 'india',
+  koreacentral: 'korea',
+  koreasouth: 'korea',
+  polandcentral: 'poland',
+  italynorth: 'italy',
+  israelcentral: 'israel',
+  spaincentral: 'spain',
+  mexicocentral: 'mexico'
+};
+
+function canonicalFlowGeo(row: IRawEnvironment): string {
   const properties = row.properties;
-  const raw = row.location
-    || (properties && properties.location)
-    || (properties && properties.region)
-    || (properties && properties.azureRegion)
-    || '';
-  return raw.trim().toLowerCase().replace(/[^a-z]/g, '');
+  const hints = [
+    row.location || '',
+    (properties && properties.location) || '',
+    (properties && properties.azureRegionHint) || '',
+    (properties && properties.azureRegion) || '',
+    (properties && properties.region) || '',
+    (properties && properties.linkedEnvironmentMetadata && properties.linkedEnvironmentMetadata.instanceUrl) || ''
+  ];
+  for (let index = 0; index < hints.length; index += 1) {
+    const geo = geoFromHint(hints[index]) || geoFromInstance(hints[index]);
+    if (geo) {
+      return geo;
+    }
+  }
+  const endpoints = properties && properties.runtimeEndpoints;
+  if (!endpoints) {
+    return '';
+  }
+  const keys = Object.keys(endpoints);
+  for (let index = 0; index < keys.length; index += 1) {
+    const geo = geoFromFlowHost(publicFlowHost(endpoints[keys[index]]));
+    if (geo) {
+      return geo;
+    }
+  }
+  return '';
+}
+
+export function geoFromHint(value: string): string {
+  const key = value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!key) {
+    return '';
+  }
+  if (FLOW_GEOS.indexOf(key) >= 0) {
+    return key;
+  }
+  return REGION_GEOS[key] || '';
+}
+
+function geoFromInstance(value: string): string {
+  const match = /crm(\d*)\.dynamics\.com/i.exec(value);
+  if (!match) {
+    return '';
+  }
+  const geos: { [name: string]: string } = {
+    '': 'unitedstates',
+    '2': 'southamerica',
+    '3': 'canada',
+    '4': 'europe',
+    '5': 'asia',
+    '6': 'australia',
+    '7': 'japan',
+    '8': 'india',
+    '11': 'unitedkingdom',
+    '12': 'france',
+    '14': 'southafrica',
+    '15': 'unitedarabemirates',
+    '16': 'germany',
+    '17': 'switzerland',
+    '19': 'norway',
+    '20': 'singapore',
+    '21': 'korea',
+    '22': 'sweden'
+  };
+  return geos[match[1]] || '';
+}
+
+function geoFromFlowHost(host: string): string {
+  const match = /^https:\/\/([a-z0-9]+)\.api\.flow\.microsoft\.com$/i.exec(host);
+  if (!match || match[1] === 'api') {
+    return '';
+  }
+  return geoFromHint(match[1]);
 }
 
 function publicServiceUrl(value: string | undefined, fallback: string, suffix: string): string {
@@ -282,13 +407,24 @@ export function flowHomeUrl(environmentId: string): string {
 
 export function flowApiHosts(environment: { location?: string; endpoint?: string }): string[] {
   const hosts: string[] = [];
-  const location = (environment.location || '').trim().toLowerCase();
-  if (/^[a-z]{2,32}$/.test(location)) {
-    addFlowHost(hosts, `https://${location}.api.flow.microsoft.com`);
+  const geo = geoFromHint(environment.location || '');
+  if (geo) {
+    addFlowHost(hosts, `https://${geo}.api.flow.microsoft.com`);
   }
   addFlowHost(hosts, environment.endpoint || '');
   addFlowHost(hosts, 'https://api.flow.microsoft.com');
   return hosts;
+}
+
+export function flowGeoCandidates(environment: { location?: string; endpoint?: string }): string[] {
+  const hosts = flowApiHosts(environment).filter((host) => host !== 'https://api.flow.microsoft.com');
+  FLOW_GEOS.forEach((geo) => addFlowHost(hosts, `https://${geo}.api.flow.microsoft.com`));
+  return hosts;
+}
+
+export function flowCreateUrl(host: string, environmentId: string): string {
+  const id = encodeURIComponent(environmentId.trim());
+  return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows?api-version=2016-11-01`;
 }
 
 function addFlowHost(hosts: string[], value: string): void {
@@ -312,11 +448,7 @@ function publicFlowHost(value: string): string {
 }
 
 export function flowCreateUrls(environment: { id: string; location?: string; endpoint?: string }): string[] {
-  const id = encodeURIComponent(environment.id.trim());
-  const version = 'api-version=2016-11-01';
-  return flowApiHosts(environment).map((host) => {
-    return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows?${version}`;
-  });
+  return flowApiHosts(environment).map((host) => flowCreateUrl(host, environment.id));
 }
 
 export interface IRawListedFlow {

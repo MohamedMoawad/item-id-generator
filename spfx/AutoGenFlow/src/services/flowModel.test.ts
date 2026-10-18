@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowHomeUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -20,7 +20,7 @@ describe('flow model', () => {
       displayName: 'Default',
       isDefault: true,
       powerAppsEndpoint: 'https://api.powerapps.com',
-      location: ''
+      location: 'unitedstates'
     });
     const environment = chooseEnvironment({
       value: [{
@@ -131,6 +131,22 @@ describe('flow model', () => {
     expect(locatedUrls[0]).toContain('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
     expect(locatedUrls.join(' ')).not.toContain('scopes/admin');
     expect(locatedUrls.join(' ')).not.toContain('10.');
+    const qatar = chooseEnvironment({
+      value: [{
+        name: '2ab1148e-14ab-e29a-acaf-fc1efecf9050',
+        properties: {
+          isDefault: false,
+          displayName: 'Qatargas',
+          azureRegionHint: 'uaenorth',
+          runtimeEndpoints: { 'microsoft.Flow': 'https://10.0.5.41:21497' },
+          linkedEnvironmentMetadata: { instanceUrl: 'https://org.crm15.dynamics.com' }
+        }
+      }]
+    });
+    expect(qatar && qatar.location).toBe('unitedarabemirates');
+    expect(qatar && flowGeoCandidates(qatar)[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com');
+    expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
+    expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');
     expect(flowHomeUrl('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da')).toBe('https://make.powerautomate.com/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/home');
     expect(readConnectionNamesFromFlows({
       value: [{

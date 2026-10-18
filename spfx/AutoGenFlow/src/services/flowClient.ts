@@ -4,7 +4,8 @@ import {
   connectionListUrls,
   connectionPortalUrl,
   flowApiHosts,
-  flowCreateUrls,
+  flowCreateUrl,
+  flowGeoCandidates,
   flowHomeUrl,
   FlowConsentError,
   FlowRunState,
@@ -452,7 +453,12 @@ export async function createRemoteFlow(
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const payload = buildCreateFlowPayload(target, connectionName);
-  const urls = flowCreateUrls(environment);
+  const host = await resolveFlowHost(client, environment);
+  const urls = [flowCreateUrl(host, environment.id)];
+  const globalUrl = flowCreateUrl('https://api.flow.microsoft.com', environment.id);
+  if (urls[0] !== globalUrl) {
+    urls.push(globalUrl);
+  }
   let lastError = '';
   for (let index = 0; index < urls.length; index += 1) {
     try {
@@ -582,6 +588,44 @@ async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient>
   return factory.getClient(FLOW_RESOURCE);
 }
 
+async function resolveFlowHost(client: AadHttpClient, environment: IFlowEnvironment): Promise<string> {
+  const hosts = flowGeoCandidates(environment);
+  if (hosts.length > 0 && await environmentLivesOn(client, environment.id, hosts[0])) {
+    return hosts[0];
+  }
+  const answers = await Promise.all(hosts.slice(1).map(async (host) => {
+    const lives = await environmentLivesOn(client, environment.id, host);
+    return lives ? host : '';
+  }));
+  const found = answers.filter((host) => host.length > 0)[0];
+  return found || 'https://api.flow.microsoft.com';
+}
+
+async function environmentLivesOn(client: AadHttpClient, environmentId: string, host: string): Promise<boolean> {
+  try {
+    const response = await client.fetch(
+      `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environmentId)}?api-version=${API_VERSION}`,
+      AadHttpClient.configurations.v1,
+      { method: 'GET', headers: { Accept: 'application/json' }, redirect: 'manual' }
+    );
+    if (!response.ok) {
+      return false;
+    }
+    if (response.url && !publicRegionalHost(response.url)) {
+      return false;
+    }
+    const text = await response.text();
+    return text.indexOf(environmentId) >= 0;
+  } catch {
+    return false;
+  }
+}
+
+function publicRegionalHost(url: string): boolean {
+  const host = hostOf(url);
+  return host !== 'https://api.flow.microsoft.com' && /^https:\/\/[a-z0-9]+\.api\.flow\.microsoft\.com$/i.test(host);
+}
+
 async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object): Promise<T> {
   const response = await client.fetch(url, AadHttpClient.configurations.v1, {
     method,
@@ -591,7 +635,7 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new FlowRequestError(response.status, shorten(text, response.status));
+    throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${redactPrivateUrls(shorten(text, response.status))}`);
   }
   if (!text.trim()) {
     return {} as T;
@@ -627,10 +671,15 @@ function flowErrorRank(message: string): number {
 }
 
 function publicFlowError(environmentId: string, message: string): string {
-  if (message.indexOf('10.') >= 0 || message.indexOf('does not have permission to perform POST') >= 0 || message.indexOf('No HTTP resource was found') >= 0) {
-    return `Power Automate did not accept the numbering flow for this environment. Open ${flowHomeUrl(environmentId)} and confirm this account can create flows, then choose Manage flow again.`;
+  const detail = redactPrivateUrls(message);
+  if (detail) {
+    return detail;
   }
-  return message || 'The numbering flow was not created.';
+  return `The numbering flow was not created in ${flowHomeUrl(environmentId)}.`;
+}
+
+function redactPrivateUrls(message: string): string {
+  return message.replace(/https:\/\/10\.[0-9.]+(?::[0-9]+)?[^'"\s]*/g, 'the internal service address');
 }
 
 function hostOf(url: string): string {

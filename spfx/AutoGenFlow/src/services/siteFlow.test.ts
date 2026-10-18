@@ -33,5 +33,6 @@ describe('list flow', () => {
     const payload = buildCreateFlowPayload(target, 'shared-sharepointonl-1');
     expect(payload.properties.connectionReferences.shared_sharepointonline.connectionName).toBe('shared-sharepointonl-1');
     expect(payload.properties.displayName).toBe('AutoGen · Requests');
+    expect(payload.properties.state).toBe('Stopped');
   });
 });

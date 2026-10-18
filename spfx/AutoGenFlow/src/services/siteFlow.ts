@@ -28,6 +28,7 @@ export interface ICreateFlowPayload {
         tier: string;
       };
     };
+    state: 'Stopped';
     flowFailureAlertSubscribed: boolean;
   };
 }
@@ -50,6 +51,7 @@ export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: 
           tier: 'NotSpecified'
         }
       },
+      state: 'Stopped',
       flowFailureAlertSubscribed: false
     }
   };
