@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -111,6 +111,46 @@ describe('flow model', () => {
         properties: { displayName: 'SharePoint', environment: { id: 'Default-tenant' } }
       }]
     }, false, 'Default-tenant')[0].name).toBe('shared-sharepointonl-9');
+  });
+
+  it('creates a SharePoint connection from the flow host', () => {
+    const environment = {
+      id: 'Default-tenant',
+      endpoint: 'https://unitedstates.api.flow.microsoft.com',
+      powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
+      displayName: 'Default',
+      isDefault: true
+    };
+    const urls = sharePointConnectionCreateUrls(environment);
+    expect(urls[0]).toContain('https://api.flow.microsoft.com/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?');
+    expect(urls[0]).toContain('Default-tenant');
+    expect(sharePointConnectionPutUrl(environment, 'shared-sharepointonl-new')).toContain('/connections/shared-sharepointonl-new?');
+    expect(sharePointConnectionBody('Default-tenant').properties.environment.id).toBe('/providers/Microsoft.PowerApps/environments/Default-tenant');
+    expect(readCreatedConnection({
+      name: 'shared-sharepointonl-4',
+      properties: { displayName: 'SharePoint', accountName: 'me@contoso.com', statuses: [{ status: 'Connected' }] }
+    })).toEqual({
+      name: 'shared-sharepointonl-4',
+      displayName: 'me@contoso.com',
+      accountName: 'me@contoso.com',
+      consentUrl: '',
+      connected: true
+    });
+    expect(readCreatedConnection({
+      name: 'shared-sharepointonl-5',
+      properties: {
+        displayName: 'SharePoint',
+        statuses: [{ status: 'Unauthenticated' }],
+        consentInfo: { redirectUrl: 'https://login.microsoftonline.com/consent' }
+      }
+    })).toEqual({
+      name: 'shared-sharepointonl-5',
+      displayName: 'SharePoint',
+      accountName: '',
+      consentUrl: 'https://login.microsoftonline.com/consent',
+      connected: false
+    });
+    expect(connectionPortalUrl('Default-tenant')).toBe('https://make.powerautomate.com/environments/Default-tenant/connections');
   });
 
   it('reads the flow state and treats a missing approval as consent', () => {

@@ -75,6 +75,7 @@ interface IFlowSettingsPanelState {
   connectionName: string;
   connectionsLoading: boolean;
   flowHint: string;
+  consentUrl: string;
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
@@ -109,6 +110,7 @@ export default class FlowSettingsPanel
       connectionName: '',
       connectionsLoading: false,
       flowHint: '',
+      consentUrl: '',
       errorMessage: '',
       warningMessage: '',
       statusMessage: ''
@@ -161,6 +163,11 @@ export default class FlowSettingsPanel
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.warning}>{this.state.warningMessage}</MessageBar>
           </div>
+        )}
+        {this.state.consentUrl && (
+          <button type="button" className={styles.addLink} onClick={this._openConsent}>
+            Sign in to the SharePoint connection
+          </button>
         )}
         {this.state.statusMessage && (
           <div className={styles.status}>
@@ -238,7 +245,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Choose the environment. Saving an active rule creates the numbering flow for this list.
+          Choose the environment. Saving an active rule creates this account’s SharePoint connection, then creates the numbering flow for this list.
         </p>
         {this._flowPickers()}
         {!this.state.canEdit && (
@@ -341,6 +348,13 @@ export default class FlowSettingsPanel
       return;
     }
     window.open(flowPortalUrl(environmentId, draft.flowId), '_blank', 'noopener,noreferrer');
+  };
+
+  private _openConsent = (): void => {
+    if (!this.state.consentUrl) {
+      return;
+    }
+    window.open(this.state.consentUrl, '_blank', 'noopener,noreferrer');
   };
 
   private _flowPickers(): React.ReactElement {
@@ -523,7 +537,7 @@ export default class FlowSettingsPanel
           connectionsLoading: false,
           connections,
           connectionName: chosen ? chosen.name : '',
-          flowHint: chosen ? '' : 'This environment has no SharePoint connection for this account.'
+          flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates the numbering flow.'
         });
       })
       .catch((error: unknown) => {
@@ -649,7 +663,7 @@ export default class FlowSettingsPanel
       environmentId: environment.id,
       connections,
       connectionName: chosen ? chosen.name : '',
-      flowHint: chosen ? '' : 'This environment has no SharePoint connection for this account.'
+      flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates the numbering flow.'
     });
   }
 
@@ -673,7 +687,7 @@ export default class FlowSettingsPanel
       this.setState({ errorMessage: problem, statusMessage: '', warningMessage: '' });
       return;
     }
-    this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '' });
+    this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '', consentUrl: '' });
     const listTitle = this._listTitle();
     const id = await saveConfigRow(
       this.props.spHttpClient,
@@ -691,6 +705,7 @@ export default class FlowSettingsPanel
     );
     let saved: IConfigDraft = { ...next, id };
     let warningMessage = '';
+    let consentUrl = '';
     let statusMessage = saved.isActive
       ? 'Saved. Numbering is on. Add a new item and leave the number column empty. For an item that is already blank, open it and save it once.'
       : 'Saved the settings for this list. Numbering is turned off.';
@@ -700,7 +715,8 @@ export default class FlowSettingsPanel
         flowEnvironment: this.state.environmentId || saved.flowEnvironment,
         flowConnection: this.state.connectionName || saved.flowConnection,
         flowState: saved.flowState,
-        note: ''
+        note: '',
+        consentUrl: ''
       }, saved.isActive);
       await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, id, {
         flowId: synced.flowId,
@@ -716,6 +732,7 @@ export default class FlowSettingsPanel
         flowState: synced.flowState
       };
       warningMessage = synced.note;
+      consentUrl = synced.consentUrl;
       if (saved.isActive && synced.flowState !== 'Started') {
         statusMessage = 'Saved the rule for this list.';
       }
@@ -727,7 +744,7 @@ export default class FlowSettingsPanel
       warningMessage = messageOf(error);
       statusMessage = 'Saved the rule for this list.';
     }
-    this.setState({ saving: false, statusMessage, warningMessage, draft: saved });
+    this.setState({ saving: false, statusMessage, warningMessage, consentUrl, draft: saved });
     await this._load();
   }
 

@@ -53,6 +53,7 @@ interface IRawConnection {
     statuses?: Array<{ status?: string }>;
     environment?: string | { name?: string; id?: string };
     createdBy?: { displayName?: string; email?: string };
+    consentInfo?: { redirectUrl?: string; firstPartyLoginUri?: string; consentLink?: string };
   };
 }
 
@@ -112,6 +113,78 @@ function pushUrl(urls: string[], url: string): void {
   if (urls.indexOf(url) === -1) {
     urls.push(url);
   }
+}
+
+export function sharePointConnectionCreateUrls(environment: IFlowEnvironment): string[] {
+  const filter = encodeURIComponent(`environment eq '${environment.id.replace(/'/g, "''")}'`);
+  const path = `/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?api-version=${API_VERSION}&$filter=${filter}`;
+  const hosts = [
+    'https://api.flow.microsoft.com',
+    environment.endpoint.replace(/\/+$/, ''),
+    environment.powerAppsEndpoint.replace(/\/+$/, ''),
+    'https://api.powerapps.com'
+  ];
+  const urls: string[] = [];
+  hosts.forEach((host) => pushUrl(urls, `${host}${path}`));
+  return urls;
+}
+
+export function sharePointConnectionPutUrl(environment: IFlowEnvironment, connectionName: string): string {
+  return sharePointConnectionCreateUrls(environment)[0].replace(
+    '/connections?',
+    `/connections/${encodeURIComponent(connectionName)}?`
+  );
+}
+
+export function sharePointConnectionBody(environmentId: string): { properties: { displayName: string; apiId: string; connectionParameters: object; environment: { name: string; id: string } } } {
+  return {
+    properties: {
+      displayName: 'SharePoint',
+      apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline',
+      connectionParameters: {},
+      environment: {
+        name: environmentId,
+        id: `/providers/Microsoft.PowerApps/environments/${environmentId}`
+      }
+    }
+  };
+}
+
+export interface ICreatedConnection {
+  name: string;
+  displayName: string;
+  accountName: string;
+  consentUrl: string;
+  connected: boolean;
+}
+
+export function readCreatedConnection(payload: { value?: IRawConnection[]; name?: string; id?: string; properties?: IRawConnection['properties'] }): ICreatedConnection | undefined {
+  const row = payload.value && payload.value.length > 0 ? payload.value[0] : payload;
+  const name = connectionName(row);
+  if (!name || !isSharePointConnection(row, true)) {
+    return undefined;
+  }
+  const connected = connectionIsReady(row);
+  return {
+    name,
+    displayName: connectionUser(row),
+    accountName: connectionAccount(row),
+    consentUrl: connected ? '' : consentUrlOf(row),
+    connected
+  };
+}
+
+export function connectionPortalUrl(environmentId: string): string {
+  const environment = encodeURIComponent(environmentId.trim());
+  return `https://make.powerautomate.com/environments/${environment}/connections`;
+}
+
+function consentUrlOf(row: IRawConnection): string {
+  const info = row.properties && row.properties.consentInfo;
+  if (!info) {
+    return '';
+  }
+  return info.redirectUrl || info.firstPartyLoginUri || info.consentLink || '';
 }
 
 export function readConnections(payload: { value?: IRawConnection[] }, sharePointScoped = false, environmentId = ''): IFlowConnection[] {
