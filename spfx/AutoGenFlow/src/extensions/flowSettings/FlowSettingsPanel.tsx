@@ -38,7 +38,7 @@ import {
   showConfigList
 } from '../../services/configListClient';
 import { FlowConsentError, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { listConnections, listEnvironments, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
+import { listConnections, listEnvironments, readFlowProblem, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { IListFlowTarget } from '../../services/siteFlow';
@@ -115,7 +115,7 @@ export default class FlowSettingsPanel
   }
 
   public componentDidMount(): void {
-    this._load().catch((error: unknown) => {
+    this._load(true).catch((error: unknown) => {
       this.setState({ loading: false, errorMessage: messageOf(error) });
     });
   }
@@ -577,7 +577,7 @@ export default class FlowSettingsPanel
     this.setState({ draft: { ...this.state.draft, ...patch } });
   }
 
-  private async _load(): Promise<void> {
+  private async _load(reportRuns = false): Promise<void> {
     const listTitle = this._listTitle();
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     await showConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
@@ -604,6 +604,21 @@ export default class FlowSettingsPanel
       this._loadFlowChoices(draft.flowEnvironment, draft.flowConnection).catch((error: unknown) => {
         this.setState({ connectionsLoading: false, flowHint: messageOf(error) });
       });
+    }
+    if (reportRuns) {
+      this._loadFlowProblem(draft).catch((error: unknown) => {
+        this.setState({ warningMessage: messageOf(error) });
+      });
+    }
+  }
+
+  private async _loadFlowProblem(draft: IConfigDraft): Promise<void> {
+    if (!draft.flowId || draft.flowState !== 'Started') {
+      return;
+    }
+    const problem = await readFlowProblem(this.props.aadHttpClientFactory, draft.flowEnvironment, draft.flowId);
+    if (problem) {
+      this.setState({ warningMessage: problem });
     }
   }
 
@@ -674,7 +689,7 @@ export default class FlowSettingsPanel
     let saved: IConfigDraft = { ...next, id };
     let warningMessage = '';
     let statusMessage = saved.isActive
-      ? 'Saved. New items on this list receive the next number.'
+      ? 'Saved. Numbering is on. Add a new item and leave the number column empty. For an item that is already blank, open it and save it once.'
       : 'Saved the settings for this list. Numbering is turned off.';
     try {
       const synced = await syncListFlow(this.props.aadHttpClientFactory, this._target(), {

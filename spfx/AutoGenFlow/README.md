@@ -6,14 +6,14 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.5.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.6.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those are the same two permissions an alert app already asks a Global Administrator to approve under **Advanced → API access**. If both rows are already under **Approved requests**, upload this package and leave that page alone.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
-6. Choose **Environment** and **Connection user**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates the flow.
+6. Choose **Environment** and **Connection user**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates the flow. If this list already has a rule, open **AutoGen Flow** and save again so the flow is replaced.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**. The flow is named **AutoGen ·** and the list name, in the environment you chose. The SharePoint connection needs Contribute on this list and on the site collection.
 
@@ -46,7 +46,7 @@ Delete stops and removes that flow, then deletes the row.
 
 ## What the flow does
 
-When an item is created, the flow loads that list’s active row from `AutoGenFlowConfiguration`. If the number column is still empty, it reserves the next integer, writes the code, and stores the new count. A failed write puts the count back.
+When an item is created or saved, the flow loads that list’s row from `AutoGenFlowConfiguration`. If the number column is still empty, it reserves the next integer, writes the code, and stores the new count. A failed write puts the count back. An item that was created before the flow was saved stays blank until you open that item and save it.
 
 ## Local development
 

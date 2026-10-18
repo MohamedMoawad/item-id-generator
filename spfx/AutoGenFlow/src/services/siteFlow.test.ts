@@ -12,11 +12,15 @@ describe('list flow', () => {
   const text = JSON.stringify(buildSiteFlowDefinition(target));
 
   it('creates one flow for the list and reads the site collection rule', () => {
-    expect(text).toContain('GetOnNewItems');
+    expect(text).toContain('GetOnUpdatedItems');
     expect(text).toContain('"dataset":"https://contoso.sharepoint.com/sites/PortalTeam/subsite"');
     expect(text).toContain('"dataset":"https://contoso.sharepoint.com/sites/PortalTeam"');
     expect(text).toContain('"table":"aabbccdd-1111-2222-3333-444455556666"');
-    expect(text).toContain("TargetListGuid+eq+'aabbccdd-1111-2222-3333-444455556666'");
+    expect(text).toContain("TargetListGuid%20eq%20'aabbccdd-1111-2222-3333-444455556666'");
+    expect(text).toContain("body('Get_rule')?['d']?['results']");
+    expect(text).toContain('Column_name');
+    expect(text).toContain('No AutoGen rule was found for this list.');
+    expect(text).not.toContain('+eq+');
     expect(text).toContain('AutoGenFlowConfiguration');
     expect(text).toContain('ItemQuery');
     expect(text).toContain('"runs":1');

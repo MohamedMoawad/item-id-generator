@@ -10,7 +10,9 @@ import {
   isConsentFailure,
   readConnections,
   readEnvironments,
-  readFlowState
+  readFailedAction,
+  readFlowState,
+  readLatestRun
 } from './flowModel';
 
 const FLOW_RESOURCE = 'https://service.flow.microsoft.com/';
@@ -158,14 +160,6 @@ export async function syncListFlow(
     };
   }
   const sameEnvironment = current.flowEnvironment === environment.id;
-  const sameConnection = current.flowConnection === connection.name;
-  if (current.flowId && sameEnvironment && sameConnection && current.flowState === 'Started') {
-    return { flowId: current.flowId, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
-  }
-  if (current.flowId && sameEnvironment && sameConnection) {
-    await setRemoteFlowState(factory, environment, current.flowId, 'Started');
-    return { flowId: current.flowId, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
-  }
   if (current.flowId && sameEnvironment) {
     const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connection.name);
     return { flowId: remote.id, flowEnvironment: environment.id, flowConnection: connection.name, flowState: 'Started', note: '' };
@@ -278,6 +272,13 @@ export async function redeployRemoteFlow(
   connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
+  try {
+    await sendJson(client, 'POST', `${flowPath(environment, flowId)}/stop?api-version=${API_VERSION}`);
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
   await sendJson(
     client,
     'PATCH',
@@ -286,6 +287,52 @@ export async function redeployRemoteFlow(
   );
   await startFlow(client, environment, flowId, 'The numbering flow was updated and did not start.');
   return { id: flowId, state: 'Started' };
+}
+
+export async function readFlowProblem(
+  factory: AadHttpClientFactory,
+  environmentId: string,
+  flowId: string
+): Promise<string> {
+  if (!flowId || !environmentId) {
+    return '';
+  }
+  const environments = await listEnvironments(factory);
+  const environment = environments.filter((item) => item.id === environmentId)[0] || environments[0];
+  if (!environment) {
+    return '';
+  }
+  const client = await openClient(factory);
+  const runs = await sendJson<Parameters<typeof readLatestRun>[0]>(
+    client,
+    'GET',
+    `${flowPath(environment, flowId)}/runs?api-version=${API_VERSION}&$top=10`
+  );
+  const latest = readLatestRun(runs);
+  if (!latest) {
+    return 'The numbering flow has not run. Save the rule again, then add a new item and leave the number column empty. For an item that is already blank, open it and save it once.';
+  }
+  if (latest.status === 'Succeeded' || latest.status === 'Running' || latest.status === 'Waiting' || latest.status === 'Cancelled') {
+    return '';
+  }
+  let detail = latest.error;
+  try {
+    const actions = await sendJson<Parameters<typeof readFailedAction>[0]>(
+      client,
+      'GET',
+      `${flowPath(environment, flowId)}/runs/${encodeURIComponent(latest.name)}/actions?api-version=${API_VERSION}`
+    );
+    const failed = readFailedAction(actions);
+    if (failed) {
+      detail = failed;
+    }
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
+  const reason = detail || 'Open that flow in Power Automate and read the failed run.';
+  return `The numbering flow ran and did not write a number. ${reason} Save the rule again, then add a new item or open the blank item and save it.`;
 }
 
 export async function setRemoteFlowState(

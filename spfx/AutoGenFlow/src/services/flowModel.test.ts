@@ -1,4 +1,4 @@
-import { chooseEnvironment, connectionListUrls, isConsentFailure, readConnections, readEnvironments, readFlowState } from './flowModel';
+import { chooseEnvironment, connectionListUrls, isConsentFailure, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -73,5 +73,20 @@ describe('flow model', () => {
     expect(readFlowState({})).toBe('Missing');
     expect(isConsentFailure(401, '')).toBe(true);
     expect(isConsentFailure(400, 'The column is missing')).toBe(false);
+  });
+
+  it('reads the newest flow run and the failed action', () => {
+    expect(readLatestRun({
+      value: [
+        { name: 'older', properties: { status: 'Failed', startTime: '2026-01-01T00:00:00Z', error: { message: 'old' } } },
+        { name: 'newer', properties: { status: 'Succeeded', startTime: '2026-02-01T00:00:00Z' } }
+      ]
+    })).toEqual({ name: 'newer', status: 'Succeeded', error: '', startTime: '2026-02-01T00:00:00Z' });
+    expect(readFailedAction({
+      value: [
+        { name: 'Get_rule', properties: { status: 'Succeeded' } },
+        { name: 'Write_item', properties: { status: 'Failed', error: { message: 'The field was not found.' } } }
+      ]
+    })).toBe('Write item: The field was not found.');
   });
 });

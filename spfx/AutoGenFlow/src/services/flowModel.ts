@@ -169,6 +169,63 @@ function connectionUser(row: IRawConnection): string {
     || 'SharePoint';
 }
 
+export interface IFlowRunReport {
+  name: string;
+  status: string;
+  error: string;
+  startTime: string;
+}
+
+interface IRawRunRecord {
+  name?: string;
+  properties?: {
+    status?: string;
+    startTime?: string;
+    error?: { message?: string };
+  };
+}
+
+interface IRawFlowAction {
+  name?: string;
+  properties?: {
+    status?: string;
+    error?: { message?: string };
+  };
+}
+
+export function readLatestRun(payload: { value?: IRawRunRecord[] }): IFlowRunReport | undefined {
+  const runs = (payload.value || [])
+    .map(toRun)
+    .filter((run): run is IFlowRunReport => run !== undefined);
+  runs.sort((left, right) => right.startTime.localeCompare(left.startTime));
+  return runs[0];
+}
+
+export function readFailedAction(payload: { value?: IRawFlowAction[] }): string {
+  const failed = (payload.value || []).filter((action) => {
+    const status = action.properties && action.properties.status;
+    return status === 'Failed' || status === 'TimedOut';
+  })[0];
+  if (!failed) {
+    return '';
+  }
+  const message = failed.properties && failed.properties.error && failed.properties.error.message;
+  const name = (failed.name || 'Action').replace(/_/g, ' ');
+  return message ? `${name}: ${message}` : name;
+}
+
+function toRun(row: IRawRunRecord): IFlowRunReport | undefined {
+  if (!row.name || !row.properties || !row.properties.status) {
+    return undefined;
+  }
+  return {
+    name: row.name,
+    status: row.properties.status,
+    error: (row.properties.error && row.properties.error.message) || '',
+    startTime: row.properties.startTime || ''
+  };
+}
+
 export function readFlowState(payload: { name?: string; properties?: { state?: string } } | undefined): FlowRunState {
   const state = payload && payload.properties && payload.properties.state;
   if (state === 'Started' || state === 'Stopped') {
