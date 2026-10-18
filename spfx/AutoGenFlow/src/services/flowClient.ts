@@ -454,10 +454,11 @@ export async function createRemoteFlow(
   const client = await openClient(factory);
   const payload = buildCreateFlowPayload(target, connectionName);
   const host = await resolveFlowHost(client, environment);
-  const urls = [flowCreateUrl(host, environment.id)];
   const globalUrl = flowCreateUrl('https://api.flow.microsoft.com', environment.id);
-  if (urls[0] !== globalUrl) {
-    urls.push(globalUrl);
+  const urls = [globalUrl];
+  const regionalUrl = flowCreateUrl(host, environment.id);
+  if (regionalUrl !== globalUrl) {
+    urls.push(regionalUrl);
   }
   let lastError = '';
   for (let index = 0; index < urls.length; index += 1) {
@@ -585,7 +586,15 @@ async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ p
 }
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {
-  return factory.getClient(FLOW_RESOURCE);
+  try {
+    return await factory.getClient(FLOW_RESOURCE);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (needsFlowUserScope(message)) {
+      throw new Error(flowUserScopeMessage());
+    }
+    throw error;
+  }
 }
 
 async function resolveFlowHost(client: AadHttpClient, environment: IFlowEnvironment): Promise<string> {
@@ -671,11 +680,28 @@ function flowErrorRank(message: string): number {
 }
 
 function publicFlowError(environmentId: string, message: string): string {
+  if (needsFlowUserScope(message)) {
+    return flowUserScopeMessage();
+  }
   const detail = redactPrivateUrls(message);
   if (detail) {
     return detail;
   }
   return `The numbering flow was not created in ${flowHomeUrl(environmentId)}.`;
+}
+
+function needsFlowUserScope(message: string): boolean {
+  const text = message.toLowerCase();
+  return text.indexOf('does not have permission to perform post') >= 0
+    || text.indexOf('internal service address') >= 0
+    || text.indexOf('aadsts65001') >= 0
+    || text.indexOf('aadsts65002') >= 0
+    || text.indexOf('has not consented') >= 0
+    || text.indexOf('admin consent') >= 0;
+}
+
+function flowUserScopeMessage(): string {
+  return 'Approve Microsoft Flow Service, scope User, under Admin center, Advanced, API access. Flows.Read.All and Flows.Manage.All are already approved. Update the app on the site, then choose Manage flow again.';
 }
 
 function redactPrivateUrls(message: string): string {

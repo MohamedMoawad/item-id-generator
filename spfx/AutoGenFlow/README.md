@@ -6,15 +6,15 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.19.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.20.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
-2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those are the same two permissions an alert app already asks a Global Administrator to approve under **Advanced → API access**. If both rows are already under **Approved requests**, upload this package and leave that page alone.
+2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All**, **Flows.Manage.All**, and **User**. The first two may already be approved. **User** is the scope that lets this account create a flow. If **API access** shows a new **User** row, approve it, then update the app on the site.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
 6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates this account’s SharePoint connection in that environment, then creates one numbering flow for this list. If this list already has a rule, open **AutoGen Flow** and save again so the flow is replaced.
-7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates the numbering flow and opens it. The page shows the flow that runs when an item is created and the run history. The app uses the **Microsoft Flow Service** permissions **Flows.Read.All** and **Flows.Manage.All** that are already approved.
+7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates the numbering flow and opens it. The page shows the flow that runs when an item is created and the run history.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on this list and on the site collection.
 
