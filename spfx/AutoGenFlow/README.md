@@ -6,7 +6,7 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.10.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.11.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those are the same two permissions an alert app already asks a Global Administrator to approve under **Advanced → API access**. If both rows are already under **Approved requests**, upload this package and leave that page alone.
@@ -14,9 +14,9 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
 6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates the flow with this account’s SharePoint connection. If this list already has a rule, open **AutoGen Flow** and save again so the flow is replaced.
-7. On the saved rule, choose **Open flow in Power Automate**. That opens the flow named **AutoGen ·** and the list name.
+7. On the saved rule, open **Settings** and choose **Manage flow**. That opens the flow named **AutoGen ·** and the list name. The same page shows the flow that runs when an item is created and the run history.
 
-`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Open flow**, and **Delete**. The SharePoint connection needs Contribute on this list and on the site collection.
+`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on this list and on the site collection.
 
 If an older site-wide flow named **AutoGen ·** and the site name is still turned on, turn it off in Power Automate. Saving an active list rule also turns that older flow off when this account can reach it.
 

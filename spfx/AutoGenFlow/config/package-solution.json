@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.10.0.0",
+    "version": "1.11.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -29,7 +29,7 @@
         "default": "Add, edit, or delete a list rule. AutoGen creates the numbering flow."
       },
       "longDescription": {
-        "default": "Open AutoGen Flow on a list. Add a rule, choose the environment, column, and formula, and save. The app creates that list's flow with this account's SharePoint connection. Open flow in Power Automate from the same dialog."
+        "default": "Open AutoGen Flow on a list. Add a rule, choose the environment, column, and formula, and save. The app creates that list's flow with this account's SharePoint connection. Settings, Manage flow opens that flow and its run history."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -40,7 +40,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.10.0.0",
+        "version": "1.11.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

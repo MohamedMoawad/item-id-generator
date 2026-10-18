@@ -307,7 +307,7 @@ export default class FlowSettingsPanel
             />
           )}
           {draft.flowId && (
-            <DefaultButton text="Open flow" onClick={this._openFlow} disabled={this.state.saving} />
+            <DefaultButton text="Manage flow" onClick={this._openFlow} disabled={this.state.saving} />
           )}
           {draft.id !== undefined && (
             <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
@@ -324,7 +324,7 @@ export default class FlowSettingsPanel
     }
     return (
       <button type="button" className={styles.addLink} onClick={this._openFlow}>
-        Open flow in Power Automate
+        Manage flow
       </button>
     );
   }
@@ -333,6 +333,11 @@ export default class FlowSettingsPanel
     const draft = this.state.draft;
     const environmentId = (draft && draft.flowEnvironment) || this.state.environmentId;
     if (!draft || !draft.flowId || !environmentId) {
+      this.setState({
+        warningMessage: 'Save an active rule first. Manage flow opens after the numbering flow is created.',
+        errorMessage: '',
+        statusMessage: ''
+      });
       return;
     }
     window.open(flowPortalUrl(environmentId, draft.flowId), '_blank', 'noopener,noreferrer');
@@ -395,6 +400,13 @@ export default class FlowSettingsPanel
         iconProps: { iconName: 'View' },
         disabled: !this.state.draft || this.state.draft.id === undefined || this.state.saving,
         onClick: this._onView
+      },
+      {
+        key: 'manage',
+        text: 'Manage flow',
+        iconProps: { iconName: 'Flow' },
+        disabled: this.state.saving || !this.state.draft || this.state.draft.id === undefined,
+        onClick: this._openFlow
       }
     ];
   }
@@ -418,7 +430,7 @@ export default class FlowSettingsPanel
       },
       {
         key: 'open',
-        text: 'Open flow',
+        text: 'Manage flow',
         iconProps: { iconName: 'OpenInNewWindow' },
         disabled: this.state.saving || !this.state.draft || !this.state.draft.flowId,
         onClick: this._openFlow
