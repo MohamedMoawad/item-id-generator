@@ -134,7 +134,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.17',
+          title: 'AutoGen Flow 1.18',
           showCloseButton: true
         }}
         modalProps={{

@@ -3,6 +3,7 @@ import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
+  flowApiHosts,
   flowCreateUrls,
   flowHomeUrl,
   FlowConsentError,
@@ -76,7 +77,7 @@ export async function listConnections(factory: AadHttpClientFactory, environment
 }
 
 async function connectionsFromExistingFlows(client: AadHttpClient, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
-  const hosts = ['https://api.flow.microsoft.com'];
+  const hosts = flowApiHosts(environment);
   for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
     const host = hosts[hostIndex];
     const listUrl = `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}&$top=50`;
@@ -451,7 +452,7 @@ export async function createRemoteFlow(
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const payload = buildCreateFlowPayload(target, connectionName);
-  const urls = flowCreateUrls(environment.id);
+  const urls = flowCreateUrls(environment);
   let lastError = '';
   for (let index = 0; index < urls.length; index += 1) {
     try {
@@ -460,13 +461,13 @@ export async function createRemoteFlow(
       if (!id) {
         throw new Error('Power Automate did not return the new numbering flow.');
       }
-      await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
+      await startFlow(client, environment, id, 'The numbering flow was created and did not start.', hostOf(urls[index]));
       return { id, state: 'Started' };
     } catch (error) {
       if (error instanceof FlowStartError) {
         throw error;
       }
-      lastError = error instanceof Error ? error.message : lastError;
+      lastError = preferFlowError(lastError, error instanceof Error ? error.message : lastError);
     }
   }
   throw new Error(publicFlowError(environment.id, lastError));
@@ -554,16 +555,22 @@ export async function setRemoteFlowState(
   await sendJson(client, 'POST', `${flowPath(environment, flowId)}/${action}?api-version=${API_VERSION}`);
 }
 
-async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string): Promise<void> {
-  try {
-    await sendJson(client, 'POST', `${flowPath(environment, flowId)}/start?api-version=${API_VERSION}`);
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
+async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, flowId: string, fallback: string, host?: string): Promise<void> {
+  const preferred = host || flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
+  const hosts = [preferred].concat(flowApiHosts(environment).filter((item) => item !== preferred));
+  let lastError = '';
+  for (let index = 0; index < hosts.length; index += 1) {
+    try {
+      await sendJson(client, 'POST', `${flowPath(environment, flowId, hosts[index])}/start?api-version=${API_VERSION}`);
+      return;
+    } catch (error) {
+      if (error instanceof FlowConsentError) {
+        throw error;
+      }
+      lastError = preferFlowError(lastError, error instanceof Error ? error.message : '');
     }
-    const message = error instanceof Error ? error.message : fallback;
-    throw new FlowStartError(flowId, message);
   }
+  throw new FlowStartError(flowId, lastError || fallback);
 }
 
 async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ powerApps?: AadHttpClient; ordered: AadHttpClient[] }> {
@@ -596,15 +603,44 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   }
 }
 
+function preferFlowError(current: string, next: string): string {
+  if (!next) {
+    return current;
+  }
+  if (flowErrorRank(next) > flowErrorRank(current)) {
+    return next;
+  }
+  return current;
+}
+
+function flowErrorRank(message: string): number {
+  if (!message) {
+    return 0;
+  }
+  if (message.indexOf('No HTTP resource was found') >= 0) {
+    return 1;
+  }
+  if (message.indexOf('Failed to fetch') >= 0 || message.indexOf('NetworkError') >= 0) {
+    return 2;
+  }
+  return 3;
+}
+
 function publicFlowError(environmentId: string, message: string): string {
-  if (message.indexOf('10.') >= 0 || message.indexOf('does not have permission to perform POST') >= 0) {
-    return `Power Automate did not accept the flow on the private service address. Open ${flowHomeUrl(environmentId)} and confirm this account can create flows, then choose Manage flow again.`;
+  if (message.indexOf('10.') >= 0 || message.indexOf('does not have permission to perform POST') >= 0 || message.indexOf('No HTTP resource was found') >= 0) {
+    return `Power Automate did not accept the numbering flow for this environment. Open ${flowHomeUrl(environmentId)} and confirm this account can create flows, then choose Manage flow again.`;
   }
   return message || 'The numbering flow was not created.';
 }
 
-function flowPath(environment: IFlowEnvironment, flowId: string): string {
-  return `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
+function hostOf(url: string): string {
+  const match = /^https:\/\/[^/]+/i.exec(url);
+  return match ? match[0] : 'https://api.flow.microsoft.com';
+}
+
+function flowPath(environment: IFlowEnvironment, flowId: string, host?: string): string {
+  const root = host || flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
+  return `${root}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
 }
 
 function flowUrl(environment: IFlowEnvironment, flowId: string): string {

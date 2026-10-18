@@ -19,7 +19,8 @@ describe('flow model', () => {
       endpoint: 'https://unitedstates.api.flow.microsoft.com',
       displayName: 'Default',
       isDefault: true,
-      powerAppsEndpoint: 'https://api.powerapps.com'
+      powerAppsEndpoint: 'https://api.powerapps.com',
+      location: ''
     });
     const environment = chooseEnvironment({
       value: [{
@@ -41,7 +42,8 @@ describe('flow model', () => {
       endpoint: 'https://unitedstates.api.flow.microsoft.com',
       powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
       displayName: 'Default',
-      isDefault: true
+      isDefault: true,
+      location: 'unitedstates'
     });
     expect(regional.some((url) => url.indexOf('https://api.powerapps.com/providers/Microsoft.PowerApps/connections?') === 0)).toBe(true);
     expect(chooseEnvironment({
@@ -51,8 +53,8 @@ describe('flow model', () => {
           isDefault: true,
           displayName: 'Personal Productivity(Default)',
           runtimeEndpoints: {
-            'microsoft.Flow': 'https://10.0.5.6:23060',
-            'microsoft.PowerApps': 'https://10.0.5.6:23061'
+            'microsoft.Flow': 'https://10.0.5.41:21497',
+            'microsoft.PowerApps': 'https://10.0.5.41:21498'
           }
         }
       }]
@@ -61,7 +63,8 @@ describe('flow model', () => {
       endpoint: 'https://api.flow.microsoft.com',
       powerAppsEndpoint: 'https://api.powerapps.com',
       displayName: 'Personal Productivity(Default)',
-      isDefault: true
+      isDefault: true,
+      location: ''
     });
     expect(readEnvironments({
       value: [
@@ -104,10 +107,30 @@ describe('flow model', () => {
     expect(mine && mine.name).toBe('shared-sharepointonl-2');
     expect(first && first.name).toBe(connections[0].name);
     expect(flowPortalUrl('Default-tenant', 'flow-1')).toBe('https://make.powerautomate.com/environments/Default-tenant/flows/flow-1/details');
-    const createUrls = flowCreateUrls('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da');
-    expect(createUrls[0]).toBe('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?api-version=2016-11-01');
-    expect(createUrls[1]).toContain('/scopes/admin/environments/');
-    expect(createUrls.join(' ')).not.toContain('10.0.');
+    const createUrls = flowCreateUrls({
+      id: '2ab1148e-14ab-e29a-acaf-fc1efecf9050',
+      location: 'unitedarabemirates',
+      endpoint: 'https://api.flow.microsoft.com'
+    });
+    expect(createUrls[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
+    expect(createUrls[1]).toBe('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
+    expect(createUrls.join(' ')).not.toContain('scopes/admin');
+    expect(createUrls.join(' ')).not.toContain('10.');
+    const located = chooseEnvironment({
+      value: [{
+        name: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',
+        location: 'unitedarabemirates',
+        properties: {
+          isDefault: true,
+          displayName: 'Personal Productivity(Default)',
+          runtimeEndpoints: { 'microsoft.Flow': 'https://10.0.5.41:21497' }
+        }
+      }]
+    });
+    const locatedUrls = located ? flowCreateUrls(located) : [];
+    expect(locatedUrls[0]).toContain('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
+    expect(locatedUrls.join(' ')).not.toContain('scopes/admin');
+    expect(locatedUrls.join(' ')).not.toContain('10.');
     expect(flowHomeUrl('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da')).toBe('https://make.powerautomate.com/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/home');
     expect(readConnectionNamesFromFlows({
       value: [{
@@ -143,7 +166,8 @@ describe('flow model', () => {
       endpoint: 'https://unitedstates.api.flow.microsoft.com',
       powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
       displayName: 'Default',
-      isDefault: true
+      isDefault: true,
+      location: 'unitedstates'
     };
     const urls = sharePointConnectionCreateUrls(environment);
     expect(urls[0]).toContain('https://api.flow.microsoft.com/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?');

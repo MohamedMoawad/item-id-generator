@@ -10,6 +10,7 @@ export interface IFlowEnvironment {
   powerAppsEndpoint: string;
   displayName: string;
   isDefault: boolean;
+  location: string;
 }
 
 export type FlowRunState = 'Started' | 'Stopped' | 'Missing';
@@ -35,9 +36,13 @@ export class FlowConsentError extends Error {
 
 interface IRawEnvironment {
   name?: string;
+  location?: string;
   properties?: {
     displayName?: string;
     isDefault?: boolean;
+    location?: string;
+    region?: string;
+    azureRegion?: string;
     runtimeEndpoints?: { [name: string]: string };
   };
 }
@@ -86,8 +91,19 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
     endpoint: publicServiceUrl(flowRuntime, 'https://api.flow.microsoft.com', '.flow.microsoft.com'),
     powerAppsEndpoint: publicServiceUrl(powerAppsRuntime, 'https://api.powerapps.com', '.powerapps.com'),
     displayName: (row.properties && row.properties.displayName) || 'Default',
-    isDefault: !!(row.properties && row.properties.isDefault)
+    isDefault: !!(row.properties && row.properties.isDefault),
+    location: environmentLocation(row)
   };
+}
+
+function environmentLocation(row: IRawEnvironment): string {
+  const properties = row.properties;
+  const raw = row.location
+    || (properties && properties.location)
+    || (properties && properties.region)
+    || (properties && properties.azureRegion)
+    || '';
+  return raw.trim().toLowerCase().replace(/[^a-z]/g, '');
 }
 
 function publicServiceUrl(value: string | undefined, fallback: string, suffix: string): string {
@@ -264,14 +280,43 @@ export function flowHomeUrl(environmentId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/home`;
 }
 
-export function flowCreateUrls(environmentId: string): string[] {
-  const id = encodeURIComponent(environmentId.trim());
+export function flowApiHosts(environment: { location?: string; endpoint?: string }): string[] {
+  const hosts: string[] = [];
+  const location = (environment.location || '').trim().toLowerCase();
+  if (/^[a-z]{2,32}$/.test(location)) {
+    addFlowHost(hosts, `https://${location}.api.flow.microsoft.com`);
+  }
+  addFlowHost(hosts, environment.endpoint || '');
+  addFlowHost(hosts, 'https://api.flow.microsoft.com');
+  return hosts;
+}
+
+function addFlowHost(hosts: string[], value: string): void {
+  const host = publicFlowHost(value);
+  if (host && hosts.indexOf(host) === -1) {
+    hosts.push(host);
+  }
+}
+
+function publicFlowHost(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  const match = /^https:\/\/([^/:?#]+)$/i.exec(trimmed);
+  if (!match) {
+    return '';
+  }
+  const host = match[1].toLowerCase();
+  if (isPrivateHost(host) || (host !== 'api.flow.microsoft.com' && host.slice(-23) !== '.api.flow.microsoft.com')) {
+    return '';
+  }
+  return `https://${host}`;
+}
+
+export function flowCreateUrls(environment: { id: string; location?: string; endpoint?: string }): string[] {
+  const id = encodeURIComponent(environment.id.trim());
   const version = 'api-version=2016-11-01';
-  const root = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple';
-  return [
-    `${root}/environments/${id}/flows?${version}`,
-    `${root}/scopes/admin/environments/${id}/flows?${version}`
-  ];
+  return flowApiHosts(environment).map((host) => {
+    return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows?${version}`;
+  });
 }
 
 export interface IRawListedFlow {
