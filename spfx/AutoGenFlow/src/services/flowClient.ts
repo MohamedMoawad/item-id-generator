@@ -10,7 +10,6 @@ import {
   IFlowConnection,
   IFlowEnvironment,
   IRawListedFlow,
-  isConsentFailure,
   readConnectionNamesFromFlows,
   readConnections,
   readCreatedConnection,
@@ -254,7 +253,6 @@ async function ensureSharePointConnection(
     }
   }
   let lastError = '';
-  let consent = false;
   for (let index = 0; index < clients.ordered.length; index += 1) {
     const created = await createSharePointConnection(clients.ordered[index], environment);
     if (created.connection) {
@@ -269,13 +267,9 @@ async function ensureSharePointConnection(
       };
     }
     lastError = created.error || lastError;
-    consent = consent || created.consent;
   }
   if (savedName) {
     return { connection: { name: savedName, displayName: 'SharePoint', accountName: '' }, consentUrl: '', error: '' };
-  }
-  if (consent) {
-    throw new FlowConsentError();
   }
   return { consentUrl: '', error: lastError };
 }
@@ -460,7 +454,7 @@ export async function createRemoteFlow(
   const created = await sendJson<{ name?: string; properties?: { state?: string } }>(
     client,
     'POST',
-    `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}`,
+    `${flowApiRoot(environment)}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}`,
     buildCreateFlowPayload(target, connectionName)
   );
   const id = created.name || '';
@@ -571,15 +565,7 @@ async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ p
 }
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {
-  try {
-    return await factory.getClient(FLOW_RESOURCE);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (isConsentFailure(0, message)) {
-      throw new FlowConsentError();
-    }
-    throw error instanceof Error ? error : new Error(message);
-  }
+  return factory.getClient(FLOW_RESOURCE);
 }
 
 async function sendJson<T>(client: AadHttpClient, method: string, url: string, body?: object): Promise<T> {
@@ -590,9 +576,6 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   });
   const text = await response.text();
   if (!response.ok) {
-    if (isConsentFailure(response.status, text)) {
-      throw new FlowConsentError();
-    }
     throw new FlowRequestError(response.status, shorten(text, response.status));
   }
   if (!text.trim()) {
@@ -605,8 +588,18 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   }
 }
 
+function flowApiRoot(environment: IFlowEnvironment): string {
+  const endpoint = environment.endpoint.replace(/\/+$/, '');
+  const match = /^https:\/\/([^/:?#]+)/i.exec(endpoint);
+  const host = match ? match[1].toLowerCase() : '';
+  if (host === 'api.flow.microsoft.com' || host.slice(-19) === '.flow.microsoft.com') {
+    return endpoint;
+  }
+  return 'https://api.flow.microsoft.com';
+}
+
 function flowPath(environment: IFlowEnvironment, flowId: string): string {
-  return `${environment.endpoint}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
+  return `${flowApiRoot(environment)}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
 }
 
 function flowUrl(environment: IFlowEnvironment, flowId: string): string {
