@@ -79,15 +79,50 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
     return undefined;
   }
   const endpoints = row.properties && row.properties.runtimeEndpoints;
-  const endpoint = endpoints && endpoints['microsoft.Flow'] ? endpoints['microsoft.Flow'] : 'https://api.flow.microsoft.com';
-  const powerApps = endpoints && endpoints['microsoft.PowerApps'] ? endpoints['microsoft.PowerApps'] : 'https://api.powerapps.com';
+  const flowRuntime = endpoints && endpoints['microsoft.Flow'];
+  const powerAppsRuntime = endpoints && endpoints['microsoft.PowerApps'];
   return {
     id: row.name,
-    endpoint: endpoint.replace(/\/+$/, ''),
-    powerAppsEndpoint: powerApps.replace(/\/+$/, ''),
+    endpoint: publicServiceUrl(flowRuntime, 'https://api.flow.microsoft.com', '.flow.microsoft.com'),
+    powerAppsEndpoint: publicServiceUrl(powerAppsRuntime, 'https://api.powerapps.com', '.powerapps.com'),
     displayName: (row.properties && row.properties.displayName) || 'Default',
     isDefault: !!(row.properties && row.properties.isDefault)
   };
+}
+
+function publicServiceUrl(value: string | undefined, fallback: string, suffix: string): string {
+  if (!value) {
+    return fallback;
+  }
+  const trimmed = value.trim().replace(/\/+$/, '');
+  const match = /^https:\/\/([^/:?#]+)(?::\d+)?$/i.exec(trimmed);
+  if (!match) {
+    return fallback;
+  }
+  const host = match[1].toLowerCase();
+  if (isPrivateHost(host) || (host !== suffix.slice(1) && host.indexOf(suffix) !== host.length - suffix.length)) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+function isPrivateHost(host: string): boolean {
+  if (host === 'localhost' || host.slice(-6) === '.local') {
+    return true;
+  }
+  const parts = host.split('.');
+  if (parts.length !== 4) {
+    return false;
+  }
+  const numbers = parts.map((part) => (/^\d+$/.test(part) ? Number(part) : -1));
+  if (numbers.some((part) => part < 0 || part > 255)) {
+    return false;
+  }
+  return numbers[0] === 10
+    || numbers[0] === 127
+    || (numbers[0] === 192 && numbers[1] === 168)
+    || (numbers[0] === 172 && numbers[1] >= 16 && numbers[1] <= 31)
+    || (numbers[0] === 169 && numbers[1] === 254);
 }
 
 const API_VERSION = '2016-11-01';

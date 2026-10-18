@@ -44,6 +44,25 @@ describe('flow model', () => {
       isDefault: true
     });
     expect(regional.some((url) => url.indexOf('https://api.powerapps.com/providers/Microsoft.PowerApps/connections?') === 0)).toBe(true);
+    expect(chooseEnvironment({
+      value: [{
+        name: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',
+        properties: {
+          isDefault: true,
+          displayName: 'Personal Productivity(Default)',
+          runtimeEndpoints: {
+            'microsoft.Flow': 'https://10.0.5.6:23060',
+            'microsoft.PowerApps': 'https://10.0.5.6:23061'
+          }
+        }
+      }]
+    })).toEqual({
+      id: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',
+      endpoint: 'https://api.flow.microsoft.com',
+      powerAppsEndpoint: 'https://api.powerapps.com',
+      displayName: 'Personal Productivity(Default)',
+      isDefault: true
+    });
     expect(readEnvironments({
       value: [
         { name: 'prd', properties: { isDefault: false, displayName: 'SharePoint (PRD)' } },
