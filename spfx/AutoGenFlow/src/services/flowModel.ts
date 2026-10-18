@@ -45,7 +45,7 @@ interface IRawEnvironment {
     azureRegion?: string;
     azureRegionHint?: string;
     runtimeEndpoints?: { [name: string]: string };
-    linkedEnvironmentMetadata?: { instanceUrl?: string };
+    linkedEnvironmentMetadata?: { instanceUrl?: string; instanceApiUrl?: string };
   };
 }
 
@@ -101,13 +101,14 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
 const FLOW_GEOS = [
   'unitedstates', 'europe', 'asia', 'australia', 'india', 'japan', 'canada', 'unitedkingdom',
   'france', 'unitedarabemirates', 'germany', 'switzerland', 'norway', 'korea', 'southafrica',
-  'sweden', 'singapore', 'poland', 'italy', 'israel', 'spain', 'mexico', 'southamerica', 'qatar'
+  'sweden', 'singapore', 'poland', 'italy', 'israel', 'spain', 'mexico', 'southamerica'
 ];
 
 const REGION_GEOS: { [name: string]: string } = {
   uaenorth: 'unitedarabemirates',
   uaecentral: 'unitedarabemirates',
   qatarcentral: 'unitedarabemirates',
+  qatar: 'unitedarabemirates',
   westeurope: 'europe',
   northeurope: 'europe',
   francecentral: 'france',
@@ -156,13 +157,23 @@ const REGION_GEOS: { [name: string]: string } = {
 
 function canonicalFlowGeo(row: IRawEnvironment): string {
   const properties = row.properties;
-  const hints = [
-    row.location || '',
-    (properties && properties.location) || '',
+  const metadata = properties && properties.linkedEnvironmentMetadata;
+  const datacenter = [
     (properties && properties.azureRegionHint) || '',
     (properties && properties.azureRegion) || '',
     (properties && properties.region) || '',
-    (properties && properties.linkedEnvironmentMetadata && properties.linkedEnvironmentMetadata.instanceUrl) || ''
+    (metadata && metadata.instanceUrl) || '',
+    (metadata && metadata.instanceApiUrl) || ''
+  ];
+  for (let index = 0; index < datacenter.length; index += 1) {
+    const geo = geoFromHint(datacenter[index]) || geoFromInstance(datacenter[index]);
+    if (geo) {
+      return geo;
+    }
+  }
+  const hints = [
+    row.location || '',
+    (properties && properties.location) || ''
   ];
   for (let index = 0; index < hints.length; index += 1) {
     const geo = geoFromHint(hints[index]) || geoFromInstance(hints[index]);
@@ -410,6 +421,7 @@ export function flowApiHosts(environment: { location?: string; endpoint?: string
   const geo = geoFromHint(environment.location || '');
   if (geo) {
     addFlowHost(hosts, `https://${geo}.api.flow.microsoft.com`);
+    return hosts;
   }
   addFlowHost(hosts, environment.endpoint || '');
   addFlowHost(hosts, 'https://api.flow.microsoft.com');
@@ -441,7 +453,8 @@ export function publicFlowRedirect(fromUrl: string, locationHeader: string): str
     return '';
   }
   const origin = /^https:\/\/[^/?#]+/i.exec(absolute);
-  if (!origin || !publicFlowHost(origin[0])) {
+  const fromOrigin = /^https:\/\/[^/?#]+/i.exec(fromUrl);
+  if (!origin || !fromOrigin || origin[0].toLowerCase() !== fromOrigin[0].toLowerCase() || !publicFlowHost(origin[0])) {
     return '';
   }
   return absolute;

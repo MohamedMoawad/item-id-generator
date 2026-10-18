@@ -112,16 +112,15 @@ describe('flow model', () => {
       location: 'unitedarabemirates',
       endpoint: 'https://api.flow.microsoft.com'
     });
-    expect(createUrls[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
-    expect(createUrls[1]).toBe('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01');
+    expect(createUrls).toEqual(['https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/2ab1148e-14ab-e29a-acaf-fc1efecf9050/flows?api-version=2016-11-01']);
+    expect(createUrls.join(' ')).not.toContain('europe.api');
     expect(createUrls.join(' ')).not.toContain('scopes/admin');
     expect(createUrls.join(' ')).not.toContain('10.');
     const fromGlobal = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01';
-    expect(publicFlowRedirect(fromGlobal, 'https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01'))
-      .toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01');
+    expect(publicFlowRedirect(fromGlobal, 'https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01')).toBe('');
     expect(publicFlowRedirect(fromGlobal, 'https://10.0.5.41:21497/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01')).toBe('');
-    expect(publicFlowRedirect('https://europe.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01', '/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01'))
-      .toBe('https://europe.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01');
+    expect(publicFlowRedirect('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01', '/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01'))
+      .toBe('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/env/flows?api-version=2016-11-01');
     const located = chooseEnvironment({
       value: [{
         name: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',
@@ -150,6 +149,21 @@ describe('flow model', () => {
       }]
     });
     expect(qatar && qatar.location).toBe('unitedarabemirates');
+    expect(qatar && flowCreateUrls(qatar).join(' ')).not.toContain('europe.api');
+    const labeledEurope = chooseEnvironment({
+      value: [{
+        name: '2ab1148e-14ab-e29a-acaf-fc1efecf9050',
+        location: 'europe',
+        properties: {
+          displayName: 'Qatar',
+          azureRegionHint: 'qatarcentral',
+          runtimeEndpoints: { 'microsoft.Flow': 'https://europe.api.flow.microsoft.com' },
+          linkedEnvironmentMetadata: { instanceUrl: 'https://org.crm15.dynamics.com' }
+        }
+      }]
+    });
+    expect(labeledEurope && labeledEurope.location).toBe('unitedarabemirates');
+    expect(labeledEurope && flowCreateUrls(labeledEurope).join(' ')).not.toContain('europe.api');
     expect(qatar && flowGeoCandidates(qatar)[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');

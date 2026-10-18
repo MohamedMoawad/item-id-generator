@@ -14,6 +14,7 @@ import {
   IFlowConnection,
   IFlowEnvironment,
   IRawListedFlow,
+  chooseEnvironment,
   readConnectionNamesFromFlows,
   readConnections,
   readCreatedConnection,
@@ -455,7 +456,8 @@ export async function createRemoteFlow(
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const token = await readFlowToken(tokens);
-  const hosts = flowApiHosts(environment);
+  const located = await environmentForWrite(client, token, environment);
+  const hosts = flowApiHosts(located);
   const full = buildCreateFlowPayload(target, connectionName);
   const shell = buildShellFlowPayload(target.listTitle);
   let lastError = '';
@@ -489,7 +491,8 @@ export async function redeployRemoteFlow(
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const token = await readFlowToken(tokens);
-  const host = flowApiHosts(environment)[0] || 'https://api.flow.microsoft.com';
+  const located = await environmentForWrite(client, token, environment);
+  const host = flowApiHosts(located)[0] || 'https://api.flow.microsoft.com';
   try {
     await sendJson(client, 'POST', `${flowPath(environment, flowId, host)}/stop?api-version=${API_VERSION}`, undefined, token);
   } catch (error) {
@@ -590,6 +593,27 @@ async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ p
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {
   return factory.getClient(FLOW_RESOURCE);
+}
+
+async function environmentForWrite(client: AadHttpClient, token: string, environment: IFlowEnvironment): Promise<IFlowEnvironment> {
+  try {
+    const detail = await sendJson<NonNullable<Parameters<typeof chooseEnvironment>[0]['value']>[number]>(
+      client,
+      'GET',
+      `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}?api-version=${API_VERSION}`,
+      undefined,
+      token
+    );
+    const refreshed = chooseEnvironment({ value: [detail] });
+    if (refreshed && refreshed.id === environment.id && refreshed.location) {
+      return refreshed;
+    }
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+  }
+  return environment;
 }
 
 async function readFlowToken(tokens?: AadTokenProviderFactory): Promise<string> {
