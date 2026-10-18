@@ -211,7 +211,6 @@ export default class FlowSettingsPanel
             <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
           </div>
         )}
-        {draft.flowState !== 'Started' && this._flowPickers(true)}
         {this._openFlowLink(draft)}
       </div>
     );
@@ -241,7 +240,7 @@ export default class FlowSettingsPanel
         <p className={styles.intro}>
           Choose the environment. Saving an active rule creates the numbering flow for this list.
         </p>
-        {this._flowPickers(false)}
+        {this._flowPickers()}
         {!this.state.canEdit && (
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.info}>
@@ -339,7 +338,7 @@ export default class FlowSettingsPanel
     window.open(flowPortalUrl(environmentId, draft.flowId), '_blank', 'noopener,noreferrer');
   };
 
-  private _flowPickers(createButton: boolean): React.ReactElement {
+  private _flowPickers(): React.ReactElement {
     const environmentKey = this.state.environments.some((item) => item.id === this.state.environmentId)
       ? this.state.environmentId
       : undefined;
@@ -355,15 +354,6 @@ export default class FlowSettingsPanel
           onChange={this._onEnvironmentChange}
         />
         {this.state.flowHint && <p className={styles.intro}>{this.state.flowHint}</p>}
-        {createButton && (
-          <div className={styles.actions}>
-            <PrimaryButton
-              text={this.state.saving ? 'Creating the flow' : 'Create flow'}
-              onClick={this._onCreateFlow}
-              disabled={locked}
-            />
-          </div>
-        )}
       </div>
     );
   }
@@ -530,18 +520,6 @@ export default class FlowSettingsPanel
         }
         this.setState({ connectionsLoading: false, connections: [], connectionName: '', flowHint: messageOf(error) });
       });
-  };
-
-  private _onCreateFlow = (): void => {
-    const draft = this.state.draft;
-    if (!draft) {
-      return;
-    }
-    this.setState({ draft: { ...draft, isActive: true } }, () => {
-      this._save().catch((error: unknown) => {
-        this.setState({ saving: false, errorMessage: messageOf(error) });
-      });
-    });
   };
 
   private _onColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
