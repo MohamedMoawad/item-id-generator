@@ -146,17 +146,14 @@ export async function syncListFlow(
     return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.' };
   }
   const connections = await listConnections(factory, environment);
-  const selected = connections.filter((item) => item.name === current.flowConnection)[0];
-  const connection = selected || (current.flowConnection ? undefined : connections[0]);
+  const connection = connections.filter((item) => item.name === current.flowConnection)[0] || connections[0];
   if (!connection) {
     return {
       flowId: current.flowId,
       flowEnvironment: environment.id,
       flowConnection: current.flowConnection,
       flowState: current.flowState,
-      note: connections.length === 0
-        ? 'Choose an environment that has a SharePoint connection user.'
-        : 'Choose the connection user, then save.'
+      note: 'This environment has no SharePoint connection for this account.'
     };
   }
   const sameEnvironment = current.flowEnvironment === environment.id;

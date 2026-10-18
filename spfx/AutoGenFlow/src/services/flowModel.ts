@@ -1,6 +1,7 @@
 export interface IFlowConnection {
   name: string;
   displayName: string;
+  accountName: string;
 }
 
 export interface IFlowEnvironment {
@@ -128,6 +129,7 @@ export function readConnections(payload: { value?: IRawConnection[] }, sharePoin
     .map((row) => ({
       name: row.name || '',
       displayName: connectionUser(row),
+      accountName: connectionAccount(row),
       connected: connectionIsReady(row)
     }))
     .filter((row) => row.name.length > 0);
@@ -137,7 +139,31 @@ export function readConnections(payload: { value?: IRawConnection[] }, sharePoin
     }
     return left.connected ? -1 : 1;
   });
-  return rows.map((row) => ({ name: row.name, displayName: row.displayName }));
+  return rows.map((row) => ({ name: row.name, displayName: row.displayName, accountName: row.accountName }));
+}
+
+export function chooseConnection(connections: IFlowConnection[], account: string, savedName = ''): IFlowConnection | undefined {
+  const needle = normalizeAccount(account);
+  if (needle) {
+    const mine = connections.filter((item) => normalizeAccount(item.accountName) === needle || normalizeAccount(item.displayName) === needle);
+    if (mine.length > 0) {
+      return mine[0];
+    }
+  }
+  const saved = connections.filter((item) => item.name === savedName)[0];
+  return saved || connections[0];
+}
+
+export function flowPortalUrl(environmentId: string, flowId: string): string {
+  const environment = encodeURIComponent(environmentId.trim());
+  const flow = encodeURIComponent(flowId.trim());
+  return `https://make.powerautomate.com/environments/${environment}/flows/${flow}/details`;
+}
+
+function normalizeAccount(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  const parts = trimmed.split('|');
+  return parts[parts.length - 1] || '';
 }
 
 function connectionApi(row: IRawConnection): string {
@@ -156,6 +182,12 @@ function connectionIsReady(row: IRawConnection): boolean {
     const value = (status.status || '').toLowerCase();
     return value === 'connected' || value === 'ready' || value === 'ok';
   });
+}
+
+function connectionAccount(row: IRawConnection): string {
+  const properties = row.properties;
+  const createdBy = properties && properties.createdBy;
+  return ((properties && properties.accountName) || (createdBy && createdBy.email) || '').trim().toLowerCase();
 }
 
 function connectionUser(row: IRawConnection): string {

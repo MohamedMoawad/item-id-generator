@@ -37,7 +37,7 @@ import {
   saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { FlowConsentError, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { chooseConnection, FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
 import { listConnections, listEnvironments, readFlowProblem, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
@@ -54,6 +54,7 @@ export interface IFlowSettingsPanelProps {
   listGuid: string;
   spHttpClient: SPHttpClient;
   aadHttpClientFactory: AadHttpClientFactory;
+  userEmail: string;
   onDismiss: () => void;
 }
 
@@ -211,6 +212,7 @@ export default class FlowSettingsPanel
           </div>
         )}
         {draft.flowState !== 'Started' && this._flowPickers(true)}
+        {this._openFlowLink(draft)}
       </div>
     );
   }
@@ -237,7 +239,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Choose the environment and the connection user. Saving an active rule creates the numbering flow for this list.
+          Choose the environment. Saving an active rule creates the numbering flow for this list.
         </p>
         {this._flowPickers(false)}
         {!this.state.canEdit && (
@@ -305,6 +307,9 @@ export default class FlowSettingsPanel
               disabled={this.state.saving || this.state.connectionsLoading || (draft.isActive && !this.state.connectionName)}
             />
           )}
+          {draft.flowId && (
+            <DefaultButton text="Open flow" onClick={this._openFlow} disabled={this.state.saving} />
+          )}
           {draft.id !== undefined && (
             <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
           )}
@@ -314,12 +319,29 @@ export default class FlowSettingsPanel
     );
   }
 
+  private _openFlowLink(draft: IConfigDraft): React.ReactElement | null {
+    if (!draft.flowId) {
+      return null;
+    }
+    return (
+      <button type="button" className={styles.addLink} onClick={this._openFlow}>
+        Open flow in Power Automate
+      </button>
+    );
+  }
+
+  private _openFlow = (): void => {
+    const draft = this.state.draft;
+    const environmentId = (draft && draft.flowEnvironment) || this.state.environmentId;
+    if (!draft || !draft.flowId || !environmentId) {
+      return;
+    }
+    window.open(flowPortalUrl(environmentId, draft.flowId), '_blank', 'noopener,noreferrer');
+  };
+
   private _flowPickers(createButton: boolean): React.ReactElement {
     const environmentKey = this.state.environments.some((item) => item.id === this.state.environmentId)
       ? this.state.environmentId
-      : undefined;
-    const connectionKey = this.state.connections.some((item) => item.name === this.state.connectionName)
-      ? this.state.connectionName
       : undefined;
     const locked = !this.state.canEdit || this.state.saving || this.state.connectionsLoading;
     return (
@@ -331,14 +353,6 @@ export default class FlowSettingsPanel
           selectedKey={environmentKey}
           disabled={locked || this.state.environments.length === 0}
           onChange={this._onEnvironmentChange}
-        />
-        <Dropdown
-          label="Connection user"
-          placeholder={this.state.connectionsLoading ? 'Loading connection users' : 'Choose a connection user'}
-          options={this.state.connections.map((item) => ({ key: item.name, text: item.displayName }))}
-          selectedKey={connectionKey}
-          disabled={locked || this.state.connections.length === 0}
-          onChange={this._onConnectionChange}
         />
         {this.state.flowHint && <p className={styles.intro}>{this.state.flowHint}</p>}
         {createButton && (
@@ -411,6 +425,13 @@ export default class FlowSettingsPanel
         iconProps: { iconName: 'View' },
         disabled: this.state.saving,
         onClick: this._onView
+      },
+      {
+        key: 'open',
+        text: 'Open flow',
+        iconProps: { iconName: 'OpenInNewWindow' },
+        disabled: this.state.saving || !this.state.draft || !this.state.draft.flowId,
+        onClick: this._openFlow
       },
       {
         key: 'delete',
@@ -495,11 +516,12 @@ export default class FlowSettingsPanel
         if (request !== this._connectionRequest) {
           return;
         }
+        const chosen = chooseConnection(connections, this.props.userEmail, this.state.draft ? this.state.draft.flowConnection : '');
         this.setState({
           connectionsLoading: false,
           connections,
-          connectionName: connections[0] ? connections[0].name : '',
-          flowHint: connections.length === 0 ? 'This environment has no SharePoint connection user. Choose another environment.' : ''
+          connectionName: chosen ? chosen.name : '',
+          flowHint: chosen ? '' : 'This environment has no SharePoint connection for this account.'
         });
       })
       .catch((error: unknown) => {
@@ -508,13 +530,6 @@ export default class FlowSettingsPanel
         }
         this.setState({ connectionsLoading: false, connections: [], connectionName: '', flowHint: messageOf(error) });
       });
-  };
-
-  private _onConnectionChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
-    if (!option) {
-      return;
-    }
-    this.setState({ connectionName: String(option.key), flowHint: '' });
   };
 
   private _onCreateFlow = (): void => {
@@ -637,16 +652,14 @@ export default class FlowSettingsPanel
       return;
     }
     const connections = await listConnections(this.props.aadHttpClientFactory, environment);
-    const connectionName = connections.some((item) => item.name === preferredConnection)
-      ? preferredConnection
-      : (connections[0] ? connections[0].name : '');
+    const chosen = chooseConnection(connections, this.props.userEmail, preferredConnection);
     this.setState({
       connectionsLoading: false,
       environments,
       environmentId: environment.id,
       connections,
-      connectionName,
-      flowHint: connections.length === 0 ? 'This environment has no SharePoint connection user. Choose another environment.' : ''
+      connectionName: chosen ? chosen.name : '',
+      flowHint: chosen ? '' : 'This environment has no SharePoint connection for this account.'
     });
   }
 

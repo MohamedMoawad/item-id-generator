@@ -1,4 +1,4 @@
-import { chooseEnvironment, connectionListUrls, isConsentFailure, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, flowPortalUrl, isConsentFailure, readConnections, readEnvironments, readFailedAction, readFlowState, readLatestRun } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -54,7 +54,7 @@ describe('flow model', () => {
         { name: 'shared-sharepointonl-1', properties: { displayName: 'SharePoint', apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline', statuses: [{ status: 'Connected' }] } },
         { name: 'sql-1', properties: { displayName: 'SQL', apiId: '/providers/Microsoft.PowerApps/apis/shared_sql' } }
       ]
-    })).toEqual([{ name: 'shared-sharepointonl-1', displayName: 'SharePoint' }]);
+    })).toEqual([{ name: 'shared-sharepointonl-1', displayName: 'SharePoint', accountName: '' }]);
     expect(readConnections({
       value: [{
         name: 'shared-sharepointonl-2',
@@ -65,7 +65,18 @@ describe('flow model', () => {
           statuses: [{ status: 'Error' }]
         }
       }]
-    })).toEqual([{ name: 'shared-sharepointonl-2', displayName: 'svc@contoso.com' }]);
+    })).toEqual([{ name: 'shared-sharepointonl-2', displayName: 'svc@contoso.com', accountName: 'svc@contoso.com' }]);
+    const connections = readConnections({
+      value: [
+        { name: 'shared-sharepointonl-1', properties: { displayName: 'SharePoint', accountName: 'other@contoso.com', apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline', statuses: [{ status: 'Connected' }] } },
+        { name: 'shared-sharepointonl-2', properties: { displayName: 'SharePoint', accountName: 'me@contoso.com', apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline', statuses: [{ status: 'Connected' }] } }
+      ]
+    });
+    const mine = chooseConnection(connections, 'i:0#.f|membership|me@contoso.com');
+    const first = chooseConnection(connections, '');
+    expect(mine && mine.name).toBe('shared-sharepointonl-2');
+    expect(first && first.name).toBe(connections[0].name);
+    expect(flowPortalUrl('Default-tenant', 'flow-1')).toBe('https://make.powerautomate.com/environments/Default-tenant/flows/flow-1/details');
   });
 
   it('reads the flow state and treats a missing approval as consent', () => {
