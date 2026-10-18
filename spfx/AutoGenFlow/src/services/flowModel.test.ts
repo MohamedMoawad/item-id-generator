@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowHomeUrl, flowPortalUrl, isConsentFailure, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -104,6 +104,11 @@ describe('flow model', () => {
     expect(mine && mine.name).toBe('shared-sharepointonl-2');
     expect(first && first.name).toBe(connections[0].name);
     expect(flowPortalUrl('Default-tenant', 'flow-1')).toBe('https://make.powerautomate.com/environments/Default-tenant/flows/flow-1/details');
+    const createUrls = flowCreateUrls('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da');
+    expect(createUrls[0]).toBe('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?api-version=2016-11-01');
+    expect(createUrls[1]).toContain('/scopes/admin/environments/');
+    expect(createUrls.join(' ')).not.toContain('10.0.');
+    expect(flowHomeUrl('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da')).toBe('https://make.powerautomate.com/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/home');
     expect(readConnectionNamesFromFlows({
       value: [{
         properties: {

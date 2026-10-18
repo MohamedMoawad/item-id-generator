@@ -259,6 +259,21 @@ export function flowPortalUrl(environmentId: string, flowId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/flows/${flow}/details`;
 }
 
+export function flowHomeUrl(environmentId: string): string {
+  const environment = encodeURIComponent(environmentId.trim());
+  return `https://make.powerautomate.com/environments/${environment}/home`;
+}
+
+export function flowCreateUrls(environmentId: string): string[] {
+  const id = encodeURIComponent(environmentId.trim());
+  const version = 'api-version=2016-11-01';
+  const root = 'https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple';
+  return [
+    `${root}/environments/${id}/flows?${version}`,
+    `${root}/scopes/admin/environments/${id}/flows?${version}`
+  ];
+}
+
 export interface IRawListedFlow {
   name?: string;
   properties?: {

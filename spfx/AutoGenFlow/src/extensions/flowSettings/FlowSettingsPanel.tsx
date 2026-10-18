@@ -134,7 +134,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow',
+          title: 'AutoGen Flow 1.17',
           showCloseButton: true
         }}
         modalProps={{
@@ -166,7 +166,7 @@ export default class FlowSettingsPanel
         )}
         {this.state.consentUrl && (
           <button type="button" className={styles.addLink} onClick={this._openConsent}>
-            Sign in to the SharePoint connection
+            {this.state.consentUrl.indexOf('make.powerautomate.com') >= 0 ? 'Open Power Automate' : 'Sign in to the SharePoint connection'}
           </button>
         )}
         {this.state.statusMessage && (

@@ -3,6 +3,8 @@ import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
+  flowCreateUrls,
+  flowHomeUrl,
   FlowConsentError,
   FlowRunState,
   FlowStartError,
@@ -74,12 +76,9 @@ export async function listConnections(factory: AadHttpClientFactory, environment
 }
 
 async function connectionsFromExistingFlows(client: AadHttpClient, environment: IFlowEnvironment): Promise<IFlowConnection[]> {
-  const hosts = [environment.endpoint.replace(/\/+$/, ''), 'https://api.flow.microsoft.com'];
+  const hosts = ['https://api.flow.microsoft.com'];
   for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
     const host = hosts[hostIndex];
-    if (hostIndex > 0 && host === hosts[0]) {
-      continue;
-    }
     const listUrl = `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}&$top=50`;
     try {
       const listed = await sendJson<{ value?: IRawListedFlow[] }>(client, 'GET', listUrl);
@@ -451,18 +450,26 @@ export async function createRemoteFlow(
   connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
-  const created = await sendJson<{ name?: string; properties?: { state?: string } }>(
-    client,
-    'POST',
-    `${flowApiRoot(environment)}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}`,
-    buildCreateFlowPayload(target, connectionName)
-  );
-  const id = created.name || '';
-  if (!id) {
-    throw new Error('Power Automate did not return the new numbering flow.');
+  const payload = buildCreateFlowPayload(target, connectionName);
+  const urls = flowCreateUrls(environment.id);
+  let lastError = '';
+  for (let index = 0; index < urls.length; index += 1) {
+    try {
+      const created = await sendJson<{ name?: string; properties?: { state?: string } }>(client, 'POST', urls[index], payload);
+      const id = created.name || '';
+      if (!id) {
+        throw new Error('Power Automate did not return the new numbering flow.');
+      }
+      await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
+      return { id, state: 'Started' };
+    } catch (error) {
+      if (error instanceof FlowStartError) {
+        throw error;
+      }
+      lastError = error instanceof Error ? error.message : lastError;
+    }
   }
-  await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
-  return { id, state: 'Started' };
+  throw new Error(publicFlowError(environment.id, lastError));
 }
 
 export async function redeployRemoteFlow(
@@ -572,7 +579,8 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   const response = await client.fetch(url, AadHttpClient.configurations.v1, {
     method,
     headers: jsonHeaders,
-    body: body === undefined ? undefined : JSON.stringify(body)
+    body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: 'error'
   });
   const text = await response.text();
   if (!response.ok) {
@@ -588,18 +596,15 @@ async function sendJson<T>(client: AadHttpClient, method: string, url: string, b
   }
 }
 
-function flowApiRoot(environment: IFlowEnvironment): string {
-  const endpoint = environment.endpoint.replace(/\/+$/, '');
-  const match = /^https:\/\/([^/:?#]+)/i.exec(endpoint);
-  const host = match ? match[1].toLowerCase() : '';
-  if (host === 'api.flow.microsoft.com' || host.slice(-19) === '.flow.microsoft.com') {
-    return endpoint;
+function publicFlowError(environmentId: string, message: string): string {
+  if (message.indexOf('10.') >= 0 || message.indexOf('does not have permission to perform POST') >= 0) {
+    return `Power Automate did not accept the flow on the private service address. Open ${flowHomeUrl(environmentId)} and confirm this account can create flows, then choose Manage flow again.`;
   }
-  return 'https://api.flow.microsoft.com';
+  return message || 'The numbering flow was not created.';
 }
 
 function flowPath(environment: IFlowEnvironment, flowId: string): string {
-  return `${flowApiRoot(environment)}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
+  return `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows/${encodeURIComponent(flowId)}`;
 }
 
 function flowUrl(environment: IFlowEnvironment, flowId: string): string {
