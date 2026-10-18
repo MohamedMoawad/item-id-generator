@@ -218,7 +218,7 @@ export default class FlowSettingsPanel
             <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
           </div>
         )}
-        {this._openFlowLink(draft)}
+        {this._openFlowLink()}
       </div>
     );
   }
@@ -313,8 +313,8 @@ export default class FlowSettingsPanel
               disabled={this.state.saving || this.state.connectionsLoading}
             />
           )}
-          {draft.flowId && (
-            <DefaultButton text="Manage flow" onClick={this._openFlow} disabled={this.state.saving} />
+          {draft.id !== undefined && (
+            <DefaultButton text="Manage flow" onClick={this._onManageFlow} disabled={this.state.saving} />
           )}
           {draft.id !== undefined && (
             <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
@@ -325,29 +325,68 @@ export default class FlowSettingsPanel
     );
   }
 
-  private _openFlowLink(draft: IConfigDraft): React.ReactElement | null {
-    if (!draft.flowId) {
-      return null;
-    }
+  private _openFlowLink(): React.ReactElement {
     return (
-      <button type="button" className={styles.addLink} onClick={this._openFlow}>
+      <button type="button" className={styles.addLink} onClick={this._onManageFlow} disabled={this.state.saving}>
         Manage flow
       </button>
     );
   }
 
-  private _openFlow = (): void => {
+  private _onManageFlow = (): void => {
+    this._manageFlow().catch((error: unknown) => {
+      this.setState({ saving: false, errorMessage: messageOf(error), statusMessage: '' });
+    });
+  };
+
+  private async _manageFlow(): Promise<void> {
     const draft = this.state.draft;
-    const environmentId = (draft && draft.flowEnvironment) || this.state.environmentId;
-    if (!draft || !draft.flowId || !environmentId) {
+    if (!draft || draft.id === undefined) {
       this.setState({
-        warningMessage: 'Save an active rule first. Manage flow opens after the numbering flow is created.',
+        warningMessage: 'Save the rule first. Manage flow opens the numbering flow.',
         errorMessage: '',
         statusMessage: ''
       });
       return;
     }
-    window.open(flowPortalUrl(environmentId, draft.flowId), '_blank', 'noopener,noreferrer');
+    let flowId = draft.flowId;
+    let environmentId = draft.flowEnvironment || this.state.environmentId;
+    if (!flowId || draft.flowState !== 'Started') {
+      this.setState({ saving: true, errorMessage: '', warningMessage: '', statusMessage: '', consentUrl: '' });
+      const synced = await syncListFlow(this.props.aadHttpClientFactory, this._target(), {
+        flowId: draft.flowId,
+        flowEnvironment: environmentId,
+        flowConnection: this.state.connectionName || draft.flowConnection,
+        flowState: draft.flowState,
+        note: '',
+        consentUrl: ''
+      }, true);
+      await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id, {
+        flowId: synced.flowId,
+        flowEnvironment: synced.flowEnvironment,
+        flowConnection: synced.flowConnection,
+        flowState: synced.flowState
+      });
+      flowId = synced.flowId;
+      environmentId = synced.flowEnvironment;
+      this.setState({
+        saving: false,
+        consentUrl: synced.consentUrl,
+        warningMessage: synced.note,
+        statusMessage: synced.flowState === 'Started' ? 'Numbering is on.' : 'Saved the rule for this list.',
+        draft: {
+          ...draft,
+          isActive: true,
+          flowId: synced.flowId,
+          flowEnvironment: synced.flowEnvironment,
+          flowConnection: synced.flowConnection,
+          flowState: synced.flowState
+        }
+      });
+    }
+    if (flowId && environmentId) {
+      window.open(flowPortalUrl(environmentId, flowId), '_blank', 'noopener,noreferrer');
+    }
   };
 
   private _openConsent = (): void => {
@@ -418,9 +457,9 @@ export default class FlowSettingsPanel
       {
         key: 'manage',
         text: 'Manage flow',
-        iconProps: { iconName: 'Flow' },
+        iconProps: { iconName: 'OpenInNewWindow' },
         disabled: this.state.saving || !this.state.draft || this.state.draft.id === undefined,
-        onClick: this._openFlow
+        onClick: this._onManageFlow
       }
     ];
   }
@@ -446,8 +485,8 @@ export default class FlowSettingsPanel
         key: 'open',
         text: 'Manage flow',
         iconProps: { iconName: 'OpenInNewWindow' },
-        disabled: this.state.saving || !this.state.draft || !this.state.draft.flowId,
-        onClick: this._openFlow
+        disabled: this.state.saving || !this.state.draft || this.state.draft.id === undefined,
+        onClick: this._onManageFlow
       },
       {
         key: 'delete',

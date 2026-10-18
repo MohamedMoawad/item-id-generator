@@ -6,7 +6,7 @@ The flow reads that list’s row in `AutoGenFlowConfiguration` on the site colle
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.12.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.13.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The app calls Power Automate with **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those are the same two permissions an alert app already asks a Global Administrator to approve under **Advanced → API access**. If both rows are already under **Approved requests**, upload this package and leave that page alone.
@@ -14,7 +14,7 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
 6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates this account’s SharePoint connection in that environment, then creates one numbering flow for this list. If this list already has a rule, open **AutoGen Flow** and save again so the flow is replaced.
-7. On the saved rule, open **Settings** and choose **Manage flow**. That opens the flow named **AutoGen ·** and the list name. The same page shows the flow that runs when an item is created and the run history.
+7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates this account’s SharePoint connection and the numbering flow, then opens it. The page shows the flow that runs when an item is created and the run history. If **Admin center → Advanced → API access** shows **PowerApps Service** / **User**, approve that row once. The Microsoft Flow Service rows stay as they are.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on this list and on the site collection.
 

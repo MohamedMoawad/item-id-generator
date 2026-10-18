@@ -26,8 +26,8 @@ export class FlowStartError extends Error {
 }
 
 export class FlowConsentError extends Error {
-  public constructor() {
-    super('Open Admin center, Advanced, API access. Microsoft Flow Service needs Flows.Read.All and Flows.Manage.All approved. Then turn numbering on.');
+  public constructor(message?: string) {
+    super(message || 'Open Admin center, Advanced, API access. Microsoft Flow Service needs Flows.Read.All and Flows.Manage.All approved. Then turn numbering on.');
     this.name = 'FlowConsentError';
     Object.setPrototypeOf(this, FlowConsentError.prototype);
   }
