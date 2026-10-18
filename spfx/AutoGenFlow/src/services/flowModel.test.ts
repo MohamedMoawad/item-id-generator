@@ -36,6 +36,14 @@ describe('flow model', () => {
     expect(urls[0]).toContain('Default-tenant');
     expect(urls[0]).not.toContain('/apis/shared_sharepointonline');
     expect(urls[urls.length - 1]).toContain('/providers/Microsoft.ProcessSimple/environments/Default-tenant/connections');
+    const regional = connectionListUrls({
+      id: 'Default-tenant',
+      endpoint: 'https://unitedstates.api.flow.microsoft.com',
+      powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
+      displayName: 'Default',
+      isDefault: true
+    });
+    expect(regional.some((url) => url.indexOf('https://api.powerapps.com/providers/Microsoft.PowerApps/connections?') === 0)).toBe(true);
     expect(readEnvironments({
       value: [
         { name: 'prd', properties: { isDefault: false, displayName: 'SharePoint (PRD)' } },
@@ -77,6 +85,12 @@ describe('flow model', () => {
     expect(mine && mine.name).toBe('shared-sharepointonl-2');
     expect(first && first.name).toBe(connections[0].name);
     expect(flowPortalUrl('Default-tenant', 'flow-1')).toBe('https://make.powerautomate.com/environments/Default-tenant/flows/flow-1/details');
+    expect(readConnections({
+      value: [{
+        id: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections/shared-sharepointonl-9',
+        properties: { displayName: 'SharePoint', environment: { id: 'Default-tenant' } }
+      }]
+    }, false, 'Default-tenant')[0].name).toBe('shared-sharepointonl-9');
   });
 
   it('reads the flow state and treats a missing approval as consent', () => {

@@ -60,20 +60,28 @@ export async function listConnections(factory: AadHttpClientFactory, environment
   const resolved = await resolvePowerAppsHost(client, environment);
   const urls = connectionListUrls(resolved);
   let consentOnFlowHost = false;
+  let fallback: IFlowConnection[] = [];
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index];
     try {
       const payload = await sendJson<Parameters<typeof readConnections>[0]>(client, 'GET', url);
-      const filtered = url.indexOf('$filter=') >= 0;
-      const rows = readConnections(payload, url.indexOf('shared_sharepointonline') >= 0, filtered ? '' : resolved.id);
+      const scoped = url.indexOf('shared_sharepointonline') >= 0;
+      const rows = readConnections(payload, scoped, resolved.id);
       if (rows.length > 0) {
         return rows;
+      }
+      const loose = readConnections(payload, scoped, '');
+      if (loose.length > fallback.length) {
+        fallback = loose;
       }
     } catch (error) {
       if (error instanceof FlowConsentError && isFlowHost(url)) {
         consentOnFlowHost = true;
       }
     }
+  }
+  if (fallback.length > 0) {
+    return fallback;
   }
   if (consentOnFlowHost) {
     throw new FlowConsentError();

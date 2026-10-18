@@ -44,13 +44,14 @@ interface IRawEnvironment {
 
 interface IRawConnection {
   name?: string;
+  id?: string;
   properties?: {
     displayName?: string;
     apiId?: string;
     accountName?: string;
     api?: { name?: string };
     statuses?: Array<{ status?: string }>;
-    environment?: { name?: string };
+    environment?: string | { name?: string; id?: string };
     createdBy?: { displayName?: string; email?: string };
   };
 }
@@ -96,11 +97,12 @@ export function connectionListUrls(environment: IFlowEnvironment): string[] {
   const filter = encodeURIComponent(`environment eq '${environment.id.replace(/'/g, "''")}'`);
   const version = `api-version=${API_VERSION}`;
   const id = encodeURIComponent(environment.id);
+  const hosts = [powerApps, 'https://api.powerapps.com', flow, 'https://api.flow.microsoft.com'];
   const urls: string[] = [];
-  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/connections?${version}&$filter=${filter}`);
-  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/connections?${version}`);
-  pushUrl(urls, `${powerApps}/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?${version}&$filter=${filter}`);
-  pushUrl(urls, `https://api.flow.microsoft.com/providers/Microsoft.PowerApps/connections?${version}&$filter=${filter}`);
+  hosts.forEach((host) => {
+    pushUrl(urls, `${host}/providers/Microsoft.PowerApps/connections?${version}&$filter=${filter}`);
+    pushUrl(urls, `${host}/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?${version}&$filter=${filter}`);
+  });
   pushUrl(urls, `${flow}/providers/Microsoft.ProcessSimple/environments/${id}/connections?${version}`);
   pushUrl(urls, `https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/${id}/connections?${version}`);
   return urls;
@@ -114,20 +116,9 @@ function pushUrl(urls: string[], url: string): void {
 
 export function readConnections(payload: { value?: IRawConnection[] }, sharePointScoped = false, environmentId = ''): IFlowConnection[] {
   const rows = (payload.value || [])
-    .filter((row) => {
-      const api = connectionApi(row);
-      const name = (row.name || '').toLowerCase();
-      const rowEnvironment = row.properties && row.properties.environment && row.properties.environment.name;
-      const sharePoint = sharePointScoped
-        || api.indexOf('shared_sharepointonline') >= 0
-        || api.indexOf('sharepoint') >= 0
-        || name.indexOf('shared-sharepointonl') === 0;
-      const otherApi = api.length > 0 && api.indexOf('sharepoint') < 0;
-      const sameEnvironment = !environmentId || !rowEnvironment || rowEnvironment === environmentId;
-      return sharePoint && !otherApi && sameEnvironment;
-    })
+    .filter((row) => isSharePointConnection(row, sharePointScoped) && inEnvironment(row, environmentId))
     .map((row) => ({
-      name: row.name || '',
+      name: connectionName(row),
       displayName: connectionUser(row),
       accountName: connectionAccount(row),
       connected: connectionIsReady(row)
@@ -164,6 +155,45 @@ function normalizeAccount(value: string): string {
   const trimmed = value.trim().toLowerCase();
   const parts = trimmed.split('|');
   return parts[parts.length - 1] || '';
+}
+
+function connectionName(row: IRawConnection): string {
+  if (row.name) {
+    return row.name;
+  }
+  const id = row.id || '';
+  const parts = id.split('/');
+  return parts[parts.length - 1] || '';
+}
+
+function isSharePointConnection(row: IRawConnection, sharePointScoped: boolean): boolean {
+  const api = connectionApi(row);
+  const name = connectionName(row).toLowerCase();
+  const id = (row.id || '').toLowerCase();
+  const sharePoint = api.indexOf('sharepoint') >= 0 || name.indexOf('sharepoint') >= 0 || id.indexOf('sharepoint') >= 0;
+  if (sharePoint) {
+    return true;
+  }
+  if (!sharePointScoped) {
+    return false;
+  }
+  return api.length === 0 || api.indexOf('sharepoint') >= 0;
+}
+
+function inEnvironment(row: IRawConnection, environmentId: string): boolean {
+  if (!environmentId) {
+    return true;
+  }
+  const environment = row.properties && row.properties.environment;
+  if (!environment) {
+    return true;
+  }
+  const value = typeof environment === 'string' ? environment : `${environment.name || ''} ${environment.id || ''}`;
+  const text = value.trim();
+  if (!text) {
+    return true;
+  }
+  return text === environmentId || text.indexOf(environmentId) >= 0;
 }
 
 function connectionApi(row: IRawConnection): string {

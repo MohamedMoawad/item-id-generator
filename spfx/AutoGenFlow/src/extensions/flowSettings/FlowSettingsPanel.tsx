@@ -304,7 +304,7 @@ export default class FlowSettingsPanel
             <PrimaryButton
               text={this.state.saving ? 'Saving' : 'Save settings'}
               onClick={this._onSave}
-              disabled={this.state.saving || this.state.connectionsLoading || (draft.isActive && !this.state.connectionName)}
+              disabled={this.state.saving || this.state.connectionsLoading}
             />
           )}
           {draft.flowId && (
@@ -360,7 +360,7 @@ export default class FlowSettingsPanel
             <PrimaryButton
               text={this.state.saving ? 'Creating the flow' : 'Create flow'}
               onClick={this._onCreateFlow}
-              disabled={locked || !this.state.connectionName}
+              disabled={locked}
             />
           </div>
         )}
