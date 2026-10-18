@@ -11,6 +11,7 @@ export interface IFlowEnvironment {
   displayName: string;
   isDefault: boolean;
   location: string;
+  instanceUrl: string;
 }
 
 export type FlowRunState = 'Started' | 'Stopped' | 'Missing';
@@ -94,7 +95,8 @@ function toEnvironment(row: IRawEnvironment): IFlowEnvironment | undefined {
     powerAppsEndpoint: publicServiceUrl(powerAppsRuntime, 'https://api.powerapps.com', '.powerapps.com'),
     displayName: (row.properties && row.properties.displayName) || 'Default',
     isDefault: !!(row.properties && row.properties.isDefault),
-    location: canonicalFlowGeo(row)
+    location: canonicalFlowGeo(row),
+    instanceUrl: dataverseOrgUrl(row)
   };
 }
 
@@ -232,6 +234,24 @@ function geoFromInstance(value: string): string {
     '22': 'sweden'
   };
   return geos[match[1]] || '';
+}
+
+export function dataverseOrgUrl(row: IRawEnvironment): string {
+  const metadata = row.properties && row.properties.linkedEnvironmentMetadata;
+  const raw = ((metadata && (metadata.instanceUrl || metadata.instanceApiUrl)) || '').trim().replace(/\/+$/, '');
+  if (!raw) {
+    return '';
+  }
+  let host = raw;
+  const withProtocol = /^https:\/\//i.test(host) ? host : '';
+  if (!withProtocol) {
+    return '';
+  }
+  host = withProtocol.replace(/\.api\.crm/i, '.crm').toLowerCase();
+  if (!/^https:\/\/[a-z0-9-]+\.crm\d*\.dynamics\.com$/i.test(host)) {
+    return '';
+  }
+  return host;
 }
 
 function geoFromFlowHost(host: string): string {

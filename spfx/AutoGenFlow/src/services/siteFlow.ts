@@ -59,6 +59,39 @@ export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: 
   };
 }
 
+export function buildDataverseWorkflowBody(target: IListFlowTarget, connectionName: string): {
+  category: 5;
+  name: string;
+  type: 1;
+  description: string;
+  primaryentity: 'none';
+  clientdata: string;
+} {
+  const flow = buildCreateFlowPayload(target, connectionName);
+  const connection = flow.properties.connectionReferences.shared_sharepointonline;
+  const connectionReferences = connection ? {
+    shared_sharepointonline: {
+      runtimeSource: 'embedded',
+      connection: { name: connection.connectionName },
+      api: { name: 'shared_sharepointonline' }
+    }
+  } : {};
+  return {
+    category: 5,
+    name: flow.properties.displayName,
+    type: 1,
+    description: 'AutoGen numbering flow for this list.',
+    primaryentity: 'none',
+    clientdata: JSON.stringify({
+      properties: {
+        connectionReferences,
+        definition: flow.properties.definition
+      },
+      schemaVersion: '1.0.0.0'
+    })
+  };
+}
+
 export function buildShellFlowPayload(listTitle: string): ICreateFlowPayload {
   return {
     properties: {

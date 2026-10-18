@@ -1,5 +1,5 @@
 import { AadHttpClient, AadHttpClientFactory, AadTokenProviderFactory } from '@microsoft/sp-http';
-import { buildCreateFlowPayload, buildShellFlowPayload, IListFlowTarget } from './siteFlow';
+import { buildCreateFlowPayload, buildDataverseWorkflowBody, buildShellFlowPayload, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
@@ -44,6 +44,14 @@ export interface IRemoteFlow {
 const jsonHeaders: { [name: string]: string } = {
   Accept: 'application/json',
   'Content-Type': 'application/json'
+};
+
+const dataverseHeaders: { [name: string]: string } = {
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+  'OData-MaxVersion': '4.0',
+  'OData-Version': '4.0',
+  Prefer: 'return=representation'
 };
 
 class FlowRequestError extends Error {
@@ -461,6 +469,17 @@ export async function createRemoteFlow(
   const full = buildCreateFlowPayload(target, connectionName);
   const shell = buildShellFlowPayload(target.listTitle);
   let lastError = '';
+  try {
+    const dataverse = await createDataverseFlow(factory, located, target, connectionName);
+    if (dataverse) {
+      return dataverse;
+    }
+  } catch (error) {
+    if (error instanceof FlowStartError) {
+      throw error;
+    }
+    lastError = error instanceof Error ? error.message : lastError;
+  }
   for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
     const host = hosts[hostIndex];
     const created = await createOnHost(client, token, environment, host, full, shell);
@@ -492,6 +511,10 @@ export async function redeployRemoteFlow(
   const client = await openClient(factory);
   const token = await readFlowToken(tokens);
   const located = await environmentForWrite(client, token, environment);
+  const dataverse = await redeployDataverseFlow(factory, located, flowId, target, connectionName);
+  if (dataverse) {
+    return dataverse;
+  }
   const host = flowApiHosts(located)[0] || 'https://api.flow.microsoft.com';
   try {
     await sendJson(client, 'POST', `${flowPath(environment, flowId, host)}/stop?api-version=${API_VERSION}`, undefined, token);
@@ -636,6 +659,98 @@ interface IFlowWriteResult {
 interface IFlowWriteResponse {
   name?: string;
   id?: string;
+}
+
+async function createDataverseFlow(
+  factory: AadHttpClientFactory,
+  environment: IFlowEnvironment,
+  target: IListFlowTarget,
+  connectionName: string
+): Promise<IRemoteFlow | undefined> {
+  const client = await openDataverseClient(factory, environment.instanceUrl);
+  if (!client) {
+    return undefined;
+  }
+  const response = await client.fetch(`${environment.instanceUrl}/api/data/v9.2/workflows`, AadHttpClient.configurations.v1, {
+    method: 'POST',
+    headers: dataverseHeaders,
+    body: JSON.stringify(buildDataverseWorkflowBody(target, connectionName))
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new FlowRequestError(response.status, `${environment.instanceUrl} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
+  }
+  const body = text.trim() ? parseJson<{ workflowid?: string }>(text) : {};
+  const id = body.workflowid || workflowIdFromHeader(response.headers.get('OData-EntityId') || '');
+  if (!id) {
+    throw new Error('Dataverse did not return the new numbering flow.');
+  }
+  await activateDataverseFlow(client, environment.instanceUrl, id);
+  return { id, state: 'Started' };
+}
+
+async function redeployDataverseFlow(
+  factory: AadHttpClientFactory,
+  environment: IFlowEnvironment,
+  flowId: string,
+  target: IListFlowTarget,
+  connectionName: string
+): Promise<IRemoteFlow | undefined> {
+  const client = await openDataverseClient(factory, environment.instanceUrl);
+  if (!client) {
+    return undefined;
+  }
+  const row = buildDataverseWorkflowBody(target, connectionName);
+  const url = `${environment.instanceUrl}/api/data/v9.2/workflows(${flowId})`;
+  try {
+    await dataverseSend(client, 'PATCH', url, { statecode: 0 });
+    await dataverseSend(client, 'PATCH', url, { clientdata: row.clientdata, name: row.name });
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+    return undefined;
+  }
+  await activateDataverseFlow(client, environment.instanceUrl, flowId);
+  return { id: flowId, state: 'Started' };
+}
+
+async function openDataverseClient(factory: AadHttpClientFactory, orgUrl: string): Promise<AadHttpClient | undefined> {
+  if (!orgUrl) {
+    return undefined;
+  }
+  try {
+    return await factory.getClient(orgUrl);
+  } catch {
+    return undefined;
+  }
+}
+
+async function activateDataverseFlow(client: AadHttpClient, orgUrl: string, flowId: string): Promise<void> {
+  try {
+    await dataverseSend(client, 'PATCH', `${orgUrl}/api/data/v9.2/workflows(${flowId})`, { statecode: 1 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The numbering flow was created and did not start.';
+    throw new FlowStartError(flowId, message);
+  }
+}
+
+async function dataverseSend(client: AadHttpClient, method: string, url: string, body: object): Promise<void> {
+  const response = await client.fetch(url, AadHttpClient.configurations.v1, {
+    method,
+    headers: dataverseHeaders,
+    body: JSON.stringify(body)
+  });
+  if (response.ok) {
+    return;
+  }
+  const text = await response.text();
+  throw new FlowRequestError(response.status, `${hostOf(url)} returned HTTP ${response.status}. ${cleanFlowError(shorten(text, response.status))}`);
+}
+
+function workflowIdFromHeader(value: string): string {
+  const match = /workflows\(([0-9a-f-]{36})\)/i.exec(value);
+  return match ? match[1] : '';
 }
 
 async function createOnHost(

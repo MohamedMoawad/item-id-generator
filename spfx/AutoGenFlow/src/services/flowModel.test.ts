@@ -20,7 +20,8 @@ describe('flow model', () => {
       displayName: 'Default',
       isDefault: true,
       powerAppsEndpoint: 'https://api.powerapps.com',
-      location: 'unitedstates'
+      location: 'unitedstates',
+      instanceUrl: ''
     });
     const environment = chooseEnvironment({
       value: [{
@@ -43,7 +44,8 @@ describe('flow model', () => {
       powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
       displayName: 'Default',
       isDefault: true,
-      location: 'unitedstates'
+      location: 'unitedstates',
+      instanceUrl: ''
     });
     expect(regional.some((url) => url.indexOf('https://api.powerapps.com/providers/Microsoft.PowerApps/connections?') === 0)).toBe(true);
     expect(chooseEnvironment({
@@ -64,7 +66,8 @@ describe('flow model', () => {
       powerAppsEndpoint: 'https://api.powerapps.com',
       displayName: 'Personal Productivity(Default)',
       isDefault: true,
-      location: ''
+      location: '',
+      instanceUrl: ''
     });
     expect(readEnvironments({
       value: [
@@ -149,6 +152,7 @@ describe('flow model', () => {
       }]
     });
     expect(qatar && qatar.location).toBe('unitedarabemirates');
+    expect(qatar && qatar.instanceUrl).toBe('https://org.crm15.dynamics.com');
     expect(qatar && flowCreateUrls(qatar).join(' ')).not.toContain('europe.api');
     const labeledEurope = chooseEnvironment({
       value: [{
@@ -217,7 +221,8 @@ describe('flow model', () => {
       powerAppsEndpoint: 'https://unitedstates.api.powerapps.com',
       displayName: 'Default',
       isDefault: true,
-      location: 'unitedstates'
+      location: 'unitedstates',
+      instanceUrl: ''
     };
     const urls = sharePointConnectionCreateUrls(environment);
     expect(urls[0]).toContain('https://api.flow.microsoft.com/providers/Microsoft.PowerApps/apis/shared_sharepointonline/connections?');
