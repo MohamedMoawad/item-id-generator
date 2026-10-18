@@ -156,7 +156,9 @@ describe('flow model', () => {
   it('reads the flow state and treats a missing approval as consent', () => {
     expect(readFlowState({ properties: { state: 'Started' } })).toBe('Started');
     expect(readFlowState({})).toBe('Missing');
-    expect(isConsentFailure(401, '')).toBe(true);
+    expect(isConsentFailure(401, '')).toBe(false);
+    expect(isConsentFailure(403, 'The user is not authorized for this environment.')).toBe(false);
+    expect(isConsentFailure(0, 'AADSTS65001: The user or administrator has not consented to use the application.')).toBe(true);
     expect(isConsentFailure(400, 'The column is missing')).toBe(false);
   });
 

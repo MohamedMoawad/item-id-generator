@@ -423,12 +423,11 @@ export function readFlowState(payload: { name?: string; properties?: { state?: s
 }
 
 export function isConsentFailure(status: number, body: string): boolean {
-  if (status === 401 || status === 403) {
-    return true;
-  }
   const text = body.toLowerCase();
-  return text.indexOf('consent') >= 0
+  return text.indexOf('aadsts65001') >= 0
     || text.indexOf('aadsts65002') >= 0
-    || text.indexOf('aadsts') >= 0
-    || text.indexOf('approval') >= 0;
+    || text.indexOf('has not consented') >= 0
+    || text.indexOf('admin consent') >= 0
+    || text.indexOf('requires consent') >= 0
+    || (status === 0 && text.indexOf('consent') >= 0);
 }

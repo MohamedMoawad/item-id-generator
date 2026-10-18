@@ -24,8 +24,6 @@ import {
 } from './flowModel';
 
 const FLOW_RESOURCE = 'https://service.flow.microsoft.com/';
-const POWERAPPS_RESOURCE = 'https://service.powerapps.com/';
-const POWERAPPS_CONSENT = 'Open Admin center, Advanced, API access. Approve PowerApps Service with scope User. Then choose Manage flow again.';
 const API_VERSION = '2016-11-01';
 
 export interface IFlowContext {
@@ -187,65 +185,59 @@ export async function syncListFlow(
     return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.', consentUrl: '' };
   }
   const ensured = await ensureSharePointConnection(factory, environment, current.flowConnection);
-  const connection = ensured.connection;
-  if (!connection) {
-    const detail = ensured.error ? ` ${ensured.error}` : '';
-    return {
-      flowId: current.flowId,
-      flowEnvironment: environment.id,
-      flowConnection: current.flowConnection,
-      flowState: current.flowState,
-      note: `The SharePoint connection could not be created in this environment.${detail} Open Power Automate, add a SharePoint connection for this account, then save again.`,
-      consentUrl: connectionPortalUrl(environment.id)
-    };
-  }
-  const sameEnvironment = current.flowEnvironment === environment.id;
-  if (current.flowId && sameEnvironment) {
-    try {
-      const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connection.name);
-      return {
-        flowId: remote.id,
-        flowEnvironment: environment.id,
-        flowConnection: connection.name,
-        flowState: 'Started',
-        note: ensured.consentUrl ? 'Sign in to the SharePoint connection, then save again so numbering can start.' : '',
-        consentUrl: ensured.consentUrl
-      };
-    } catch (error) {
-      if (error instanceof FlowStartError) {
-        return flowSavedWithoutStart(environment, connection.name, error, ensured.consentUrl);
-      }
-      throw error;
-    }
-  }
-  if (current.flowId) {
-    const previous = environments.filter((item) => item.id === current.flowEnvironment)[0];
-    if (previous) {
-      try {
-        await setRemoteFlowState(factory, previous, current.flowId, 'Stopped');
-      } catch (error) {
-        if (error instanceof FlowConsentError) {
-          throw error;
+  const names = ensured.connection ? [ensured.connection.name] : ['', newSharePointConnectionName()];
+  let lastError = ensured.error;
+  for (let index = 0; index < names.length; index += 1) {
+    const connectionName = names[index];
+    const sameEnvironment = current.flowEnvironment === environment.id;
+    if (index === 0 && current.flowId && !sameEnvironment) {
+      const previous = environments.filter((item) => item.id === current.flowEnvironment)[0];
+      if (previous) {
+        try {
+          await setRemoteFlowState(factory, previous, current.flowId, 'Stopped');
+        } catch (error) {
+          if (error instanceof FlowConsentError) {
+            throw error;
+          }
         }
       }
     }
-  }
-  try {
-    const created = await createRemoteFlow(factory, environment, target, connection.name);
-    return {
-      flowId: created.id,
-      flowEnvironment: environment.id,
-      flowConnection: connection.name,
-      flowState: 'Started',
-      note: ensured.consentUrl ? 'Sign in to the SharePoint connection, then save again so numbering can start.' : '',
-      consentUrl: ensured.consentUrl
-    };
-  } catch (error) {
-    if (error instanceof FlowStartError) {
-      return flowSavedWithoutStart(environment, connection.name, error, ensured.consentUrl);
+    try {
+      if (current.flowId && sameEnvironment) {
+        const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connectionName);
+        return startedFlow(environment, remote.id, connectionName, ensured.consentUrl);
+      }
+      const created = await createRemoteFlow(factory, environment, target, connectionName);
+      return startedFlow(environment, created.id, connectionName, ensured.consentUrl);
+    } catch (error) {
+      if (error instanceof FlowStartError) {
+        return flowSavedWithoutStart(environment, connectionName, error, ensured.consentUrl || connectionPortalUrl(environment.id));
+      }
+      if (error instanceof FlowConsentError) {
+        throw error;
+      }
+      lastError = error instanceof Error ? error.message : lastError;
     }
-    throw error;
   }
+  return {
+    flowId: current.flowId,
+    flowEnvironment: environment.id,
+    flowConnection: current.flowConnection,
+    flowState: current.flowState,
+    note: lastError || 'The numbering flow was not created.',
+    consentUrl: connectionPortalUrl(environment.id)
+  };
+}
+
+function startedFlow(environment: IFlowEnvironment, flowId: string, connectionName: string, consentUrl: string): ISyncedFlow {
+  return {
+    flowId,
+    flowEnvironment: environment.id,
+    flowConnection: connectionName,
+    flowState: 'Started',
+    note: consentUrl ? 'Sign in to the SharePoint connection, then save again so numbering can start.' : '',
+    consentUrl
+  };
 }
 
 async function ensureSharePointConnection(
@@ -262,7 +254,7 @@ async function ensureSharePointConnection(
     }
   }
   let lastError = '';
-  let consent = !clients.powerApps;
+  let consent = false;
   for (let index = 0; index < clients.ordered.length; index += 1) {
     const created = await createSharePointConnection(clients.ordered[index], environment);
     if (created.connection) {
@@ -283,7 +275,7 @@ async function ensureSharePointConnection(
     return { connection: { name: savedName, displayName: 'SharePoint', accountName: '' }, consentUrl: '', error: '' };
   }
   if (consent) {
-    throw new FlowConsentError(POWERAPPS_CONSENT);
+    throw new FlowConsentError();
   }
   return { consentUrl: '', error: lastError };
 }
@@ -575,19 +567,7 @@ async function startFlow(client: AadHttpClient, environment: IFlowEnvironment, f
 
 async function openConnectionClients(factory: AadHttpClientFactory): Promise<{ powerApps?: AadHttpClient; ordered: AadHttpClient[] }> {
   const flow = await openClient(factory);
-  const ordered: AadHttpClient[] = [];
-  let powerApps: AadHttpClient | undefined;
-  try {
-    powerApps = await factory.getClient(POWERAPPS_RESOURCE);
-    ordered.push(powerApps);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    if (isConsentFailure(0, message)) {
-      powerApps = undefined;
-    }
-  }
-  ordered.push(flow);
-  return { powerApps, ordered };
+  return { ordered: [flow] };
 }
 
 async function openClient(factory: AadHttpClientFactory): Promise<AadHttpClient> {
