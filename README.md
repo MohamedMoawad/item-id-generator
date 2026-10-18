@@ -43,4 +43,4 @@ npm start
 
 ## AutoGen Flow
 
-[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app, package **1.22.0.0**. Open a list, choose **AutoGen Flow**, and add, edit, or delete that list’s rule. Choose the environment, then save. The app creates this account’s SharePoint connection and one numbering flow for that list. **Settings → Manage flow** opens that flow and its run history. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. On a list numbered by AutoGen Flow, clear **Active** on that list’s Autogen Feature rule.
+[spfx/AutoGenFlow](spfx/AutoGenFlow/README.md) is a second numbering app, package **1.23.0.0**. Open a list, choose **AutoGen Flow**, and add, edit, or delete that list’s rule. Choose the environment, then save. The app creates this account’s SharePoint connection and one numbering flow for that list. **Settings → Manage flow** opens that flow and its run history. Upload [deploy/autogen-flow.sppkg](deploy/autogen-flow.sppkg) separately. On a list numbered by AutoGen Flow, clear **Active** on that list’s Autogen Feature rule.

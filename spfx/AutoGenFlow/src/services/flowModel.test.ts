@@ -164,6 +164,20 @@ describe('flow model', () => {
     });
     expect(labeledEurope && labeledEurope.location).toBe('unitedarabemirates');
     expect(labeledEurope && flowCreateUrls(labeledEurope).join(' ')).not.toContain('europe.api');
+    const europeLabel = chooseEnvironment({
+      value: [{
+        name: 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da',
+        location: 'europe',
+        properties: {
+          displayName: 'Personal Productivity(Default)',
+          azureRegionHint: 'westeurope',
+          runtimeEndpoints: { 'microsoft.Flow': 'https://europe.api.flow.microsoft.com' }
+        }
+      }]
+    });
+    expect(europeLabel && europeLabel.location).toBe('europe');
+    expect(europeLabel && flowCreateUrls(europeLabel)[0]).toContain('https://unitedarabemirates.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
+    expect(europeLabel && flowCreateUrls(europeLabel).join(' ')).not.toContain('europe.api');
     expect(qatar && flowGeoCandidates(qatar)[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');

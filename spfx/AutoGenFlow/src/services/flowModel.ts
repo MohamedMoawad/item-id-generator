@@ -418,14 +418,27 @@ export function flowHomeUrl(environmentId: string): string {
 
 export function flowApiHosts(environment: { location?: string; endpoint?: string }): string[] {
   const hosts: string[] = [];
-  const geo = geoFromHint(environment.location || '');
+  const geo = flowWriteGeo(environment.location || '');
   if (geo) {
     addFlowHost(hosts, `https://${geo}.api.flow.microsoft.com`);
+    return hosts;
+  }
+  const endpoint = (environment.endpoint || '').toLowerCase();
+  if (endpoint.indexOf('europe.api.flow.microsoft.com') >= 0) {
+    addFlowHost(hosts, 'https://unitedarabemirates.api.flow.microsoft.com');
     return hosts;
   }
   addFlowHost(hosts, environment.endpoint || '');
   addFlowHost(hosts, 'https://api.flow.microsoft.com');
   return hosts;
+}
+
+function flowWriteGeo(location: string): string {
+  const geo = geoFromHint(location);
+  if (geo === 'europe') {
+    return 'unitedarabemirates';
+  }
+  return geo;
 }
 
 export function flowGeoCandidates(environment: { location?: string; endpoint?: string }): string[] {
