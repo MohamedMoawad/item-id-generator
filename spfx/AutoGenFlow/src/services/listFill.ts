@@ -105,8 +105,12 @@ export async function fillBlankNumbers(target: IListFillTarget): Promise<number>
   } catch {
     return 0;
   } finally {
-    running = false;
+    releaseFill();
   }
+}
+
+function releaseFill(): void {
+  running = false;
 }
 
 async function loadItems(target: IListFillTarget, config: IConfigDraft, field: string): Promise<Array<{ Id: number; Created?: string; [name: string]: unknown }>> {
