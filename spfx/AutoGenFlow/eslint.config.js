@@ -10,5 +10,11 @@ module.exports = [
         project: './tsconfig.json'
       }
     }
+  },
+  {
+    files: ['src/services/flowSdkSource.ts'],
+    rules: {
+      'max-len': 'off'
+    }
   }
 ];

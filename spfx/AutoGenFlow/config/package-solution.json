@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.25.0.0",
+    "version": "1.26.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -40,7 +40,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.25.0.0",
+        "version": "1.26.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

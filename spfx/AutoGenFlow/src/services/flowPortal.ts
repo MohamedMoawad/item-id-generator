@@ -1,6 +1,8 @@
+import { flowSdkSource } from './flowSdkSource';
+
 const SDK_URLS = [
-  'https://make.powerautomate.com/Content/msflowsdk-1.1.js',
-  'https://flow.microsoft.com/Content/msflowsdk-1.1.js'
+  'https://flow.microsoft.com/Content/msflowsdk-1.1.js',
+  'https://content.powerapps.com/resource/makerx/static/js/msflowsdk-1.1.1e587b1a.js'
 ];
 
 interface IFlowEvent {
@@ -106,14 +108,35 @@ export async function createFlowThroughPortal(token: string, environmentId: stri
   });
 }
 
+function sdkReady(): boolean {
+  return !!(window as unknown as ISdkWindow).MsFlowSdk;
+}
+
 function loadFlowSdk(): Promise<void> {
-  if ((window as unknown as ISdkWindow).MsFlowSdk) {
+  if (sdkReady()) {
+    return Promise.resolve();
+  }
+  installBundledSdk();
+  if (sdkReady()) {
     return Promise.resolve();
   }
   return loadScript(0);
 }
 
+function installBundledSdk(): void {
+  if (sdkReady()) {
+    return;
+  }
+  const script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.text = flowSdkSource;
+  document.head.appendChild(script);
+}
+
 function loadScript(index: number): Promise<void> {
+  if (sdkReady()) {
+    return Promise.resolve();
+  }
   if (index >= SDK_URLS.length) {
     return Promise.reject(new Error('Power Automate did not load the numbering flow creator.'));
   }
@@ -121,12 +144,19 @@ function loadScript(index: number): Promise<void> {
     const script = document.createElement('script');
     script.src = SDK_URLS[index];
     script.async = true;
-    script.onload = (): void => {
-      resolve();
-    };
-    script.onerror = (): void => {
+    const next = (): void => {
       script.remove();
       loadScript(index + 1).then(resolve).catch(reject);
+    };
+    script.onload = (): void => {
+      if (sdkReady()) {
+        resolve();
+        return;
+      }
+      next();
+    };
+    script.onerror = (): void => {
+      next();
     };
     document.head.appendChild(script);
   });
