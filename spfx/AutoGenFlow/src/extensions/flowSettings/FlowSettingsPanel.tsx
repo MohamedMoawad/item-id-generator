@@ -82,6 +82,16 @@ interface IFlowSettingsPanelState {
   statusMessage: string;
 }
 
+class CreatorSlot extends React.Component {
+  public shouldComponentUpdate(): boolean {
+    return false;
+  }
+
+  public render(): React.ReactElement {
+    return <div id="autogen-flow-creator-slot" className={styles.creatorSlot} />;
+  }
+}
+
 const RESET_OPTIONS: IDropdownOption[] = [
   { key: 'None', text: 'Never' },
   { key: 'Day', text: 'Every day' },
@@ -135,7 +145,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.28',
+          title: 'AutoGen Flow 1.29',
           showCloseButton: true
         }}
         modalProps={{
@@ -180,6 +190,7 @@ export default class FlowSettingsPanel
             Add AutoGen Configuration
           </button>
         )}
+        <CreatorSlot />
         {showRow && draft && this._renderSavedRow(draft)}
         {!this.state.loading && draft && this.state.showingForm && this._renderForm(draft)}
       </Dialog>

@@ -648,6 +648,19 @@ async function environmentForWrite(client: AadHttpClient, environment: IFlowEnvi
   return environment;
 }
 
+async function readWidgetToken(tokens: AadTokenProviderFactory | undefined, resource: string, fallback: string): Promise<string> {
+  if (!tokens || resource.toLowerCase().indexOf('service.flow.microsoft.com') < 0) {
+    return fallback;
+  }
+  try {
+    const provider = await tokens.getTokenProvider();
+    const fresh = await provider.getToken(FLOW_RESOURCE);
+    return fresh || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function readFlowToken(tokens?: AadTokenProviderFactory): Promise<string> {
   if (!tokens) {
     return '';
@@ -690,7 +703,12 @@ async function createThroughPortal(
   if (!token) {
     throw new Error('Power Automate did not create the numbering flow.');
   }
-  const id = await createFlowThroughPortal(token, environment.id, buildPortalTemplate(target, connectionName));
+  const id = await createFlowThroughPortal(
+    token,
+    environment.id,
+    buildPortalTemplate(target, connectionName),
+    (resource: string): Promise<string> => readWidgetToken(tokens, resource, token)
+  );
   let state: FlowRunState = 'Started';
   try {
     const remote = await readRemoteFlow(factory, environment, id);
