@@ -3,7 +3,7 @@
   "solution": {
     "name": "AutoGen Flow",
     "id": "c8e4a1d2-6b37-4f90-9c55-2a7e1b0d4f88",
-    "version": "1.34.0.0",
+    "version": "1.35.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -26,10 +26,10 @@
     },
     "metadata": {
       "shortDescription": {
-        "default": "Add, edit, or delete a list rule. One site flow numbers every related list."
+        "default": "Set the column and formula on a list. A blank number is written on that list."
       },
       "longDescription": {
-        "default": "Open AutoGen Flow on a list. Add a rule, choose the environment, column, and formula, and save. One numbering flow reads AutoGenFlowConfiguration and writes the number on each related list. Settings, Manage flow opens that flow."
+        "default": "Open AutoGen Flow on a list. Set the number column and formula, then save. Leave the number column empty. The number is written on the list."
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -40,7 +40,7 @@
         "title": "AutoGen Flow",
         "description": "Creates AutoGenFlowConfiguration and adds AutoGen Flow to each list.",
         "id": "d1f6b2a4-8c50-4e77-a193-5b6d0e2c7a11",
-        "version": "1.34.0.0",
+        "version": "1.35.0.0",
         "assets": {
           "elementManifests": [
             "elements.xml",

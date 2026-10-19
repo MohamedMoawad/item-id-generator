@@ -23,7 +23,6 @@ import {
   findSiteFlow,
   IConfigDraft,
   ResetPeriod,
-  siteFlowDraft,
   validateDraft,
   wholeCount
 } from '../../services/contract';
@@ -32,19 +31,16 @@ import {
   deleteConfigRow,
   ensureConfigList,
   ensureTargetNumberColumn,
-  IFlowBinding,
   loadConfigRows,
   loadFormulaColumns,
   saveConfigRow,
-  saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { chooseConnection, FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { ISyncedFlow, listConnections, listEnvironments, readFlowProblem, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
+import { FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { readFlowProblem } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
-import { beginPowerAutomateAccess, openPowerAutomateSignIn, showPowerAutomatePage } from '../../services/flowPortal';
-import { IListFlowTarget } from '../../services/siteFlow';
+import { fillBlankNumbers } from '../../services/listFill';
 import styles from './FlowSettingsPanel.module.scss';
 
 export interface IFlowSettingsPanelProps {
@@ -94,9 +90,6 @@ const RESET_OPTIONS: IDropdownOption[] = [
 export default class FlowSettingsPanel
   extends React.Component<IFlowSettingsPanelProps, IFlowSettingsPanelState> {
 
-  private _connectionRequest = 0;
-  private _makerTab: Window | undefined;
-
   public constructor(props: IFlowSettingsPanelProps) {
     super(props);
     this.state = {
@@ -138,7 +131,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.34',
+          title: 'AutoGen Flow 1.35',
           showCloseButton: true
         }}
         modalProps={{
@@ -222,7 +215,7 @@ export default class FlowSettingsPanel
             <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
           </div>
         )}
-        {this._openFlowLink()}
+        {this._hasStoredFlow() && this._openFlowLink()}
       </div>
     );
   }
@@ -249,9 +242,8 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Save settings opens Power Automate in a new tab so this account can sign in. One numbering flow for this site collection reads AutoGenFlowConfiguration and writes the number on each related list.
+          Set the number column and the formula, then save. Leave that column empty on the item. The number is written on this list.
         </p>
-        {this._flowPickers()}
         {!this.state.canEdit && (
           <div className={styles.status}>
             <MessageBar messageBarType={MessageBarType.info}>
@@ -314,10 +306,10 @@ export default class FlowSettingsPanel
             <PrimaryButton
               text={this.state.saving ? 'Saving' : 'Save settings'}
               onClick={this._onSave}
-              disabled={this.state.saving || this.state.connectionsLoading}
+              disabled={this.state.saving}
             />
           )}
-          {draft.id !== undefined && (
+          {draft.id !== undefined && this._hasStoredFlow() && (
             <DefaultButton text="Manage flow" onClick={this._onManageFlow} disabled={this.state.saving} />
           )}
           {draft.id !== undefined && (
@@ -338,48 +330,12 @@ export default class FlowSettingsPanel
   }
 
   private _onManageFlow = (): void => {
-    beginPowerAutomateAccess();
-    const draft = this.state.draft;
-    if (!draft || draft.id === undefined) {
-      this.setState({
-        warningMessage: 'Save the rule first. Manage flow opens the site numbering flow.',
-        errorMessage: '',
-        statusMessage: ''
-      });
+    const flowId = this._storedFlowId();
+    const environmentId = this._storedEnvironmentId();
+    if (!flowId || !environmentId) {
       return;
     }
-    this._makerTab = openPowerAutomateSignIn(this.state.environmentId || draft.flowEnvironment);
-    this._manageFlow().catch((error: unknown) => {
-      this.setState({ saving: false, errorMessage: messageOf(error), statusMessage: '' });
-    });
-  };
-
-  private async _manageFlow(): Promise<void> {
-    const draft = this.state.draft;
-    if (!draft || draft.id === undefined) {
-      return;
-    }
-    this.setState({ saving: true, errorMessage: '', warningMessage: '', statusMessage: '', consentUrl: '' });
-    const synced = await this._syncShared(draft, draft.id);
-    const flowId = synced.flowId;
-    const environmentId = synced.flowEnvironment;
-    const opened = this._openMessage(synced.flowState === 'Started', synced.note);
-    this.setState({
-      saving: false,
-      consentUrl: synced.consentUrl,
-      warningMessage: opened.warningMessage,
-      statusMessage: opened.statusMessage,
-      draft: {
-        ...draft,
-        flowId: synced.flowId,
-        flowEnvironment: synced.flowEnvironment,
-        flowConnection: synced.flowConnection,
-        flowState: synced.flowState
-      }
-    });
-    if (flowId && environmentId) {
-      showPowerAutomatePage(this._makerTab, flowPortalUrl(environmentId, flowId));
-    }
+    window.open(flowPortalUrl(environmentId, flowId), '_blank', 'noopener,noreferrer');
   };
 
   private _openConsent = (): void => {
@@ -388,26 +344,6 @@ export default class FlowSettingsPanel
     }
     window.open(this.state.consentUrl, '_blank', 'noopener,noreferrer');
   };
-
-  private _flowPickers(): React.ReactElement {
-    const environmentKey = this.state.environments.some((item) => item.id === this.state.environmentId)
-      ? this.state.environmentId
-      : undefined;
-    const locked = !this.state.canEdit || this.state.saving || this.state.connectionsLoading;
-    return (
-      <div className={styles.pickers}>
-        <Dropdown
-          label="Environment"
-          placeholder={this.state.connectionsLoading ? 'Loading environments' : 'Choose an environment'}
-          options={this.state.environments.map((item) => ({ key: item.id, text: item.displayName }))}
-          selectedKey={environmentKey}
-          disabled={locked || this.state.environments.length === 0}
-          onChange={this._onEnvironmentChange}
-        />
-        {this.state.flowHint && <p className={styles.intro}>{this.state.flowHint}</p>}
-      </div>
-    );
-  }
 
   private _statusLine(): string {
     const draft = this.state.draft;
@@ -419,17 +355,12 @@ export default class FlowSettingsPanel
     }
     const who = draft.modifiedBy ? ` by ${draft.modifiedBy}` : '';
     const when = draft.modified ? `Last modified ${formatModified(draft.modified)}${who}.` : 'Saved for this list.';
-    const flow = draft.flowState === 'Started' ? ' Numbering is on.' : '';
+    const flow = draft.isActive ? ' The number is written on this list.' : '';
     return `${when}${flow}`;
   }
 
   private _rowStatus(draft: IConfigDraft): string {
-    if (!draft.isActive) {
-      return 'Off';
-    }
-    const shared = this.state.legacySite;
-    const started = draft.flowState === 'Started' || (!!shared && shared.flowState === 'Started');
-    return started ? 'Active' : 'Saved';
+    return draft.isActive ? 'Active' : 'Off';
   }
 
   private _settingsItems(): IContextualMenuItem[] {
@@ -449,13 +380,13 @@ export default class FlowSettingsPanel
         disabled: !this.state.draft || this.state.draft.id === undefined || this.state.saving,
         onClick: this._onView
       },
-      {
+      ...(this._hasStoredFlow() ? [{
         key: 'manage',
         text: 'Manage flow',
         iconProps: { iconName: 'OpenInNewWindow' },
-        disabled: this.state.saving || !this.state.draft || this.state.draft.id === undefined,
+        disabled: this.state.saving,
         onClick: this._onManageFlow
-      }
+      }] : [])
     ];
   }
 
@@ -476,13 +407,13 @@ export default class FlowSettingsPanel
         disabled: this.state.saving,
         onClick: this._onView
       },
-      {
+      ...(this._hasStoredFlow() ? [{
         key: 'open',
         text: 'Manage flow',
         iconProps: { iconName: 'OpenInNewWindow' },
-        disabled: this.state.saving || !this.state.draft || this.state.draft.id === undefined,
+        disabled: this.state.saving,
         onClick: this._onManageFlow
-      },
+      }] : []),
       {
         key: 'delete',
         text: 'Delete',
@@ -544,45 +475,9 @@ export default class FlowSettingsPanel
   };
 
   private _onSave = (): void => {
-    beginPowerAutomateAccess();
-    const draft = this.state.draft;
-    this._makerTab = openPowerAutomateSignIn(this.state.environmentId || (draft && draft.flowEnvironment) || '');
     this._save().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error) });
     });
-  };
-
-  private _onEnvironmentChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
-    if (!option) {
-      return;
-    }
-    const environmentId = String(option.key);
-    const environment = this.state.environments.filter((item) => item.id === environmentId)[0];
-    if (!environment) {
-      return;
-    }
-    const request = this._connectionRequest + 1;
-    this._connectionRequest = request;
-    this.setState({ environmentId, connectionsLoading: true, connectionName: '', connections: [], flowHint: '' });
-    listConnections(this.props.aadHttpClientFactory, environment)
-      .then((connections) => {
-        if (request !== this._connectionRequest) {
-          return;
-        }
-        const chosen = chooseConnection(connections, this.props.userEmail, this.state.draft ? this.state.draft.flowConnection : '');
-        this.setState({
-          connectionsLoading: false,
-          connections,
-          connectionName: chosen ? chosen.name : '',
-          flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates one numbering flow for this site collection.'
-        });
-      })
-      .catch((error: unknown) => {
-        if (request !== this._connectionRequest) {
-          return;
-        }
-        this.setState({ connectionsLoading: false, connections: [], connectionName: '', flowHint: messageOf(error) });
-      });
   };
 
   private _onColumnChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
@@ -656,11 +551,6 @@ export default class FlowSettingsPanel
       editing: false,
       errorMessage: ''
     });
-    if (canEdit) {
-      this._loadFlowChoices(draft.flowEnvironment, draft.flowConnection).catch((error: unknown) => {
-        this.setState({ connectionsLoading: false, flowHint: messageOf(error) });
-      });
-    }
     if (reportRuns) {
       this._loadFlowProblem(draft).catch((error: unknown) => {
         this.setState({ warningMessage: messageOf(error) });
@@ -676,32 +566,6 @@ export default class FlowSettingsPanel
     if (problem) {
       this.setState({ warningMessage: problem });
     }
-  }
-
-  private async _loadFlowChoices(preferredEnvironment: string, preferredConnection: string): Promise<void> {
-    this.setState({ connectionsLoading: true, flowHint: '' });
-    const environments = await listEnvironments(this.props.aadHttpClientFactory);
-    const environment = environments.filter((item) => item.id === preferredEnvironment)[0]
-      || environments.filter((item) => item.id === this.state.environmentId)[0]
-      || environments[0];
-    if (!environment) {
-      this.setState({
-        connectionsLoading: false,
-        environments,
-        flowHint: 'Power Automate did not return an environment for this account.'
-      });
-      return;
-    }
-    const connections = await listConnections(this.props.aadHttpClientFactory, environment);
-    const chosen = chooseConnection(connections, this.props.userEmail, preferredConnection);
-    this.setState({
-      connectionsLoading: false,
-      environments,
-      environmentId: environment.id,
-      connections,
-      connectionName: chosen ? chosen.name : '',
-      flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates one numbering flow for this site collection.'
-    });
   }
 
   private async _save(): Promise<void> {
@@ -740,137 +604,37 @@ export default class FlowSettingsPanel
       this.props.listGuid,
       next.numberColumnInternalName
     );
-    let saved: IConfigDraft = { ...next, id };
-    let warningMessage = '';
-    let consentUrl = '';
-    let statusMessage = saved.isActive
-      ? 'No numbering flow was created. The Power Automate tab lists the flows in this environment.'
-      : 'Saved the settings for this list. This list is left out of the site numbering flow.';
-    try {
-      const synced = await this._syncShared(saved, id);
-      saved = {
-        ...saved,
-        flowId: synced.flowId,
-        flowEnvironment: synced.flowEnvironment,
-        flowConnection: synced.flowConnection,
-        flowState: synced.flowState
-      };
-      consentUrl = synced.consentUrl;
-      const opened = this._openMessage(saved.isActive && synced.flowState === 'Started', synced.note);
-      statusMessage = saved.isActive ? opened.statusMessage : 'Saved the settings for this list. This list is left out of the site numbering flow.';
-      warningMessage = saved.isActive ? opened.warningMessage : '';
-      if (saved.flowId && saved.flowEnvironment) {
-        showPowerAutomatePage(this._makerTab, flowPortalUrl(saved.flowEnvironment, saved.flowId));
-      }
-    } catch (error) {
-      const opened = this._openMessage(false, messageOf(error));
-      warningMessage = opened.warningMessage;
-      statusMessage = opened.statusMessage;
+    const saved: IConfigDraft = { ...next, id };
+    const statusMessage = saved.isActive
+      ? 'Saved. Leave the number column empty. The number is written on this list.'
+      : 'Saved. This list is off, so new items stay blank.';
+    this.setState({ saving: false, statusMessage, warningMessage: '', consentUrl: '', draft: saved, showingForm: false });
+    if (saved.isActive) {
+      await fillBlankNumbers({
+        spHttpClient: this.props.spHttpClient,
+        siteAbsoluteUrl: this.props.siteAbsoluteUrl,
+        webAbsoluteUrl: this.props.webAbsoluteUrl,
+        configListTitle: listTitle,
+        listGuid: this.props.listGuid
+      });
     }
-    this.setState({ saving: false, statusMessage, warningMessage, consentUrl, draft: saved });
     await this._load();
   }
 
-  private _openMessage(started: boolean, note: string): { statusMessage: string; warningMessage: string } {
-    if (started) {
-      return {
-        statusMessage: 'Saved. The site numbering flow is on. A blank number is filled within about a minute.',
-        warningMessage: ''
-      };
-    }
-    if (!note || note === 'Power Automate is open.' || note === 'No numbering flow was created.' || note.indexOf('Sign in on the Power Automate tab') === 0) {
-      return {
-        statusMessage: 'No numbering flow was created. The Power Automate tab lists the flows in this environment.',
-        warningMessage: ''
-      };
-    }
-    if (note === 'Turn the numbering flow on in the Power Automate tab.') {
-      return { statusMessage: note, warningMessage: '' };
-    }
-    return {
-      statusMessage: 'No numbering flow was created. The Power Automate tab lists the flows in this environment.',
-      warningMessage: note
-    };
+  private _storedFlowId(): string {
+    const draft = this.state.draft;
+    const shared = this.state.legacySite;
+    return ((draft && draft.flowId) || (shared && shared.flowId) || '').trim();
   }
 
-  private _sharedSeed(draft: IConfigDraft): ISyncedFlow {
-    const legacy = this.state.legacySite;
-    const flowId = (legacy && legacy.flowId) || draft.flowId;
-    return {
-      flowId,
-      flowEnvironment: this.state.environmentId || (legacy && legacy.flowEnvironment) || draft.flowEnvironment,
-      flowConnection: this.state.connectionName || (legacy && legacy.flowConnection) || draft.flowConnection,
-      flowState: flowId && legacy && legacy.flowId === flowId ? legacy.flowState : draft.flowState,
-      note: '',
-      consentUrl: ''
-    };
+  private _storedEnvironmentId(): string {
+    const draft = this.state.draft;
+    const shared = this.state.legacySite;
+    return (this.state.environmentId || (draft && draft.flowEnvironment) || (shared && shared.flowEnvironment) || '').trim();
   }
 
-  private async _syncShared(draft: IConfigDraft, listItemId: number): Promise<ISyncedFlow> {
-    const seed = this._sharedSeed(draft);
-    const synced = await syncListFlow(
-      this.props.aadHttpClientFactory,
-      this._target(),
-      seed,
-      true
-    );
-    const binding: IFlowBinding = {
-      flowId: synced.flowId,
-      flowEnvironment: synced.flowEnvironment,
-      flowConnection: synced.flowConnection,
-      flowState: synced.flowState
-    };
-    await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), listItemId, binding);
-    await this._storeSharedFlow(binding);
-    if (synced.flowState === 'Started') {
-      const replaced = await this._stopReplacedFlow(draft.flowId, draft.flowEnvironment, synced.flowId);
-      if (replaced && !synced.note) {
-        synced.note = replaced;
-      }
-    }
-    return synced;
-  }
-
-  private async _storeSharedFlow(binding: IFlowBinding): Promise<void> {
-    const listTitle = this._listTitle();
-    const legacy = this.state.legacySite;
-    if (legacy && legacy.id !== undefined) {
-      await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, legacy.id, binding);
-      this.setState({
-        legacySite: {
-          ...legacy,
-          flowId: binding.flowId,
-          flowEnvironment: binding.flowEnvironment,
-          flowConnection: binding.flowConnection,
-          flowState: binding.flowState
-        }
-      });
-      return;
-    }
-    const draft = siteFlowDraft(this.props.siteAbsoluteUrl, this.props.siteTitle);
-    draft.flowId = binding.flowId;
-    draft.flowEnvironment = binding.flowEnvironment;
-    draft.flowConnection = binding.flowConnection;
-    draft.flowState = binding.flowState;
-    const id = await saveConfigRow(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, draft, false, true);
-    this.setState({ legacySite: { ...draft, id } });
-  }
-
-  private async _stopReplacedFlow(oldId: string, oldEnvironment: string, keptId: string): Promise<string> {
-    if (!oldId || oldId === keptId) {
-      return '';
-    }
-    try {
-      const environments = await listEnvironments(this.props.aadHttpClientFactory);
-      const environment = environments.filter((item) => item.id === oldEnvironment)[0];
-      if (!environment) {
-        return 'An older flow for this list is still on. Turn it off in Power Automate so each item is numbered once.';
-      }
-      await setRemoteFlowState(this.props.aadHttpClientFactory, environment, oldId, 'Stopped');
-      return '';
-    } catch {
-      return 'An older flow for this list is still on. Turn it off in Power Automate so each item is numbered once.';
-    }
+  private _hasStoredFlow(): boolean {
+    return this._storedFlowId().length > 0 && this._storedEnvironmentId().length > 0;
   }
 
   private async _delete(): Promise<void> {
@@ -882,20 +646,10 @@ export default class FlowSettingsPanel
     await deleteConfigRow(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id);
     this.setState({
       saving: false,
-      statusMessage: 'Removed this list from AutoGen Flow. The site numbering flow stays on for the other lists.',
+      statusMessage: 'Removed this list from AutoGen Flow.',
       warningMessage: ''
     });
     await this._load();
-  }
-
-  private _target(): IListFlowTarget {
-    return {
-      webUrl: this.props.webAbsoluteUrl,
-      siteUrl: this.props.siteAbsoluteUrl,
-      listGuid: this.props.listGuid,
-      listTitle: this.props.listTitle,
-      configListTitle: this._listTitle()
-    };
   }
 
   private _listTitle(): string {
