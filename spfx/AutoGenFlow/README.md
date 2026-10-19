@@ -6,15 +6,15 @@ The flow runs about once a minute. It loads the active rows and, on each related
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.31.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.32.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those two permissions are already enough. Update the app on the site after the catalog deploy.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
-6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates this account’s SharePoint connection in that environment, then creates or updates one numbering flow for the site collection. Saving another list updates that same flow.
-7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates the site numbering flow and opens it. The page shows the flow and its run history.
+6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. Power Automate opens in a new tab so this account can sign in. The app then creates or updates one numbering flow for the site collection. Saving another list updates that same flow.
+7. On the saved rule, open **Settings** and choose **Manage flow**. That opens the same Power Automate tab. When the flow is on, the tab shows the flow and its run history.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on each numbered list and on the site collection.
 

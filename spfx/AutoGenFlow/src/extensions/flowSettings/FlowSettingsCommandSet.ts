@@ -65,7 +65,6 @@ export default class FlowSettingsCommandSet
       listGuid: list.id.toString(),
       spHttpClient: this.context.spHttpClient,
       aadHttpClientFactory: this.context.aadHttpClientFactory,
-      aadTokenProviderFactory: this.context.aadTokenProviderFactory,
       userEmail: this.context.pageContext.user.email || this.context.pageContext.user.loginName,
       siteTitle: this.context.pageContext.web.title,
       onDismiss: this._onDismiss

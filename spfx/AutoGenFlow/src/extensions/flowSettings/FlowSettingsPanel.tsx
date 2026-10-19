@@ -15,7 +15,7 @@ import {
   SpinnerSize,
   TextField
 } from '@fluentui/react';
-import { AadHttpClientFactory, AadTokenProviderFactory, SPHttpClient } from '@microsoft/sp-http';
+import { AadHttpClientFactory, SPHttpClient } from '@microsoft/sp-http';
 import {
   DEFAULT_CONFIG_LIST_TITLE,
   draftForCurrentList,
@@ -43,7 +43,7 @@ import { chooseConnection, FlowConsentError, flowPortalUrl, IFlowConnection, IFl
 import { ISyncedFlow, listConnections, listEnvironments, readFlowProblem, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
-import { beginPowerAutomateAccess } from '../../services/flowPortal';
+import { beginPowerAutomateAccess, openPowerAutomateSignIn, showPowerAutomatePage } from '../../services/flowPortal';
 import { IListFlowTarget } from '../../services/siteFlow';
 import styles from './FlowSettingsPanel.module.scss';
 
@@ -57,7 +57,6 @@ export interface IFlowSettingsPanelProps {
   listGuid: string;
   spHttpClient: SPHttpClient;
   aadHttpClientFactory: AadHttpClientFactory;
-  aadTokenProviderFactory: AadTokenProviderFactory;
   userEmail: string;
   onDismiss: () => void;
 }
@@ -85,16 +84,6 @@ interface IFlowSettingsPanelState {
   statusMessage: string;
 }
 
-class CreatorSlot extends React.Component {
-  public shouldComponentUpdate(): boolean {
-    return false;
-  }
-
-  public render(): React.ReactElement {
-    return <div id="autogen-flow-creator-slot" className={styles.creatorSlot} />;
-  }
-}
-
 const RESET_OPTIONS: IDropdownOption[] = [
   { key: 'None', text: 'Never' },
   { key: 'Day', text: 'Every day' },
@@ -106,6 +95,7 @@ export default class FlowSettingsPanel
   extends React.Component<IFlowSettingsPanelProps, IFlowSettingsPanelState> {
 
   private _connectionRequest = 0;
+  private _makerTab: Window | undefined;
 
   public constructor(props: IFlowSettingsPanelProps) {
     super(props);
@@ -148,7 +138,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.31',
+          title: 'AutoGen Flow 1.32',
           showCloseButton: true
         }}
         modalProps={{
@@ -193,7 +183,6 @@ export default class FlowSettingsPanel
             Add AutoGen Configuration
           </button>
         )}
-        <CreatorSlot />
         {showRow && draft && this._renderSavedRow(draft)}
         {!this.state.loading && draft && this.state.showingForm && this._renderForm(draft)}
       </Dialog>
@@ -260,7 +249,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          One numbering flow for this site collection reads AutoGenFlowConfiguration and writes the number on each related list. Choose the environment, then save.
+          Save settings opens Power Automate in a new tab so this account can sign in. One numbering flow for this site collection reads AutoGenFlowConfiguration and writes the number on each related list.
         </p>
         {this._flowPickers()}
         {!this.state.canEdit && (
@@ -350,6 +339,16 @@ export default class FlowSettingsPanel
 
   private _onManageFlow = (): void => {
     beginPowerAutomateAccess();
+    const draft = this.state.draft;
+    if (!draft || draft.id === undefined) {
+      this.setState({
+        warningMessage: 'Save the rule first. Manage flow opens the site numbering flow.',
+        errorMessage: '',
+        statusMessage: ''
+      });
+      return;
+    }
+    this._makerTab = openPowerAutomateSignIn(this.state.environmentId || draft.flowEnvironment);
     this._manageFlow().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error), statusMessage: '' });
     });
@@ -358,11 +357,6 @@ export default class FlowSettingsPanel
   private async _manageFlow(): Promise<void> {
     const draft = this.state.draft;
     if (!draft || draft.id === undefined) {
-      this.setState({
-        warningMessage: 'Save the rule first. Manage flow opens the site numbering flow.',
-        errorMessage: '',
-        statusMessage: ''
-      });
       return;
     }
     this.setState({ saving: true, errorMessage: '', warningMessage: '', statusMessage: '', consentUrl: '' });
@@ -373,7 +367,7 @@ export default class FlowSettingsPanel
       saving: false,
       consentUrl: synced.consentUrl,
       warningMessage: synced.note,
-      statusMessage: synced.flowState === 'Started' ? 'The site numbering flow is on.' : 'Saved the rule. The site numbering flow is not on yet.',
+        statusMessage: synced.flowState === 'Started' ? 'The site numbering flow is on.' : 'Sign in on the Power Automate tab. The numbering flow is not on yet.',
       draft: {
         ...draft,
         flowId: synced.flowId,
@@ -383,7 +377,7 @@ export default class FlowSettingsPanel
       }
     });
     if (flowId && environmentId) {
-      window.open(flowPortalUrl(environmentId, flowId), '_blank', 'noopener,noreferrer');
+      showPowerAutomatePage(this._makerTab, flowPortalUrl(environmentId, flowId));
     }
   };
 
@@ -550,6 +544,8 @@ export default class FlowSettingsPanel
 
   private _onSave = (): void => {
     beginPowerAutomateAccess();
+    const draft = this.state.draft;
+    this._makerTab = openPowerAutomateSignIn(this.state.environmentId || (draft && draft.flowEnvironment) || '');
     this._save().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error) });
     });
@@ -747,7 +743,7 @@ export default class FlowSettingsPanel
     let warningMessage = '';
     let consentUrl = '';
     let statusMessage = saved.isActive
-      ? 'Saved the rule. The site numbering flow is not on yet.'
+      ? 'Sign in on the Power Automate tab. The numbering flow is not on yet.'
       : 'Saved the settings for this list. This list is left out of the site numbering flow.';
     try {
       const synced = await this._syncShared(saved, id);
@@ -766,12 +762,15 @@ export default class FlowSettingsPanel
       if (!saved.isActive && synced.flowState === 'Started') {
         statusMessage = 'Saved the settings for this list. This list is left out of the site numbering flow.';
       }
+      if (warningMessage === statusMessage) {
+        warningMessage = '';
+      }
       if (saved.flowId && saved.flowEnvironment) {
-        window.open(flowPortalUrl(saved.flowEnvironment, saved.flowId), '_blank', 'noopener,noreferrer');
+        showPowerAutomatePage(this._makerTab, flowPortalUrl(saved.flowEnvironment, saved.flowId));
       }
     } catch (error) {
       warningMessage = messageOf(error);
-      statusMessage = 'Saved the rule. The site numbering flow is not on yet.';
+      statusMessage = 'Sign in on the Power Automate tab. The numbering flow is not on yet.';
     }
     this.setState({ saving: false, statusMessage, warningMessage, consentUrl, draft: saved });
     await this._load();
@@ -796,8 +795,7 @@ export default class FlowSettingsPanel
       this.props.aadHttpClientFactory,
       this._target(),
       seed,
-      true,
-      this.props.aadTokenProviderFactory
+      true
     );
     const binding: IFlowBinding = {
       flowId: synced.flowId,

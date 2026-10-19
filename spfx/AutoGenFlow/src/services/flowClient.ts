@@ -1,6 +1,5 @@
-import { AadHttpClient, AadHttpClientFactory, AadTokenProviderFactory } from '@microsoft/sp-http';
-import { createFlowThroughPortal } from './flowPortal';
-import { buildCreateFlowPayload, buildPortalTemplate, IListFlowTarget } from './siteFlow';
+import { AadHttpClient, AadHttpClientFactory } from '@microsoft/sp-http';
+import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
@@ -159,8 +158,7 @@ export async function syncListFlow(
   factory: AadHttpClientFactory,
   target: IListFlowTarget,
   current: ISyncedFlow,
-  active: boolean,
-  tokens?: AadTokenProviderFactory
+  active: boolean
 ): Promise<ISyncedFlow> {
   const environments = await listEnvironments(factory);
   const environment = environments.filter((item) => item.id === current.flowEnvironment)[0] || environments[0];
@@ -207,10 +205,10 @@ export async function syncListFlow(
     }
     try {
       if (current.flowId && sameEnvironment) {
-        const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connectionName, tokens);
+        const remote = await redeployRemoteFlow(factory, environment, current.flowId, target, connectionName);
         return startedFlow(environment, remote.id, connectionName, ensured.consentUrl);
       }
-      const created = await createRemoteFlow(factory, environment, target, connectionName, tokens);
+      const created = await createRemoteFlow(factory, environment, target, connectionName);
       return startedFlow(environment, created.id, connectionName, ensured.consentUrl);
     } catch (error) {
       if (error instanceof FlowStartError) {
@@ -463,8 +461,7 @@ export async function createRemoteFlow(
   factory: AadHttpClientFactory,
   environment: IFlowEnvironment,
   target: IListFlowTarget,
-  connectionName: string,
-  tokens?: AadTokenProviderFactory
+  connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const located = await environmentForWrite(client, environment);
@@ -513,7 +510,7 @@ export async function createRemoteFlow(
     }
   }
   if (portalFallback(lastError)) {
-    return createThroughPortal(factory, client, tokens, located, target, connectionName);
+    throw new Error('Sign in on the Power Automate tab. The numbering flow is not on yet.');
   }
   throw new Error(publicFlowError(environment.id, lastError));
 }
@@ -523,8 +520,7 @@ export async function redeployRemoteFlow(
   environment: IFlowEnvironment,
   flowId: string,
   target: IListFlowTarget,
-  connectionName: string,
-  tokens?: AadTokenProviderFactory
+  connectionName: string
 ): Promise<IRemoteFlow> {
   const client = await openClient(factory);
   const located = await environmentForWrite(client, environment);
@@ -551,7 +547,7 @@ export async function redeployRemoteFlow(
     }
     const message = error instanceof Error ? error.message : '';
     if (message.indexOf('HTTP 404') >= 0 || portalFallback(message)) {
-      const created = await createRemoteFlow(factory, located, target, connectionName, tokens);
+      const created = await createRemoteFlow(factory, located, target, connectionName);
       if (created.id && created.id !== flowId) {
         try {
           await setRemoteFlowState(factory, located, flowId, 'Stopped');
@@ -670,31 +666,6 @@ async function environmentForWrite(client: AadHttpClient, environment: IFlowEnvi
   return environment;
 }
 
-async function readWidgetToken(tokens: AadTokenProviderFactory | undefined, resource: string, fallback: string): Promise<string> {
-  if (!tokens || resource.toLowerCase().indexOf('service.flow.microsoft.com') < 0) {
-    return fallback;
-  }
-  try {
-    const provider = await tokens.getTokenProvider();
-    const fresh = await provider.getToken(FLOW_RESOURCE);
-    return fresh || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-async function readFlowToken(tokens?: AadTokenProviderFactory): Promise<string> {
-  if (!tokens) {
-    return '';
-  }
-  try {
-    const provider = await tokens.getTokenProvider();
-    return await provider.getToken(FLOW_RESOURCE);
-  } catch {
-    return '';
-  }
-}
-
 interface IFlowWriteResponse {
   name?: string;
   id?: string;
@@ -744,46 +715,6 @@ async function postFlow(client: AadHttpClient, url: string, body: object): Promi
     }
     return { id: '', state: 'Missing', error: error instanceof Error ? error.message : '' };
   }
-}
-
-async function createThroughPortal(
-  factory: AadHttpClientFactory,
-  client: AadHttpClient,
-  tokens: AadTokenProviderFactory | undefined,
-  environment: IFlowEnvironment,
-  target: IListFlowTarget,
-  connectionName: string
-): Promise<IRemoteFlow> {
-  const token = await readFlowToken(tokens);
-  if (!token) {
-    throw new Error('Power Automate did not create the numbering flow.');
-  }
-  const id = await createFlowThroughPortal(
-    token,
-    environment.id,
-    buildPortalTemplate(target, connectionName),
-    (resource: string): Promise<string> => readWidgetToken(tokens, resource, token)
-  );
-  let state: FlowRunState = 'Started';
-  try {
-    const remote = await readRemoteFlow(factory, environment, id);
-    state = remote.state === 'Missing' ? 'Started' : remote.state;
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-  }
-  if (state === 'Started') {
-    return { id, state: 'Started' };
-  }
-  try {
-    await startFlow(client, environment, id, 'The numbering flow was created and did not start.');
-  } catch (error) {
-    if (error instanceof FlowConsentError) {
-      throw error;
-    }
-  }
-  return { id, state: 'Started' };
 }
 
 function portalFallback(message: string): boolean {
