@@ -6,7 +6,7 @@ The flow runs about once a minute. It loads the active rows and, on each related
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.33.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.34.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those two permissions are already enough. Update the app on the site after the catalog deploy.

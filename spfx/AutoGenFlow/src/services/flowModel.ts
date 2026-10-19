@@ -436,6 +436,11 @@ export function flowHomeUrl(environmentId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/home`;
 }
 
+export function flowListUrl(environmentId: string): string {
+  const environment = encodeURIComponent(environmentId.trim());
+  return `https://make.powerautomate.com/environments/${environment}/flows`;
+}
+
 export function flowApiHosts(environment: { location?: string; endpoint?: string }): string[] {
   const hosts: string[] = [];
   const geo = geoFromHint(environment.location || '');

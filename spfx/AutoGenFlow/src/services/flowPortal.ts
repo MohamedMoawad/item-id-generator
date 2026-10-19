@@ -1,4 +1,4 @@
-import { flowHomeUrl } from './flowModel';
+import { flowListUrl } from './flowModel';
 
 interface IStorageDocument extends Document {
   requestStorageAccessFor?: (origin: string) => Promise<void>;
@@ -17,7 +17,7 @@ export function beginPowerAutomateAccess(): void {
 }
 
 export function openPowerAutomateSignIn(environmentId: string): Window | undefined {
-  const url = environmentId.trim() ? flowHomeUrl(environmentId) : 'https://make.powerautomate.com/';
+  const url = environmentId.trim() ? flowListUrl(environmentId) : 'https://make.powerautomate.com/flows';
   return window.open(url, '_blank') || undefined;
 }
 

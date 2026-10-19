@@ -528,7 +528,7 @@ export async function createRemoteFlow(
       }
       throw new FlowStartError(adopted.id, 'Turn the numbering flow on in the Power Automate tab.');
     }
-    throw new Error('Power Automate is open.');
+    throw new Error('No numbering flow was created.');
   }
   throw new Error(publicFlowError(environment.id, lastError));
 }

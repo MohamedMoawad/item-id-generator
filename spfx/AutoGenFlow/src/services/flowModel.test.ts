@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, readNamedFlow, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowListUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, readNamedFlow, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -191,6 +191,7 @@ describe('flow model', () => {
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');
     expect(flowHomeUrl('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da')).toBe('https://make.powerautomate.com/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/home');
+    expect(flowListUrl('Default-de2c0330-f2e8-4149-a927-0c5a8592f0da')).toBe('https://make.powerautomate.com/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows');
     expect(readConnectionNamesFromFlows({
       value: [{
         properties: {

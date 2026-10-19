@@ -138,7 +138,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.33',
+          title: 'AutoGen Flow 1.34',
           showCloseButton: true
         }}
         modalProps={{
@@ -744,7 +744,7 @@ export default class FlowSettingsPanel
     let warningMessage = '';
     let consentUrl = '';
     let statusMessage = saved.isActive
-      ? 'Power Automate is open.'
+      ? 'No numbering flow was created. The Power Automate tab lists the flows in this environment.'
       : 'Saved the settings for this list. This list is left out of the site numbering flow.';
     try {
       const synced = await this._syncShared(saved, id);
@@ -778,13 +778,19 @@ export default class FlowSettingsPanel
         warningMessage: ''
       };
     }
-    if (!note || note === 'Power Automate is open.' || note.indexOf('Sign in on the Power Automate tab') === 0) {
-      return { statusMessage: 'Power Automate is open.', warningMessage: '' };
+    if (!note || note === 'Power Automate is open.' || note === 'No numbering flow was created.' || note.indexOf('Sign in on the Power Automate tab') === 0) {
+      return {
+        statusMessage: 'No numbering flow was created. The Power Automate tab lists the flows in this environment.',
+        warningMessage: ''
+      };
     }
     if (note === 'Turn the numbering flow on in the Power Automate tab.') {
       return { statusMessage: note, warningMessage: '' };
     }
-    return { statusMessage: 'Power Automate is open.', warningMessage: note };
+    return {
+      statusMessage: 'No numbering flow was created. The Power Automate tab lists the flows in this environment.',
+      warningMessage: note
+    };
   }
 
   private _sharedSeed(draft: IConfigDraft): ISyncedFlow {
