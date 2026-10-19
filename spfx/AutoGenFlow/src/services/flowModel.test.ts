@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -185,6 +185,8 @@ describe('flow model', () => {
     expect(europeLabel && flowCreateUrls(europeLabel)[1]).toContain('https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows?');
     expect(europeLabel && flowCreateUrls(europeLabel).join(' ')).not.toContain('europe.api');
     expect(europeLabel && flowCreateUrls(europeLabel).join(' ')).not.toContain('unitedarabemirates');
+    expect(flowPutUrl('https://emea.api.flow.microsoft.com', 'Default-de2c0330-f2e8-4149-a927-0c5a8592f0da', '8f3e2a10-6c4b-4d11-9a77-1b2c3d4e5f60'))
+      .toBe('https://emea.api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/Default-de2c0330-f2e8-4149-a927-0c5a8592f0da/flows/8f3e2a10-6c4b-4d11-9a77-1b2c3d4e5f60?api-version=2016-11-01');
     expect(qatar && flowGeoCandidates(qatar)[0]).toBe('https://unitedarabemirates.api.flow.microsoft.com');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('10.');
     expect(qatar && flowGeoCandidates(qatar).join(' ')).not.toContain('scopes/admin');

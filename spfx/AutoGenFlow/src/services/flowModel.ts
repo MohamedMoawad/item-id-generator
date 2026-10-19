@@ -471,6 +471,12 @@ export function flowCreateUrl(host: string, environmentId: string): string {
   return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows?api-version=2016-11-01`;
 }
 
+export function flowPutUrl(host: string, environmentId: string, flowId: string): string {
+  const id = encodeURIComponent(environmentId.trim());
+  const flow = encodeURIComponent(flowId.trim());
+  return `${host}/providers/Microsoft.ProcessSimple/environments/${id}/flows/${flow}?api-version=2016-11-01`;
+}
+
 export function publicFlowRedirect(fromUrl: string, locationHeader: string): string {
   const raw = locationHeader.trim();
   if (!raw) {

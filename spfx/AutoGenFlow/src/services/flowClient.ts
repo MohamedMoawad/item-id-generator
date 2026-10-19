@@ -6,6 +6,7 @@ import {
   connectionPortalUrl,
   flowApiHosts,
   flowCreateUrl,
+  flowPutUrl,
   flowHomeUrl,
   FlowConsentError,
   FlowRunState,
@@ -490,6 +491,27 @@ export async function createRemoteFlow(
       lastError = preferFlowError(lastError, error instanceof Error ? error.message : lastError);
     }
   }
+  const named = newFlowId();
+  for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
+    const host = hosts[hostIndex];
+    const created = await putFlow(client, flowPutUrl(host, located.id, named), full);
+    if (!created.id) {
+      lastError = preferFlowError(lastError, created.error);
+      continue;
+    }
+    if (created.state === 'Started') {
+      return { id: created.id, state: 'Started' };
+    }
+    try {
+      await startFlow(client, located, created.id, 'The numbering flow was created and did not start.', host);
+      return { id: created.id, state: 'Started' };
+    } catch (error) {
+      if (error instanceof FlowStartError) {
+        throw error;
+      }
+      lastError = preferFlowError(lastError, error instanceof Error ? error.message : lastError);
+    }
+  }
   if (portalFallback(lastError)) {
     return createThroughPortal(factory, client, tokens, located, target, connectionName);
   }
@@ -677,6 +699,39 @@ interface IFlowWriteResponse {
   name?: string;
   id?: string;
   properties?: { state?: string };
+}
+
+function newFlowId(): string {
+  const bytes = new Uint8Array(16);
+  const cryptoApi = typeof crypto !== 'undefined' ? crypto : undefined;
+  if (cryptoApi && cryptoApi.getRandomValues) {
+    cryptoApi.getRandomValues(bytes);
+  }
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  let hex = '';
+  for (let index = 0; index < bytes.length; index += 1) {
+    const piece = bytes[index].toString(16);
+    hex += piece.length === 1 ? `0${piece}` : piece;
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function putFlow(client: AadHttpClient, url: string, body: object): Promise<{ id: string; state: FlowRunState; error: string }> {
+  try {
+    const payload = await sendJson<IFlowWriteResponse>(client, 'PUT', url, body);
+    return { id: createdFlowId(payload) || flowIdFromUrl(url), state: readFlowState(payload), error: '' };
+  } catch (error) {
+    if (error instanceof FlowConsentError) {
+      throw error;
+    }
+    return { id: '', state: 'Missing', error: error instanceof Error ? error.message : '' };
+  }
+}
+
+function flowIdFromUrl(url: string): string {
+  const match = /\/flows\/([^/?]+)/i.exec(url);
+  return match ? decodeURIComponent(match[1]) : '';
 }
 
 async function postFlow(client: AadHttpClient, url: string, body: object): Promise<{ id: string; state: FlowRunState; error: string }> {

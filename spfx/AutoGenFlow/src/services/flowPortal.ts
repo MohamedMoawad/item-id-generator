@@ -25,8 +25,27 @@ interface IMsFlowSdk {
   renderWidget(kind: string, options: {
     container: HTMLElement;
     environmentId: string;
+    enableOnBehalfOfTokens: boolean;
     templatesSettings: { useServerSideProvisioning: boolean };
   }): IFlowWidget;
+}
+
+interface IStorageDocument extends Document {
+  requestStorageAccessFor?: (origin: string) => Promise<void>;
+}
+
+let portalAccess: Promise<void> = Promise.resolve();
+
+export function beginPowerAutomateAccess(): void {
+  const request = (document as IStorageDocument).requestStorageAccessFor;
+  if (!request) {
+    return;
+  }
+  try {
+    portalAccess = request.call(document, 'https://make.powerautomate.com').then(() => undefined).catch(() => undefined);
+  } catch {
+    portalAccess = Promise.resolve();
+  }
 }
 
 interface ISdkWindow {
@@ -46,6 +65,7 @@ export async function createFlowThroughPortal(
   templateDefinition: string,
   acquireToken?: (resource: string) => Promise<string>
 ): Promise<string> {
+  await portalAccess;
   await loadFlowSdk();
   const sdkCtor = (window as unknown as ISdkWindow).MsFlowSdk;
   if (!sdkCtor) {
@@ -64,6 +84,7 @@ export async function createFlowThroughPortal(
     widget = sdk.renderWidget('flowCreation', {
       container: portal.container,
       environmentId,
+      enableOnBehalfOfTokens: true,
       templatesSettings: { useServerSideProvisioning: true }
     });
     fitFrame(portal.container);
@@ -328,6 +349,7 @@ function fitFrame(container: HTMLElement): void {
   iframe.style.flex = '1';
   iframe.style.border = '0';
   iframe.style.minHeight = '480px';
+  iframe.setAttribute('allow', 'storage-access *; clipboard-read; clipboard-write');
 }
 
 function flowIdFromEvent(data: IFlowEvent | undefined): string {

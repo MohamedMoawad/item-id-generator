@@ -41,6 +41,7 @@ import { chooseConnection, FlowConsentError, flowPortalUrl, IFlowConnection, IFl
 import { listConnections, listEnvironments, readFlowProblem, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
+import { beginPowerAutomateAccess } from '../../services/flowPortal';
 import { IListFlowTarget } from '../../services/siteFlow';
 import styles from './FlowSettingsPanel.module.scss';
 
@@ -145,7 +146,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.29',
+          title: 'AutoGen Flow 1.30',
           showCloseButton: true
         }}
         modalProps={{
@@ -346,6 +347,7 @@ export default class FlowSettingsPanel
   }
 
   private _onManageFlow = (): void => {
+    beginPowerAutomateAccess();
     this._manageFlow().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error), statusMessage: '' });
     });
@@ -561,6 +563,7 @@ export default class FlowSettingsPanel
   };
 
   private _onSave = (): void => {
+    beginPowerAutomateAccess();
     this._save().catch((error: unknown) => {
       this.setState({ saving: false, errorMessage: messageOf(error) });
     });
