@@ -135,7 +135,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.27',
+          title: 'AutoGen Flow 1.28',
           showCloseButton: true
         }}
         modalProps={{
@@ -779,6 +779,9 @@ export default class FlowSettingsPanel
       if (synced.flowState === 'Started') {
         const legacyNote = await this._stopLegacy();
         warningMessage = warningMessage || legacyNote;
+      }
+      if (saved.flowId && saved.flowEnvironment) {
+        window.open(flowPortalUrl(saved.flowEnvironment, saved.flowId), '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       warningMessage = messageOf(error);

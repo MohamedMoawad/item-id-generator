@@ -21,7 +21,7 @@ interface IFlowWidget {
 
 interface IMsFlowSdk {
   renderWidget(kind: string, options: {
-    container: string;
+    container: HTMLElement;
     environmentId: string;
     templatesSettings: { useServerSideProvisioning: boolean };
   }): IFlowWidget;
@@ -37,20 +37,22 @@ export async function createFlowThroughPortal(token: string, environmentId: stri
   if (!sdkCtor) {
     throw new Error('Power Automate did not load the numbering flow creator.');
   }
-  const host = ensureHost();
-  const container = host.querySelector('div');
-  if (!container) {
-    throw new Error('Power Automate did not load the numbering flow creator.');
-  }
+  const portal = ensureHost();
   const sdk = new sdkCtor({
     hostName: 'https://make.powerautomate.com',
     locale: 'en-US'
   });
-  const widget = sdk.renderWidget('flowCreation', {
-    container: container.id,
-    environmentId,
-    templatesSettings: { useServerSideProvisioning: true }
-  });
+  let widget: IFlowWidget;
+  try {
+    widget = sdk.renderWidget('flowCreation', {
+      container: portal.container,
+      environmentId,
+      templatesSettings: { useServerSideProvisioning: true }
+    });
+  } catch (error) {
+    portal.host.remove();
+    throw error;
+  }
   return new Promise<string>((resolve, reject) => {
     let settled = false;
     let timer = 0;
@@ -60,7 +62,7 @@ export async function createFlowThroughPortal(token: string, environmentId: stri
       }
       settled = true;
       window.clearTimeout(timer);
-      host.remove();
+      portal.host.remove();
       if (error || !flowId) {
         reject(error || new Error('Power Automate did not create the numbering flow.'));
         return;
@@ -70,7 +72,7 @@ export async function createFlowThroughPortal(token: string, environmentId: stri
     timer = window.setTimeout(() => {
       finish(new Error('Power Automate did not finish creating the numbering flow.'), '');
     }, 180000);
-    const close = host.querySelector('button');
+    const close = portal.host.querySelector('button');
     if (close) {
       close.addEventListener('click', () => {
         finish(new Error('The numbering flow was not created.'), '');
@@ -163,7 +165,7 @@ function loadScript(index: number): Promise<void> {
   });
 }
 
-function ensureHost(): HTMLElement {
+function ensureHost(): { host: HTMLElement; container: HTMLElement } {
   const previous = document.getElementById('autogen-flow-portal-host');
   if (previous) {
     previous.remove();
@@ -198,10 +200,11 @@ function ensureHost(): HTMLElement {
   const frame = document.createElement('div');
   frame.id = 'autogen-flow-portal';
   frame.style.flex = '1';
+  frame.style.minHeight = '480px';
   host.appendChild(bar);
   host.appendChild(frame);
   document.body.appendChild(host);
-  return host;
+  return { host, container: frame };
 }
 
 function flowIdFromEvent(data: IFlowEvent | undefined): string {
