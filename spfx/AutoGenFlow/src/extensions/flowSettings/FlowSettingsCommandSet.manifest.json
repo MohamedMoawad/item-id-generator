@@ -10,7 +10,7 @@
   "items": {
     "AUTOGEN_FLOW": {
       "title": { "default": "AutoGen Flow" },
-      "ariaLabel": { "default": "Save the AutoGen Flow rule for this list" },
+      "ariaLabel": { "default": "Open AutoGen Flow for this list" },
       "type": "command"
     }
   }

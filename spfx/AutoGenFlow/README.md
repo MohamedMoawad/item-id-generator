@@ -1,24 +1,24 @@
 # AutoGen Flow
 
-AutoGen Flow gives each list its own running number. Open a list, choose **AutoGen Flow**, and use the same popup as a list setting: add a rule, edit it, or delete it. Saving an active rule creates that list’s numbering flow. You choose the Power Automate environment. The flow uses this account’s SharePoint connection.
+AutoGen Flow gives each list its own running number. Open a list, choose **AutoGen Flow**, and use the same popup as a list setting: add a rule, edit it, or delete it. One numbering flow for the site collection reads `AutoGenFlowConfiguration` and writes the number on each related list. You choose the Power Automate environment. The flow uses this account’s SharePoint connection.
 
-The flow reads that list’s row in `AutoGenFlowConfiguration` on the site collection and writes the next number when an item is created. Runs wait in line, so items created together keep a continuous sequence.
+The flow runs about once a minute. It loads the active rows and, on each related list, fills a blank number column. Runs wait in line, so items created together keep a continuous sequence.
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.30.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.31.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Those two permissions are already enough. Update the app on the site after the catalog deploy.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
-6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates this account’s SharePoint connection in that environment, then creates one numbering flow for this list. If this list already has a rule, open **AutoGen Flow** and save again so the flow is replaced.
-7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates the numbering flow and opens it. The page shows the flow that runs when an item is created and the run history.
+6. Choose **Environment**. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**. The app creates this account’s SharePoint connection in that environment, then creates or updates one numbering flow for the site collection. Saving another list updates that same flow.
+7. On the saved rule, open **Settings** and choose **Manage flow**. If the flow is not created yet, that command creates the site numbering flow and opens it. The page shows the flow and its run history.
 
-`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on this list and on the site collection.
+`AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, **Manage flow**, and **Delete**. The SharePoint connection needs Contribute on each numbered list and on the site collection.
 
-If an older site-wide flow named **AutoGen ·** and the site name is still turned on, turn it off in Power Automate. Saving an active list rule also turns that older flow off when this account can reach it.
+An older flow that numbered only one list is replaced the next time you save a rule on that list. Delete removes the list’s row and leaves the site numbering flow running for the other lists.
 
 ## A list rule
 
@@ -33,21 +33,21 @@ If an older site-wide flow named **AutoGen ·** and the site name is still turne
 
 `REQ-{counter}` with pad length 5 and a last number of 0 shows **REQ-00001**. A formula typed as `{counter:4}{counter}` is saved as `{counter:4}`.
 
-Date tokens use the item’s Created time in UTC. `{Department.title}` uses the lookup or person display text. Changing the formula, the column, or the count is picked up on the next item. Save again after an app upgrade so the flow definition is replaced.
+Date tokens use the item’s Created time in UTC. `{Department.title}` uses the lookup or person display text. Changing the formula, the column, or the count is picked up on the next flow run. Save once after an app upgrade so the flow definition is replaced.
 
 ## What happens on save
 
 1. The dialog writes one row in `AutoGenFlowConfiguration` on the site collection.
 2. The dialog lists Power Automate environments. Choose one. The default environment is selected first.
 3. It uses this account’s SharePoint connection in that environment.
-4. It creates a flow whose trigger is **When an item is created or modified** on this list, bound to that connection, and turns the flow on.
-5. The flow id and connection are stored on the same row.
+4. It creates or updates one flow for the site collection, bound to that connection, and turns the flow on.
+5. The same flow id and connection are stored on the list row and on the site row.
 
-Delete stops and removes that flow, then deletes the row.
+Delete removes the list row. The site numbering flow stays on.
 
 ## What the flow does
 
-When an item is created or saved, the flow loads that list’s row from `AutoGenFlowConfiguration`. If the number column is still empty, it reserves the next integer, writes the code, and stores the new count. A failed write puts the count back. An item that was created before the flow was saved stays blank until you open that item and save it.
+About once a minute, the flow loads the active rows from `AutoGenFlowConfiguration`. For each row it opens that list and fills a blank number column. It reserves the next integer, writes the code, and stores the new count. A failed write puts the count back. A blank number is filled within about a minute after the item is created or saved. Status **Active** means the site flow is running.
 
 ## Local development
 

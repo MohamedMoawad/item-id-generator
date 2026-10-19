@@ -101,17 +101,17 @@ export function flowExpressions(numberColumn: string): IFlowExpression[] {
 
 export function flowSteps(): string[] {
   return [
-    'Create an automated cloud flow with the SharePoint trigger When an item is created. Choose this list.',
-    `Open the trigger settings. Turn concurrency control on and set degree of parallelism to ${FLOW_CONCURRENCY}. Add the trigger condition shown below.`,
-    'Add Get item for this same list. Id is the trigger ID. This reads the item again so a second run does not overwrite a number.',
-    'Add Get items on the master list site and AutoGenFlowConfiguration. Use the filter query and Top Count 1.',
-    'Initialize a string variable named Code and leave it empty. Initialize variable stays outside the condition.',
-    'Add a condition with the blank-item expression below. Put every remaining action in the Yes branch.',
+    'Create one scheduled cloud flow for the site collection. Recurrence, every 1 minute. Concurrency control on, degree of parallelism 1.',
+    'Get items from AutoGenFlowConfiguration on the site collection. Filter IsActive eq 1 and TargetListGuid ne \'site\'. Top Count 200.',
+    'Apply to each rule, concurrency 1. Skip a row whose TargetListGuid is site.',
+    'Take the web address from TargetListUrl: the part before /Lists/, or the part before the last slash for a library.',
+    'Send an HTTP request to that web. Get the newest 25 items on the list in TargetListGuid, using ItemQuery from the row, ordered by Modified descending.',
+    'Apply to each item, oldest of that page first, concurrency 1. Continue when the number column is empty.',
+    'Initialize Code, Next, and Previous outside the loops. Previous holds the last committed count for the current rule.',
     'Add one Compose action for each name below and paste its expression. The action name must match exactly.',
-    'Set variable Code to the CodeStart output.',
-    'If FormulaColumns is not empty, Apply to each split(outputs(\'FormulaColumns\'), \',\') and set Code with the column expression.',
-    'Update the created item. Set the number column to variables(\'Code\').',
-    'Update the master row Id outputs(\'Config\')?[\'ID\']. Set Current count to the Next output and Last reset date to Created from the trigger.',
-    'Create one flow per list. Clone it and change the trigger list, the trigger condition, and the filter query.'
+    'Set Next to Previous plus 1. Set Code from the formula on the config row.',
+    'If FormulaColumns is not empty, Apply to each split of FormulaColumns and set Code with the column expression.',
+    'Update the config row first: Current count becomes Next and Last reset date becomes the current time. Then write Code into the number column.',
+    'If the item write fails, put Current count back to Previous. Leave the same flow in place for every other list.'
   ];
 }

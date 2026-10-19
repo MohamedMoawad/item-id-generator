@@ -1,5 +1,3 @@
-import { normalizeGuid } from './contract';
-
 export interface ISiteFlowDefinition {
   $schema: string;
   contentVersion: string;
@@ -33,9 +31,11 @@ export interface ICreateFlowPayload {
   };
 }
 
-export function flowDisplayName(listTitle: string): string {
-  const leaf = listTitle.trim() || 'list';
-  return `AutoGen · ${leaf}`.slice(0, 80);
+export function flowDisplayName(siteUrl: string): string {
+  const trimmed = siteUrl.trim().replace(/\/+$/, '');
+  const parts = trimmed.split('/');
+  const leaf = parts[parts.length - 1] || 'site';
+  return `AutoGen Flow · ${leaf}`.slice(0, 80);
 }
 
 export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: string, state: 'Started' | 'Stopped' = 'Stopped'): ICreateFlowPayload {
@@ -50,7 +50,7 @@ export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: 
   }
   return {
     properties: {
-      displayName: flowDisplayName(target.listTitle),
+      displayName: flowDisplayName(target.siteUrl),
       definition: buildSiteFlowDefinition(target),
       connectionReferences,
       state,
@@ -63,7 +63,7 @@ export function buildPortalTemplate(target: IListFlowTarget, connectionName: str
   const flow = buildCreateFlowPayload(target, connectionName, 'Started');
   return JSON.stringify({
     displayName: flow.properties.displayName,
-    description: 'AutoGen numbering flow for this list.',
+    description: 'AutoGen numbering flow for this site collection.',
     properties: {
       definition: flow.properties.definition,
       connectionReferences: flow.properties.connectionReferences,
@@ -93,7 +93,7 @@ export function buildDataverseWorkflowBody(target: IListFlowTarget, connectionNa
     category: 5,
     name: flow.properties.displayName,
     type: 1,
-    description: 'AutoGen numbering flow for this list.',
+    description: 'AutoGen numbering flow for this site collection.',
     primaryentity: 'none',
     clientdata: JSON.stringify({
       properties: {
@@ -139,8 +139,6 @@ export function buildShellFlowPayload(listTitle: string): ICreateFlowPayload {
 
 export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefinition {
   const site = target.siteUrl.replace(/\/+$/, '');
-  const web = target.webUrl.replace(/\/+$/, '');
-  const guid = normalizeGuid(target.listGuid);
   const bakedTitle = target.configListTitle.replace(/'/g, "''''");
   return {
     $schema: 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#',
@@ -150,21 +148,9 @@ export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefin
       $authentication: { defaultValue: {}, type: 'SecureObject' }
     },
     triggers: {
-      When_an_item_is_created_or_modified: {
-        type: 'OpenApiConnectionWebhook',
-        inputs: {
-          host: {
-            connectionName: 'shared_sharepointonline',
-            operationId: 'GetOnUpdatedItems',
-            apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline'
-          },
-          parameters: {
-            dataset: web,
-            table: guid
-          },
-          authentication: "@parameters('$connections')['shared_sharepointonline']['connectionId']"
-        },
-        splitOn: "@triggerOutputs()?['body/value']",
+      Recurrence: {
+        type: 'Recurrence',
+        recurrence: { frequency: 'Minute', interval: 1 },
         runtimeConfiguration: { concurrency: { runs: 1 } }
       }
     },
@@ -172,47 +158,41 @@ export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefin
       Initialize_next: variable('Next', 'integer', 0),
       Initialize_code: variable('Code', 'string', ''),
       Initialize_previous: variable('Previous', 'integer', 0),
-      Get_rule: http(site, 'GET', rulesUri(target.configListTitle, guid), undefined, {
+      Get_rules: http(site, 'GET', rulesUri(target.configListTitle), undefined, {
         Initialize_next: ['Succeeded'],
         Initialize_code: ['Succeeded'],
         Initialize_previous: ['Succeeded']
       }),
       Rule_rows: {
         type: 'Compose',
-        inputs: "@coalesce(body('Get_rule')?['value'], body('Get_rule')?['d']?['results'], json('[]'))",
-        runAfter: { Get_rule: ['Succeeded'] }
+        inputs: "@coalesce(body('Get_rules')?['value'], body('Get_rules')?['d']?['results'], json('[]'))",
+        runAfter: { Get_rules: ['Succeeded'] }
       },
-      Has_rule: {
-        type: 'If',
-        expression: {
-          and: [{
-            greater: ["@length(outputs('Rule_rows'))", 0]
-          }]
-        },
+      For_each_rule: {
+        type: 'Foreach',
+        foreach: "@outputs('Rule_rows')",
+        runtimeConfiguration: { concurrency: { repetitions: 1 } },
         runAfter: { Rule_rows: ['Succeeded'] },
-        else: {
-          actions: {
-            Stop_missing: {
-              type: 'Terminate',
-              inputs: {
-                runStatus: 'Failed',
-                runError: {
-                  code: 'NoRule',
-                  message: 'No AutoGen rule was found for this list.'
-                }
-              }
-            }
+        actions: {
+          Scope_rule: {
+            type: 'Scope',
+            actions: ruleActions(site, bakedTitle)
+          },
+          Rule_done: {
+            type: 'Compose',
+            inputs: 'ok',
+            runAfter: { Scope_rule: ['Succeeded', 'Failed', 'Skipped', 'TimedOut'] }
           }
-        },
-        actions: numberingActions(web, site, guid, bakedTitle)
+        }
       }
     }
   };
 }
 
-function rulesUri(title: string, guid: string): string {
+function rulesUri(title: string): string {
   const select = [
     'Id',
+    'TargetListUrl',
     'TargetListGuid',
     'NumberColumnInternalName',
     'Formula',
@@ -226,101 +206,61 @@ function rulesUri(title: string, guid: string): string {
     'IsActive'
   ].join(',');
   const listTitle = title.replace(/'/g, "''");
-  const filter = encodeURIComponent(`TargetListGuid eq '${guid}'`);
-  return `_api/web/lists/getbytitle('${listTitle}')/items?$select=${select}&$filter=${filter}&$top=1`;
+  const filter = encodeURIComponent("IsActive eq 1 and TargetListGuid ne 'site'");
+  return `_api/web/lists/getbytitle('${listTitle}')/items?$select=${select}&$filter=${filter}&$top=200`;
 }
 
-function numberingActions(web: string, site: string, guid: string, bakedTitle: string): { [name: string]: object } {
-  const triggerId = "coalesce(triggerOutputs()?['body/ID'], triggerOutputs()?['body/Id'], triggerBody()?['ID'], triggerBody()?['Id'])";
-  const itemId = `coalesce(${triggerId}, outputs('Item')?['Id'], outputs('Item')?['ID'])`;
-  const configId = "coalesce(outputs('Config')?['Id'], outputs('Config')?['ID'])";
-  const configUri = `@concat('_api/web/lists/getbytitle(''${bakedTitle}'')/items(', string(${configId}), ')')`;
-  const readUri = `@concat('_api/web/lists(guid''${guid}'')/items(', string(${triggerId}), ')?', coalesce(outputs('Config')?['ItemQuery'], ''))`;
-  const itemUri = `@concat('_api/web/lists(guid''${guid}'')/items(', string(${itemId}), ')')`;
-  const stamp = "utcNow('yyyy-MM-ddTHH:mm:ssZ')";
+function ruleActions(site: string, bakedTitle: string): { [name: string]: object } {
   return {
     Config: {
       type: 'Compose',
-      inputs: "@first(outputs('Rule_rows'))"
+      inputs: '@item()'
+    },
+    Column_name: {
+      type: 'Compose',
+      inputs: "@outputs('Config')?['NumberColumnInternalName']",
+      runAfter: { Config: ['Succeeded'] }
     },
     Is_active: {
       type: 'If',
       expression: activeExpression(),
-      runAfter: { Config: ['Succeeded'] },
+      runAfter: { Column_name: ['Succeeded'] },
       else: { actions: {} },
       actions: {
-        Column_name: {
+        Web: {
           type: 'Compose',
-          inputs: "@outputs('Config')?['NumberColumnInternalName']"
+          inputs: webExpression()
         },
-        Get_item: http(web, 'GET', readUri, undefined, { Column_name: ['Succeeded'] }),
-        Item: {
+        Seed_rolled: {
           type: 'Compose',
-          inputs: "@if(contains(body('Get_item'), 'd'), body('Get_item')?['d'], body('Get_item'))",
-          runAfter: { Get_item: ['Succeeded'] }
+          inputs: `@${rolledExpression()}`
         },
-        Current_value: {
+        Set_previous: setVariable('Previous', "@if(outputs('Seed_rolled'), 0, int(coalesce(outputs('Config')?['CurrentCount'], 0)))", {
+          Seed_rolled: ['Succeeded']
+        }),
+        Get_items: http('@outputs(\'Web\')', 'GET', recentItemsUri(), undefined, {
+          Web: ['Succeeded'],
+          Set_previous: ['Succeeded']
+        }),
+        Item_rows: {
           type: 'Compose',
-          inputs: "@outputs('Item')?[outputs('Column_name')]",
-          runAfter: { Item: ['Succeeded'] }
+          inputs: "@reverse(coalesce(body('Get_items')?['value'], body('Get_items')?['d']?['results'], json('[]')))",
+          runAfter: { Get_items: ['Succeeded'] }
         },
-        Is_blank: {
-          type: 'If',
-          expression: {
-            and: [{
-              equals: ["@empty(outputs('Current_value'))", true]
-            }]
-          },
-          runAfter: { Current_value: ['Succeeded'] },
-          else: { actions: {} },
+        For_each_item: {
+          type: 'Foreach',
+          foreach: "@outputs('Item_rows')",
+          runtimeConfiguration: { concurrency: { repetitions: 1 } },
+          runAfter: { Item_rows: ['Succeeded'] },
           actions: {
-            Rolled: {
+            Scope_item: {
+              type: 'Scope',
+              actions: itemActions(site, bakedTitle)
+            },
+            Item_done: {
               type: 'Compose',
-              inputs: `@${rolledExpression()}`
-            },
-            Set_next: setVariable('Next', "@if(outputs('Rolled'), 1, add(int(coalesce(outputs('Config')?['CurrentCount'], 0)), 1))", {
-              Rolled: ['Succeeded']
-            }),
-            Set_previous: setVariable('Previous', "@if(outputs('Rolled'), 0, int(coalesce(outputs('Config')?['CurrentCount'], 0)))", {
-              Set_next: ['Succeeded']
-            }),
-            Set_code: setVariable('Code', codeExpression(), { Set_previous: ['Succeeded'] }),
-            For_each_column: {
-              type: 'Foreach',
-              foreach: "@split(if(equals(coalesce(outputs('Config')?['FormulaColumns'], ''), ''), '__none__', outputs('Config')?['FormulaColumns']), ',')",
-              runtimeConfiguration: { concurrency: { repetitions: 1 } },
-              runAfter: { Set_code: ['Succeeded'] },
-              actions: {
-                Apply_column: setVariable('Code', columnExpression(), {})
-              }
-            },
-            Reserve_count: http(
-              site,
-              'POST',
-              configUri,
-              `@concat('{"CurrentCount":', string(variables('Next')), ',"LastResetDate":"', ${stamp}, '"}')`,
-              { For_each_column: ['Succeeded'] }
-            ),
-            Write_item: http(
-              web,
-              'POST',
-              itemUri,
-              "@concat('{\"', outputs('Column_name'), '\":\"', replace(variables('Code'), '\"', ''), '\"}')",
-              { Reserve_count: ['Succeeded'] }
-            ),
-            Remember_count: setVariable('Previous', "@variables('Next')", { Write_item: ['Succeeded'] }),
-            Advance_count: setVariable('Next', "@add(variables('Next'), 1)", { Remember_count: ['Succeeded'] }),
-            Restore_count: http(
-              site,
-              'POST',
-              configUri,
-              "@concat('{\"CurrentCount\":', string(variables('Previous')), '}')",
-              { Write_item: ['Failed', 'TimedOut'] }
-            ),
-            Stop_run: {
-              type: 'Terminate',
-              inputs: { runStatus: 'Failed' },
-              runAfter: { Restore_count: ['Succeeded'] }
+              inputs: 'ok',
+              runAfter: { Scope_item: ['Succeeded', 'Failed', 'Skipped', 'TimedOut'] }
             }
           }
         }
@@ -329,19 +269,102 @@ function numberingActions(web: string, site: string, guid: string, bakedTitle: s
   };
 }
 
-function activeExpression(): { and: Array<{ not: { or: Array<{ equals: [string, string | number | boolean] }> } }> } {
+function itemActions(site: string, bakedTitle: string): { [name: string]: object } {
+  const itemId = "coalesce(outputs('Item')?['Id'], outputs('Item')?['ID'])";
+  const configId = "coalesce(outputs('Config')?['Id'], outputs('Config')?['ID'])";
+  const configUri = `@concat('_api/web/lists/getbytitle(''${bakedTitle}'')/items(', string(${configId}), ')')`;
+  const itemUri = `@concat('_api/web/lists(guid''', coalesce(outputs('Config')?['TargetListGuid'], ''), ''')/items(', string(${itemId}), ')')`;
+  const stamp = "utcNow('yyyy-MM-ddTHH:mm:ssZ')";
+  return {
+    Item: {
+      type: 'Compose',
+      inputs: '@item()'
+    },
+    Current_value: {
+      type: 'Compose',
+      inputs: "@outputs('Item')?[outputs('Column_name')]",
+      runAfter: { Item: ['Succeeded'] }
+    },
+    Is_blank: {
+      type: 'If',
+      expression: {
+        and: [{
+          equals: ["@empty(outputs('Current_value'))", true]
+        }]
+      },
+      runAfter: { Current_value: ['Succeeded'] },
+      else: { actions: {} },
+      actions: {
+        Set_next: setVariable('Next', "@add(variables('Previous'), 1)", {}),
+        Set_code: setVariable('Code', codeExpression(), { Set_next: ['Succeeded'] }),
+        For_each_column: {
+          type: 'Foreach',
+          foreach: "@split(if(equals(coalesce(outputs('Config')?['FormulaColumns'], ''), ''), '__none__', outputs('Config')?['FormulaColumns']), ',')",
+          runtimeConfiguration: { concurrency: { repetitions: 1 } },
+          runAfter: { Set_code: ['Succeeded'] },
+          actions: {
+            Apply_column: setVariable('Code', columnExpression(), {})
+          }
+        },
+        Reserve_count: http(
+          site,
+          'POST',
+          configUri,
+          `@concat('{"CurrentCount":', string(variables('Next')), ',"LastResetDate":"', ${stamp}, '"}')`,
+          { For_each_column: ['Succeeded'] }
+        ),
+        Write_item: http(
+          '@outputs(\'Web\')',
+          'POST',
+          itemUri,
+          "@concat('{\"', outputs('Column_name'), '\":\"', replace(variables('Code'), '\"', ''), '\"}')",
+          { Reserve_count: ['Succeeded'] }
+        ),
+        Remember_count: setVariable('Previous', "@variables('Next')", { Write_item: ['Succeeded'] }),
+        Restore_count: http(
+          site,
+          'POST',
+          configUri,
+          "@concat('{\"CurrentCount\":', string(variables('Previous')), '}')",
+          { Write_item: ['Failed', 'TimedOut'] }
+        )
+      }
+    }
+  };
+}
+
+function webExpression(): string {
+  const url = "coalesce(outputs('Config')?['TargetListUrl'], '')";
+  const lower = `toLower(${url})`;
+  const listsAt = `indexOf(${lower}, '/lists/')`;
+  const slashAt = `lastIndexOf(${url}, '/')`;
+  return `@if(contains(${lower}, '/lists/'), substring(${url}, 0, ${listsAt}), if(greater(${slashAt}, 0), substring(${url}, 0, ${slashAt}), ${url}))`;
+}
+
+function recentItemsUri(): string {
+  return "@concat('_api/web/lists(guid''', coalesce(outputs('Config')?['TargetListGuid'], ''), ''')/items?', coalesce(outputs('Config')?['ItemQuery'], ''), '&$orderby=Modified%20desc&$top=25')";
+}
+
+function activeExpression(): { and: object[] } {
   const value = "@outputs('Config')?['IsActive']";
   return {
-    and: [{
-      not: {
-        or: [
-          { equals: [value, false] },
-          { equals: ["@toLower(string(outputs('Config')?['IsActive']))", 'false'] },
-          { equals: [value, 0] },
-          { equals: ["@string(outputs('Config')?['IsActive'])", '0'] }
-        ]
+    and: [
+      {
+        not: {
+          or: [
+            { equals: [value, false] },
+            { equals: ["@toLower(string(outputs('Config')?['IsActive']))", 'false'] },
+            { equals: [value, 0] },
+            { equals: ["@string(outputs('Config')?['IsActive'])", '0'] }
+          ]
+        }
+      },
+      {
+        not: {
+          equals: ["@toLower(coalesce(outputs('Config')?['TargetListGuid'], ''))", 'site']
+        }
       }
-    }]
+    ]
   };
 }
 

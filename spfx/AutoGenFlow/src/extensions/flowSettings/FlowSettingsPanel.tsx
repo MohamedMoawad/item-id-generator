@@ -23,6 +23,7 @@ import {
   findSiteFlow,
   IConfigDraft,
   ResetPeriod,
+  siteFlowDraft,
   validateDraft,
   wholeCount
 } from '../../services/contract';
@@ -31,6 +32,7 @@ import {
   deleteConfigRow,
   ensureConfigList,
   ensureTargetNumberColumn,
+  IFlowBinding,
   loadConfigRows,
   loadFormulaColumns,
   saveConfigRow,
@@ -38,7 +40,7 @@ import {
   showConfigList
 } from '../../services/configListClient';
 import { chooseConnection, FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { listConnections, listEnvironments, readFlowProblem, removeListFlow, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
+import { ISyncedFlow, listConnections, listEnvironments, readFlowProblem, setRemoteFlowState, syncListFlow } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { beginPowerAutomateAccess } from '../../services/flowPortal';
@@ -146,7 +148,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.30',
+          title: 'AutoGen Flow 1.31',
           showCloseButton: true
         }}
         modalProps={{
@@ -258,7 +260,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Choose the environment. Saving an active rule creates this account’s SharePoint connection, then creates the numbering flow for this list.
+          One numbering flow for this site collection reads AutoGenFlowConfiguration and writes the number on each related list. Choose the environment, then save.
         </p>
         {this._flowPickers()}
         {!this.state.canEdit && (
@@ -357,47 +359,29 @@ export default class FlowSettingsPanel
     const draft = this.state.draft;
     if (!draft || draft.id === undefined) {
       this.setState({
-        warningMessage: 'Save the rule first. Manage flow opens the numbering flow.',
+        warningMessage: 'Save the rule first. Manage flow opens the site numbering flow.',
         errorMessage: '',
         statusMessage: ''
       });
       return;
     }
-    let flowId = draft.flowId;
-    let environmentId = draft.flowEnvironment || this.state.environmentId;
-    if (!flowId || draft.flowState !== 'Started') {
-      this.setState({ saving: true, errorMessage: '', warningMessage: '', statusMessage: '', consentUrl: '' });
-      const synced = await syncListFlow(this.props.aadHttpClientFactory, this._target(), {
-        flowId: draft.flowId,
-        flowEnvironment: environmentId,
-        flowConnection: this.state.connectionName || draft.flowConnection,
-        flowState: draft.flowState,
-        note: '',
-        consentUrl: ''
-      }, true, this.props.aadTokenProviderFactory);
-      await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id, {
+    this.setState({ saving: true, errorMessage: '', warningMessage: '', statusMessage: '', consentUrl: '' });
+    const synced = await this._syncShared(draft, draft.id);
+    const flowId = synced.flowId;
+    const environmentId = synced.flowEnvironment;
+    this.setState({
+      saving: false,
+      consentUrl: synced.consentUrl,
+      warningMessage: synced.note,
+      statusMessage: synced.flowState === 'Started' ? 'The site numbering flow is on.' : 'Saved the rule. The site numbering flow is not on yet.',
+      draft: {
+        ...draft,
         flowId: synced.flowId,
         flowEnvironment: synced.flowEnvironment,
         flowConnection: synced.flowConnection,
         flowState: synced.flowState
-      });
-      flowId = synced.flowId;
-      environmentId = synced.flowEnvironment;
-      this.setState({
-        saving: false,
-        consentUrl: synced.consentUrl,
-        warningMessage: synced.note,
-        statusMessage: synced.flowState === 'Started' ? 'Numbering is on.' : 'Saved the rule for this list.',
-        draft: {
-          ...draft,
-          isActive: true,
-          flowId: synced.flowId,
-          flowEnvironment: synced.flowEnvironment,
-          flowConnection: synced.flowConnection,
-          flowState: synced.flowState
-        }
-      });
-    }
+      }
+    });
     if (flowId && environmentId) {
       window.open(flowPortalUrl(environmentId, flowId), '_blank', 'noopener,noreferrer');
     }
@@ -448,7 +432,9 @@ export default class FlowSettingsPanel
     if (!draft.isActive) {
       return 'Off';
     }
-    return draft.flowState === 'Started' ? 'Active' : 'Saved';
+    const shared = this.state.legacySite;
+    const started = draft.flowState === 'Started' || (!!shared && shared.flowState === 'Started');
+    return started ? 'Active' : 'Saved';
   }
 
   private _settingsItems(): IContextualMenuItem[] {
@@ -591,7 +577,7 @@ export default class FlowSettingsPanel
           connectionsLoading: false,
           connections,
           connectionName: chosen ? chosen.name : '',
-          flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates the numbering flow.'
+          flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates one numbering flow for this site collection.'
         });
       })
       .catch((error: unknown) => {
@@ -717,7 +703,7 @@ export default class FlowSettingsPanel
       environmentId: environment.id,
       connections,
       connectionName: chosen ? chosen.name : '',
-      flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates the numbering flow.'
+      flowHint: chosen ? '' : 'Save settings. The app creates this account’s SharePoint connection, then creates one numbering flow for this site collection.'
     });
   }
 
@@ -761,23 +747,10 @@ export default class FlowSettingsPanel
     let warningMessage = '';
     let consentUrl = '';
     let statusMessage = saved.isActive
-      ? 'Saved. Numbering is on. Add a new item and leave the number column empty. For an item that is already blank, open it and save it once.'
-      : 'Saved the settings for this list. Numbering is turned off.';
+      ? 'Saved the rule. The site numbering flow is not on yet.'
+      : 'Saved the settings for this list. This list is left out of the site numbering flow.';
     try {
-      const synced = await syncListFlow(this.props.aadHttpClientFactory, this._target(), {
-        flowId: saved.flowId,
-        flowEnvironment: this.state.environmentId || saved.flowEnvironment,
-        flowConnection: this.state.connectionName || saved.flowConnection,
-        flowState: saved.flowState,
-        note: '',
-        consentUrl: ''
-      }, saved.isActive, this.props.aadTokenProviderFactory);
-      await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, id, {
-        flowId: synced.flowId,
-        flowEnvironment: synced.flowEnvironment,
-        flowConnection: synced.flowConnection,
-        flowState: synced.flowState
-      });
+      const synced = await this._syncShared(saved, id);
       saved = {
         ...saved,
         flowId: synced.flowId,
@@ -787,22 +760,102 @@ export default class FlowSettingsPanel
       };
       warningMessage = synced.note;
       consentUrl = synced.consentUrl;
-      if (saved.isActive && synced.flowState !== 'Started') {
-        statusMessage = 'Saved the rule for this list.';
+      if (saved.isActive && synced.flowState === 'Started') {
+        statusMessage = 'Saved. The site numbering flow is on. A blank number is filled within about a minute.';
       }
-      if (synced.flowState === 'Started') {
-        const legacyNote = await this._stopLegacy();
-        warningMessage = warningMessage || legacyNote;
+      if (!saved.isActive && synced.flowState === 'Started') {
+        statusMessage = 'Saved the settings for this list. This list is left out of the site numbering flow.';
       }
       if (saved.flowId && saved.flowEnvironment) {
         window.open(flowPortalUrl(saved.flowEnvironment, saved.flowId), '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       warningMessage = messageOf(error);
-      statusMessage = 'Saved the rule for this list.';
+      statusMessage = 'Saved the rule. The site numbering flow is not on yet.';
     }
     this.setState({ saving: false, statusMessage, warningMessage, consentUrl, draft: saved });
     await this._load();
+  }
+
+  private _sharedSeed(draft: IConfigDraft): ISyncedFlow {
+    const legacy = this.state.legacySite;
+    const flowId = (legacy && legacy.flowId) || draft.flowId;
+    return {
+      flowId,
+      flowEnvironment: this.state.environmentId || (legacy && legacy.flowEnvironment) || draft.flowEnvironment,
+      flowConnection: this.state.connectionName || (legacy && legacy.flowConnection) || draft.flowConnection,
+      flowState: flowId && legacy && legacy.flowId === flowId ? legacy.flowState : draft.flowState,
+      note: '',
+      consentUrl: ''
+    };
+  }
+
+  private async _syncShared(draft: IConfigDraft, listItemId: number): Promise<ISyncedFlow> {
+    const seed = this._sharedSeed(draft);
+    const synced = await syncListFlow(
+      this.props.aadHttpClientFactory,
+      this._target(),
+      seed,
+      true,
+      this.props.aadTokenProviderFactory
+    );
+    const binding: IFlowBinding = {
+      flowId: synced.flowId,
+      flowEnvironment: synced.flowEnvironment,
+      flowConnection: synced.flowConnection,
+      flowState: synced.flowState
+    };
+    await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), listItemId, binding);
+    await this._storeSharedFlow(binding);
+    if (synced.flowState === 'Started') {
+      const replaced = await this._stopReplacedFlow(draft.flowId, draft.flowEnvironment, synced.flowId);
+      if (replaced && !synced.note) {
+        synced.note = replaced;
+      }
+    }
+    return synced;
+  }
+
+  private async _storeSharedFlow(binding: IFlowBinding): Promise<void> {
+    const listTitle = this._listTitle();
+    const legacy = this.state.legacySite;
+    if (legacy && legacy.id !== undefined) {
+      await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, legacy.id, binding);
+      this.setState({
+        legacySite: {
+          ...legacy,
+          flowId: binding.flowId,
+          flowEnvironment: binding.flowEnvironment,
+          flowConnection: binding.flowConnection,
+          flowState: binding.flowState
+        }
+      });
+      return;
+    }
+    const draft = siteFlowDraft(this.props.siteAbsoluteUrl, this.props.siteTitle);
+    draft.flowId = binding.flowId;
+    draft.flowEnvironment = binding.flowEnvironment;
+    draft.flowConnection = binding.flowConnection;
+    draft.flowState = binding.flowState;
+    const id = await saveConfigRow(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle, draft, false, true);
+    this.setState({ legacySite: { ...draft, id } });
+  }
+
+  private async _stopReplacedFlow(oldId: string, oldEnvironment: string, keptId: string): Promise<string> {
+    if (!oldId || oldId === keptId) {
+      return '';
+    }
+    try {
+      const environments = await listEnvironments(this.props.aadHttpClientFactory);
+      const environment = environments.filter((item) => item.id === oldEnvironment)[0];
+      if (!environment) {
+        return 'An older flow for this list is still on. Turn it off in Power Automate so each item is numbered once.';
+      }
+      await setRemoteFlowState(this.props.aadHttpClientFactory, environment, oldId, 'Stopped');
+      return '';
+    } catch {
+      return 'An older flow for this list is still on. Turn it off in Power Automate so each item is numbered once.';
+    }
   }
 
   private async _delete(): Promise<void> {
@@ -811,45 +864,13 @@ export default class FlowSettingsPanel
       return;
     }
     this.setState({ saving: true, errorMessage: '', statusMessage: '', warningMessage: '' });
-    let warningMessage = '';
-    try {
-      await removeListFlow(this.props.aadHttpClientFactory, draft.flowId, draft.flowEnvironment);
-    } catch (error) {
-      warningMessage = `${messageOf(error)} The list rule will still be removed.`;
-    }
     await deleteConfigRow(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id);
     this.setState({
       saving: false,
-      statusMessage: 'Removed AutoGen from this list.',
-      warningMessage
+      statusMessage: 'Removed this list from AutoGen Flow. The site numbering flow stays on for the other lists.',
+      warningMessage: ''
     });
     await this._load();
-  }
-
-  private async _stopLegacy(): Promise<string> {
-    const legacy = this.state.legacySite;
-    if (!legacy || !legacy.flowId || legacy.flowState === 'Stopped') {
-      return '';
-    }
-    try {
-      const environments = await listEnvironments(this.props.aadHttpClientFactory);
-      const environment = environments.filter((item) => item.id === legacy.flowEnvironment)[0];
-      if (!environment) {
-        return 'The previous site numbering flow is still on. Turn it off in Power Automate so each item is numbered once.';
-      }
-      await setRemoteFlowState(this.props.aadHttpClientFactory, environment, legacy.flowId, 'Stopped');
-      await saveConfigRow(
-        this.props.spHttpClient,
-        this.props.siteAbsoluteUrl,
-        this._listTitle(),
-        { ...legacy, flowState: 'Stopped' },
-        false,
-        true
-      );
-      return '';
-    } catch {
-      return 'The previous site numbering flow is still on. Turn it off in Power Automate so each item is numbered once.';
-    }
   }
 
   private _target(): IListFlowTarget {
