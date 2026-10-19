@@ -1,5 +1,3 @@
-import { flowSdkSource } from './flowSdkSource';
-
 const SDK_URLS = [
   'https://flow.microsoft.com/Content/msflowsdk-1.1.js',
   'https://content.powerapps.com/resource/makerx/static/js/msflowsdk-1.1.1e587b1a.js'
@@ -127,10 +125,13 @@ function installBundledSdk(): void {
   if (sdkReady()) {
     return;
   }
-  const script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.text = flowSdkSource;
-  document.head.appendChild(script);
+  try {
+    // Resolved from lib/services after the TypeScript emit.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../../thirdparty/msflowsdk.js');
+  } catch {
+    return;
+  }
 }
 
 function loadScript(index: number): Promise<void> {

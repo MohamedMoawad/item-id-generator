@@ -11,10 +11,4 @@ module.exports = [
       }
     }
   },
-  {
-    files: ['src/services/flowSdkSource.ts'],
-    rules: {
-      'max-len': 'off'
-    }
-  }
 ];
