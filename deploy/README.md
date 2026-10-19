@@ -18,7 +18,7 @@ List owners set the formula, the number column, and the reset. Saving an active 
 
 ## AutoGen Flow
 
-`autogen-flow.sppkg` is package **1.32.0.0**, separate from AutoGen Feature. Upload it and add the app to the site. It uses **Microsoft Flow Service** permissions **Flows.Read.All** and **Flows.Manage.All**. Saving a rule opens Power Automate in a new tab for sign-in and creates or updates one numbering flow for the site collection. That flow reads AutoGenFlowConfiguration and writes the number on each related list. Open a list, choose **AutoGen Flow**, choose the environment, set the column and formula, and save. **Settings → Manage flow** opens that same tab. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
+`autogen-flow.sppkg` is package **1.33.0.0**, separate from AutoGen Feature. Upload it and add the app to the site. It uses **Microsoft Flow Service** permissions **Flows.Read.All** and **Flows.Manage.All**. Saving a rule opens Power Automate in a new tab for sign-in and creates or updates one numbering flow for the site collection. That flow reads AutoGenFlowConfiguration and writes the number on each related list. Open a list, choose **AutoGen Flow**, choose the environment, set the column and formula, and save. **Settings → Manage flow** opens that same tab. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
 
 ## Repeating Rows
 

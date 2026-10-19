@@ -1,4 +1,4 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, readNamedFlow, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -264,6 +264,13 @@ describe('flow model', () => {
   it('reads the flow state and treats a missing approval as consent', () => {
     expect(readFlowState({ properties: { state: 'Started' } })).toBe('Started');
     expect(readFlowState({})).toBe('Missing');
+    expect(readNamedFlow({
+      value: [
+        { name: 'other-flow', properties: { displayName: 'Other', state: 'Started' } },
+        { name: 'site-flow', properties: { displayName: 'AutoGen Flow · PortalTeam', state: 'Started' } }
+      ]
+    }, 'AutoGen Flow · PortalTeam')).toEqual({ id: 'site-flow', state: 'Started' });
+    expect(readNamedFlow({ value: [] }, 'AutoGen Flow · PortalTeam')).toEqual({ id: '', state: 'Missing' });
     expect(isConsentFailure(401, '')).toBe(false);
     expect(isConsentFailure(403, 'The user is not authorized for this environment.')).toBe(false);
     expect(isConsentFailure(0, 'AADSTS65001: The user or administrator has not consented to use the application.')).toBe(true);

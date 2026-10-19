@@ -138,7 +138,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.32',
+          title: 'AutoGen Flow 1.33',
           showCloseButton: true
         }}
         modalProps={{
@@ -363,11 +363,12 @@ export default class FlowSettingsPanel
     const synced = await this._syncShared(draft, draft.id);
     const flowId = synced.flowId;
     const environmentId = synced.flowEnvironment;
+    const opened = this._openMessage(synced.flowState === 'Started', synced.note);
     this.setState({
       saving: false,
       consentUrl: synced.consentUrl,
-      warningMessage: synced.note,
-        statusMessage: synced.flowState === 'Started' ? 'The site numbering flow is on.' : 'Sign in on the Power Automate tab. The numbering flow is not on yet.',
+      warningMessage: opened.warningMessage,
+      statusMessage: opened.statusMessage,
       draft: {
         ...draft,
         flowId: synced.flowId,
@@ -743,7 +744,7 @@ export default class FlowSettingsPanel
     let warningMessage = '';
     let consentUrl = '';
     let statusMessage = saved.isActive
-      ? 'Sign in on the Power Automate tab. The numbering flow is not on yet.'
+      ? 'Power Automate is open.'
       : 'Saved the settings for this list. This list is left out of the site numbering flow.';
     try {
       const synced = await this._syncShared(saved, id);
@@ -754,26 +755,36 @@ export default class FlowSettingsPanel
         flowConnection: synced.flowConnection,
         flowState: synced.flowState
       };
-      warningMessage = synced.note;
       consentUrl = synced.consentUrl;
-      if (saved.isActive && synced.flowState === 'Started') {
-        statusMessage = 'Saved. The site numbering flow is on. A blank number is filled within about a minute.';
-      }
-      if (!saved.isActive && synced.flowState === 'Started') {
-        statusMessage = 'Saved the settings for this list. This list is left out of the site numbering flow.';
-      }
-      if (warningMessage === statusMessage) {
-        warningMessage = '';
-      }
+      const opened = this._openMessage(saved.isActive && synced.flowState === 'Started', synced.note);
+      statusMessage = saved.isActive ? opened.statusMessage : 'Saved the settings for this list. This list is left out of the site numbering flow.';
+      warningMessage = saved.isActive ? opened.warningMessage : '';
       if (saved.flowId && saved.flowEnvironment) {
         showPowerAutomatePage(this._makerTab, flowPortalUrl(saved.flowEnvironment, saved.flowId));
       }
     } catch (error) {
-      warningMessage = messageOf(error);
-      statusMessage = 'Sign in on the Power Automate tab. The numbering flow is not on yet.';
+      const opened = this._openMessage(false, messageOf(error));
+      warningMessage = opened.warningMessage;
+      statusMessage = opened.statusMessage;
     }
     this.setState({ saving: false, statusMessage, warningMessage, consentUrl, draft: saved });
     await this._load();
+  }
+
+  private _openMessage(started: boolean, note: string): { statusMessage: string; warningMessage: string } {
+    if (started) {
+      return {
+        statusMessage: 'Saved. The site numbering flow is on. A blank number is filled within about a minute.',
+        warningMessage: ''
+      };
+    }
+    if (!note || note === 'Power Automate is open.' || note.indexOf('Sign in on the Power Automate tab') === 0) {
+      return { statusMessage: 'Power Automate is open.', warningMessage: '' };
+    }
+    if (note === 'Turn the numbering flow on in the Power Automate tab.') {
+      return { statusMessage: note, warningMessage: '' };
+    }
+    return { statusMessage: 'Power Automate is open.', warningMessage: note };
   }
 
   private _sharedSeed(draft: IConfigDraft): ISyncedFlow {

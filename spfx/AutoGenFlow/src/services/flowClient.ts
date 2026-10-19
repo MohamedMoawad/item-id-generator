@@ -1,5 +1,5 @@
 import { AadHttpClient, AadHttpClientFactory } from '@microsoft/sp-http';
-import { buildCreateFlowPayload, IListFlowTarget } from './siteFlow';
+import { buildCreateFlowPayload, flowDisplayName, IListFlowTarget } from './siteFlow';
 import {
   connectionListUrls,
   connectionPortalUrl,
@@ -22,6 +22,7 @@ import {
   readFailedAction,
   readFlowState,
   readLatestRun,
+  readNamedFlow,
   sharePointConnectionBody,
   sharePointConnectionCreateUrls,
   sharePointConnectionPutUrl
@@ -376,9 +377,11 @@ function flowSavedWithoutStart(environment: IFlowEnvironment, connectionName: st
     flowEnvironment: environment.id,
     flowConnection: connectionName,
     flowState: 'Stopped',
-    note: consentUrl
-      ? 'The numbering flow was created. Sign in to the SharePoint connection, then save again.'
-      : error.message,
+    note: error.message === 'Turn the numbering flow on in the Power Automate tab.'
+      ? error.message
+      : consentUrl
+        ? 'The numbering flow was created. Sign in to the SharePoint connection, then save again.'
+        : error.message,
     consentUrl: consentUrl || connectionPortalUrl(environment.id)
   };
 }
@@ -510,7 +513,22 @@ export async function createRemoteFlow(
     }
   }
   if (portalFallback(lastError)) {
-    throw new Error('Sign in on the Power Automate tab. The numbering flow is not on yet.');
+    const adopted = await findNamedFlowRemote(client, located, flowDisplayName(target.siteUrl));
+    if (adopted.id && adopted.state === 'Started') {
+      return adopted;
+    }
+    if (adopted.id) {
+      try {
+        await startFlow(client, located, adopted.id, 'Turn the numbering flow on in the Power Automate tab.');
+        return { id: adopted.id, state: 'Started' };
+      } catch (error) {
+        if (error instanceof FlowConsentError || error instanceof FlowStartError) {
+          throw error;
+        }
+      }
+      throw new FlowStartError(adopted.id, 'Turn the numbering flow on in the Power Automate tab.');
+    }
+    throw new Error('Power Automate is open.');
   }
   throw new Error(publicFlowError(environment.id, lastError));
 }
@@ -715,6 +733,26 @@ async function postFlow(client: AadHttpClient, url: string, body: object): Promi
     }
     return { id: '', state: 'Missing', error: error instanceof Error ? error.message : '' };
   }
+}
+
+async function findNamedFlowRemote(client: AadHttpClient, environment: IFlowEnvironment, displayName: string): Promise<IRemoteFlow> {
+  const hosts = flowApiHosts(environment);
+  for (let hostIndex = 0; hostIndex < hosts.length; hostIndex += 1) {
+    const host = hosts[hostIndex];
+    const listUrl = `${host}/providers/Microsoft.ProcessSimple/environments/${encodeURIComponent(environment.id)}/flows?api-version=${API_VERSION}&$top=200`;
+    try {
+      const listed = await sendJson<Parameters<typeof readNamedFlow>[0]>(client, 'GET', listUrl);
+      const found = readNamedFlow(listed, displayName);
+      if (found.id) {
+        return found;
+      }
+    } catch (error) {
+      if (error instanceof FlowConsentError) {
+        throw error;
+      }
+    }
+  }
+  return { id: '', state: 'Missing' };
 }
 
 function portalFallback(message: string): boolean {

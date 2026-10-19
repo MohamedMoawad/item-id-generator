@@ -712,6 +712,22 @@ function toRun(row: IRawRunRecord): IFlowRunReport | undefined {
   };
 }
 
+export function readNamedFlow(
+  payload: { value?: Array<{ name?: string; properties?: { displayName?: string; state?: string } }> } | undefined,
+  displayName: string
+): { id: string; state: FlowRunState } {
+  const wanted = displayName.trim().toLowerCase();
+  const rows = payload && payload.value ? payload.value : [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const name = ((row.properties && row.properties.displayName) || '').trim().toLowerCase();
+    if (row.name && name === wanted) {
+      return { id: row.name, state: readFlowState(row) };
+    }
+  }
+  return { id: '', state: 'Missing' };
+}
+
 export function readFlowState(payload: { name?: string; properties?: { state?: string } } | undefined): FlowRunState {
   const state = payload && payload.properties && payload.properties.state;
   if (state === 'Started' || state === 'Stopped') {
