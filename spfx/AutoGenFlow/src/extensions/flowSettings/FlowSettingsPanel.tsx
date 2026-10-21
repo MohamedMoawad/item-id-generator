@@ -40,8 +40,9 @@ import {
   saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { createFlowLogDetail, FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { readFlowProblem, syncListFlow } from '../../services/flowClient';
+import { createFlowLogDetail, FlowConsentError, flowEditUrl, flowListUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { listEnvironments, readFlowProblem, syncListFlow } from '../../services/flowClient';
+import { buildFlowPowerShell, isFlowUnauthorized } from '../../services/flowScript';
 import { flowDisplayName, IListFlowTarget } from '../../services/siteFlow';
 import { formulaInserts, IFormulaColumn, isLookupLike, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
@@ -81,6 +82,7 @@ interface IFlowSettingsPanelState {
   connectionsLoading: boolean;
   flowHint: string;
   consentUrl: string;
+  flowScript: string;
   errorMessage: string;
   warningMessage: string;
   statusMessage: string;
@@ -123,6 +125,7 @@ export default class FlowSettingsPanel
       connectionsLoading: false,
       flowHint: '',
       consentUrl: '',
+      flowScript: '',
       errorMessage: '',
       warningMessage: '',
       statusMessage: ''
@@ -146,7 +149,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.39',
+          title: 'AutoGen Flow 1.40',
           showCloseButton: true
         }}
         modalProps={{
@@ -165,6 +168,7 @@ export default class FlowSettingsPanel
             disabled={this.state.loading || !draft}
           />
         </div>
+        {this._environmentPicker()}
         {this.state.loading && <Spinner size={SpinnerSize.small} label="Loading settings" />}
         {this.state.errorMessage && (
           <div className={styles.status}>
@@ -230,7 +234,7 @@ export default class FlowSettingsPanel
             <DefaultButton text="Cancel" onClick={this._onCancelDelete} disabled={this.state.saving} />
           </div>
         )}
-        {this._hasStoredFlow() && this._openFlowLink()}
+        {this._storedEnvironmentId() && this._openFlowLink()}
       </div>
     );
   }
@@ -337,9 +341,7 @@ export default class FlowSettingsPanel
               disabled={this.state.saving}
             />
           )}
-          {draft.id !== undefined && this._hasStoredFlow() && (
-            <DefaultButton text="Manage flow" onClick={this._onManageFlow} disabled={this.state.saving} />
-          )}
+          <DefaultButton text="Edit flow" onClick={this._onEditFlow} disabled={this.state.saving || !this._storedEnvironmentId()} />
           {draft.id !== undefined && (
             <DefaultButton text="Back" onClick={this._onBack} disabled={this.state.saving} />
           )}
@@ -351,19 +353,80 @@ export default class FlowSettingsPanel
 
   private _openFlowLink(): React.ReactElement {
     return (
-      <button type="button" className={styles.addLink} onClick={this._onManageFlow} disabled={this.state.saving}>
-        Manage flow
+      <button type="button" className={styles.addLink} onClick={this._onEditFlow} disabled={this.state.saving}>
+        Edit flow
       </button>
     );
   }
 
-  private _onManageFlow = (): void => {
-    const flowId = this._storedFlowId();
-    const environmentId = this._storedEnvironmentId();
-    if (!flowId || !environmentId) {
+  private _environmentPicker(): React.ReactElement {
+    const options = this.state.environments.map((environment) => ({
+      key: environment.id,
+      text: environment.isDefault ? `${environment.displayName} (default)` : environment.displayName
+    }));
+    return (
+      <div className={styles.pickers}>
+        <Dropdown
+          label="Environment"
+          placeholder={options.length === 0 ? 'No Power Automate environment was returned' : 'Select an environment'}
+          options={options}
+          selectedKey={this.state.environmentId || undefined}
+          disabled={this.state.loading || this.state.saving || options.length === 0}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
+          onChange={this._onEnvironmentChange}
+        />
+        <div className={styles.actions}>
+          <DefaultButton
+            text="Edit flow"
+            onClick={this._onEditFlow}
+            disabled={this.state.saving || !this._storedEnvironmentId()}
+          />
+          {this.state.flowScript && (
+            <PrimaryButton text="Create flow with PowerShell" onClick={this._downloadScript} disabled={this.state.saving} />
+          )}
+        </div>
+        {this.state.flowScript && (
+          <MessageBar messageBarType={MessageBarType.warning}>
+            Power Automate returned HTTP 401, so this page did not create the flow. Run the PowerShell script. It signs you in, creates the flow in the selected environment, and opens Edit flow in a new tab.
+          </MessageBar>
+        )}
+      </div>
+    );
+  }
+
+  private _onEnvironmentChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
       return;
     }
-    window.open(flowPortalUrl(environmentId, flowId), '_blank', 'noopener,noreferrer');
+    const environmentId = String(option.key);
+    this.setState({ environmentId, flowScript: '' });
+    this._patch({ flowEnvironment: environmentId });
+  };
+
+  private _onEditFlow = (): void => {
+    const environmentId = this._storedEnvironmentId();
+    const flowId = this._storedFlowId();
+    if (!environmentId) {
+      return;
+    }
+    const url = flowId ? flowEditUrl(environmentId, flowId) : flowListUrl(environmentId);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  private _downloadScript = (): void => {
+    if (!this.state.flowScript) {
+      return;
+    }
+    const blob = new Blob([this.state.flowScript], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'autogen-flow.ps1';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   private _openConsent = (): void => {
@@ -408,12 +471,12 @@ export default class FlowSettingsPanel
         disabled: !this.state.draft || this.state.draft.id === undefined || this.state.saving,
         onClick: this._onView
       },
-      ...(this._hasStoredFlow() ? [{
+      ...(this._storedEnvironmentId() ? [{
         key: 'manage',
-        text: 'Manage flow',
+        text: 'Edit flow',
         iconProps: { iconName: 'OpenInNewWindow' },
-        disabled: this.state.saving,
-        onClick: this._onManageFlow
+        disabled: this.state.saving || !this._storedEnvironmentId(),
+        onClick: this._onEditFlow
       }] : [])
     ];
   }
@@ -435,12 +498,12 @@ export default class FlowSettingsPanel
         disabled: this.state.saving,
         onClick: this._onView
       },
-      ...(this._hasStoredFlow() ? [{
+      ...(this._storedEnvironmentId() ? [{
         key: 'open',
-        text: 'Manage flow',
+        text: 'Edit flow',
         iconProps: { iconName: 'OpenInNewWindow' },
-        disabled: this.state.saving,
-        onClick: this._onManageFlow
+        disabled: this.state.saving || !this._storedEnvironmentId(),
+        onClick: this._onEditFlow
       }] : []),
       {
         key: 'delete',
@@ -568,18 +631,22 @@ export default class FlowSettingsPanel
     const listTitle = this._listTitle();
     await ensureConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
     await showConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle);
-    const [rows, columns, canEdit] = await Promise.all([
+    const [rows, columns, canEdit, environments] = await Promise.all([
       loadConfigRows(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle),
       loadFormulaColumns(this.props.spHttpClient, this.props.webAbsoluteUrl, this.props.listGuid),
-      canEditConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle)
+      canEditConfigList(this.props.spHttpClient, this.props.siteAbsoluteUrl, listTitle),
+      this._loadEnvironments()
     ]);
     const existing = findConfigForList(rows, this.props.listGuid);
     const draft = existing || draftForCurrentList(this.props.listTitle, this.props.listUrl, this.props.listGuid);
+    const environmentId = this._selectedEnvironment(environments, draft.flowEnvironment);
     this.setState({
       loading: false,
       canEdit,
       columns,
-      draft,
+      environments,
+      environmentId,
+      draft: { ...draft, flowEnvironment: environmentId || draft.flowEnvironment },
       legacySite: findSiteFlow(rows),
       countEdited: false,
       confirmDelete: false,
@@ -652,13 +719,24 @@ export default class FlowSettingsPanel
       ? 'Saved. The automated flow for this list is being created. Open AutoGenFlowLog to see each step.'
       : 'Saved. This list is off. Open AutoGenFlowLog to see each step.';
     let warningMessage = '';
+    let flowScript = '';
     if (saved.isActive) {
       const created = await this._createListFlow(saved);
       saved = created.draft;
       statusMessage = created.statusMessage;
       warningMessage = created.warningMessage;
+      flowScript = created.flowScript;
     }
-    this.setState({ saving: false, statusMessage, warningMessage, consentUrl: '', draft: saved, showingForm: false });
+    this.setState({
+      saving: false,
+      statusMessage,
+      warningMessage,
+      consentUrl: '',
+      flowScript,
+      environmentId: saved.flowEnvironment || this.state.environmentId,
+      draft: saved,
+      showingForm: false
+    });
     if (saved.isActive) {
       await fillBlankNumbers({
         spHttpClient: this.props.spHttpClient,
@@ -672,7 +750,7 @@ export default class FlowSettingsPanel
     await this._load();
   }
 
-  private async _createListFlow(draft: IConfigDraft): Promise<{ draft: IConfigDraft; statusMessage: string; warningMessage: string }> {
+  private async _createListFlow(draft: IConfigDraft): Promise<{ draft: IConfigDraft; statusMessage: string; warningMessage: string; flowScript: string }> {
     const target: IListFlowTarget = {
       webUrl: this.props.webAbsoluteUrl,
       siteUrl: this.props.siteAbsoluteUrl,
@@ -681,10 +759,11 @@ export default class FlowSettingsPanel
       configListTitle: this._listTitle()
     };
     const name = flowDisplayName(this.props.listTitle);
+    const environmentId = this.state.environmentId || draft.flowEnvironment;
     try {
       const synced = await syncListFlow(this.props.aadHttpClientFactory, target, {
         flowId: draft.flowId,
-        flowEnvironment: draft.flowEnvironment,
+        flowEnvironment: environmentId,
         flowConnection: draft.flowConnection,
         flowState: draft.flowState,
         note: '',
@@ -699,12 +778,20 @@ export default class FlowSettingsPanel
         });
       }
       const started = synced.flowState === 'Started' && synced.flowId.trim().length > 0;
+      const flowScript = isFlowUnauthorized(synced.note) ? buildFlowPowerShell({
+        environmentId: synced.flowEnvironment,
+        environmentName: this._environmentName(synced.flowEnvironment),
+        apiHost: this._environmentHost(synced.flowEnvironment),
+        target,
+        connectionName: synced.flowConnection
+      }) : '';
+      const note = flowScript ? `${synced.note} Create flow with PowerShell is ready in AutoGen Flow.` : synced.note;
       const detail = createFlowLogDetail({
         name,
         environmentId: synced.flowEnvironment,
         flowId: synced.flowId,
         flowState: synced.flowState,
-        note: synced.note
+        note
       });
       await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
         step: 'Create flow',
@@ -721,26 +808,68 @@ export default class FlowSettingsPanel
           flowConnection: synced.flowConnection,
           flowState: synced.flowState
         },
-        statusMessage: started
-          ? 'Saved. The automated flow is on for this list. Leave the number column empty. Open AutoGenFlowLog for each step.'
-          : 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.',
-        warningMessage: started ? '' : (synced.note || 'The flow was not created.')
+        statusMessage: createStatus(started, flowScript.length > 0),
+        warningMessage: started ? '' : (synced.note || 'The flow was not created.'),
+        flowScript
       };
     } catch (error) {
       const detail = messageOf(error);
+      const flowScript = isFlowUnauthorized(detail) ? buildFlowPowerShell({
+        environmentId,
+        environmentName: this._environmentName(environmentId),
+        apiHost: this._environmentHost(environmentId),
+        target,
+        connectionName: draft.flowConnection
+      }) : '';
       await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
         step: 'Create flow',
         status: 'Failed',
-        detail: `Name ${name}. Trigger When an item is created. ${detail}`,
+        detail: createFlowLogDetail({
+          name,
+          environmentId,
+          flowId: draft.flowId,
+          flowState: draft.flowState,
+          note: flowScript ? `${detail} Create flow with PowerShell is ready in AutoGen Flow.` : detail
+        }),
         listTitle: this.props.listTitle,
         listGuid: this.props.listGuid
       });
       return {
         draft,
-        statusMessage: 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.',
-        warningMessage: detail
+        statusMessage: flowScript
+          ? 'Saved. Power Automate returned HTTP 401. Use Create flow with PowerShell. It opens Edit flow in a new tab.'
+          : 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.',
+        warningMessage: detail,
+        flowScript
       };
     }
+  }
+
+  private async _loadEnvironments(): Promise<IFlowEnvironment[]> {
+    try {
+      return await listEnvironments(this.props.aadHttpClientFactory);
+    } catch (error) {
+      this.setState({ warningMessage: messageOf(error) });
+      return [];
+    }
+  }
+
+  private _selectedEnvironment(environments: IFlowEnvironment[], savedId: string): string {
+    const saved = savedId.trim();
+    if (saved && environments.some((item) => item.id === saved)) {
+      return saved;
+    }
+    return environments.length > 0 ? environments[0].id : saved;
+  }
+
+  private _environmentName(environmentId: string): string {
+    const match = this.state.environments.filter((item) => item.id === environmentId)[0];
+    return match ? match.displayName : 'Default';
+  }
+
+  private _environmentHost(environmentId: string): string {
+    const match = this.state.environments.filter((item) => item.id === environmentId)[0];
+    return match ? match.endpoint : 'https://api.flow.microsoft.com';
   }
 
   private _storedFlowId(): string {
@@ -753,10 +882,6 @@ export default class FlowSettingsPanel
     const draft = this.state.draft;
     const shared = this.state.legacySite;
     return (this.state.environmentId || (draft && draft.flowEnvironment) || (shared && shared.flowEnvironment) || '').trim();
-  }
-
-  private _hasStoredFlow(): boolean {
-    return this._storedFlowId().length > 0 && this._storedEnvironmentId().length > 0;
   }
 
   private async _delete(): Promise<void> {
@@ -777,6 +902,16 @@ export default class FlowSettingsPanel
   private _listTitle(): string {
     return this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
   }
+}
+
+function createStatus(started: boolean, scriptReady: boolean): string {
+  if (started) {
+    return 'Saved. The automated flow is on for this list. Edit flow opens it in a new tab.';
+  }
+  if (scriptReady) {
+    return 'Saved. Power Automate returned HTTP 401. Use Create flow with PowerShell. It opens Edit flow in a new tab.';
+  }
+  return 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.';
 }
 
 function columnMenu(columns: IFormulaColumn[], numberField: string): IDropdownOption[] {

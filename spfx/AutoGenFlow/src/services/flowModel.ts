@@ -431,6 +431,12 @@ export function flowPortalUrl(environmentId: string, flowId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/flows/${flow}/details`;
 }
 
+export function flowEditUrl(environmentId: string, flowId: string): string {
+  const environment = encodeURIComponent(environmentId.trim());
+  const flow = encodeURIComponent(flowId.trim());
+  return `https://make.powerautomate.com/environments/${environment}/flows/${flow}`;
+}
+
 export function flowHomeUrl(environmentId: string): string {
   const environment = encodeURIComponent(environmentId.trim());
   return `https://make.powerautomate.com/environments/${environment}/home`;
