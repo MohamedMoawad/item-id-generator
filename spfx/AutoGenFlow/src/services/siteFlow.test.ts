@@ -21,6 +21,9 @@ describe('site flow', () => {
     expect(text).toContain('TargetListGuid%20eq%20');
     expect(text).toContain("body('Get_rule')?['d']?['results']");
     expect(text).toContain('@triggerBody()');
+    expect(text).toContain('Get_item');
+    expect(text).toContain('ItemQuery');
+    expect(text).toContain("['LookupValue']");
     expect(text).toContain("add(variables('Previous'), 1)");
     expect(text).toContain('Column_name');
     expect(text).toContain('"runs":1');

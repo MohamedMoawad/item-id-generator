@@ -193,6 +193,28 @@ export function isLookupLike(type: string): boolean {
   return text.indexOf('lookup') >= 0 || text === 'user' || text === 'usermulti';
 }
 
+export function isHiddenField(hidden: boolean | string | number | undefined): boolean {
+  if (hidden === true || hidden === 1) {
+    return true;
+  }
+  const text = String(hidden === undefined || hidden === null ? '' : hidden).trim().toLowerCase();
+  return text === 'true' || text === '1';
+}
+
+export function sharePointFieldType(field: { TypeAsString?: string; FieldTypeKind?: number }): string {
+  const named = (field.TypeAsString || '').trim();
+  if (named && named.toLowerCase() !== 'invalid') {
+    return named;
+  }
+  if (field.FieldTypeKind === 7) {
+    return 'Lookup';
+  }
+  if (field.FieldTypeKind === 20) {
+    return 'User';
+  }
+  return named || 'Text';
+}
+
 export function columnToken(internalName: string, type: string): string {
   return isLookupLike(type) ? `{${internalName}.title}` : `{${internalName}}`;
 }
@@ -228,23 +250,26 @@ const SKIP_FIELD_NAMES: { [name: string]: boolean } = {
   PermMask: true
 };
 
-export function formulaColumns(fields: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean | string }>): IFormulaColumn[] {
+export function formulaColumns(fields: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean | string | number; FieldTypeKind?: number }>): IFormulaColumn[] {
   return fields
     .filter((field) => {
       const name = field.InternalName || '';
+      const type = sharePointFieldType(field);
       return !!name &&
-        field.Hidden !== true &&
-        field.Hidden !== 'True' &&
-        !SKIP_FIELD_TYPES[field.TypeAsString || ''] &&
+        !isHiddenField(field.Hidden) &&
+        !SKIP_FIELD_TYPES[type] &&
         !SKIP_FIELD_NAMES[name] &&
         /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
     })
-    .map((field) => ({
-      internalName: field.InternalName || '',
-      title: field.Title || field.InternalName || '',
-      type: field.TypeAsString || 'Text',
-      token: columnToken(field.InternalName || '', field.TypeAsString || 'Text')
-    }))
+    .map((field) => {
+      const type = sharePointFieldType(field);
+      return {
+        internalName: field.InternalName || '',
+        title: field.Title || field.InternalName || '',
+        type,
+        token: columnToken(field.InternalName || '', type)
+      };
+    })
     .sort((left, right) => left.title.localeCompare(right.title));
 }
 
@@ -296,7 +321,8 @@ export function numberColumnChoices(columns: IFormulaColumn[]): IFormulaColumn[]
 export function formulaInserts(columns: IFormulaColumn[], numberField: string): IFormulaColumn[] {
   const skip = numberField.trim().toLowerCase();
   return columns.filter((column) => {
-    return INSERT_TYPES[column.type] === true
+    const insertable = INSERT_TYPES[column.type] === true || isLookupLike(column.type);
+    return insertable
       && !isSystemField(column.internalName)
       && column.internalName.toLowerCase() !== skip;
   });

@@ -5,12 +5,15 @@ import {
   Dialog,
   DialogType,
   Dropdown,
+  DropdownMenuItemType,
   IContextualMenuItem,
   IDropdownOption,
+  IDropdownProps,
   IconButton,
   MessageBar,
   MessageBarType,
   PrimaryButton,
+  ResponsiveMode,
   Spinner,
   SpinnerSize,
   TextField
@@ -40,7 +43,7 @@ import {
 import { FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
 import { readFlowProblem, syncListFlow } from '../../services/flowClient';
 import { flowDisplayName, IListFlowTarget } from '../../services/siteFlow';
-import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
+import { formulaInserts, IFormulaColumn, isLookupLike, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { fillBlankNumbers } from '../../services/listFill';
 import { writeFlowLog } from '../../services/flowLog';
@@ -82,6 +85,15 @@ interface IFlowSettingsPanelState {
   warningMessage: string;
   statusMessage: string;
 }
+
+const OPEN_MENU: IDropdownProps['calloutProps'] = {
+  calloutMaxHeight: 360,
+  layerProps: {
+    styles: {
+      root: { zIndex: 10000010 }
+    }
+  }
+};
 
 const RESET_OPTIONS: IDropdownOption[] = [
   { key: 'None', text: 'Never' },
@@ -134,7 +146,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.37',
+          title: 'AutoGen Flow 1.38',
           showCloseButton: true
         }}
         modalProps={{
@@ -230,17 +242,14 @@ export default class FlowSettingsPanel
       key: column.internalName,
       text: column.title
     }));
+    const columns = columnMenu(this.state.columns, draft.numberColumnInternalName);
     const inserts = [
       { key: '{counter}', text: 'Counter {counter}' },
       { key: '{counter:4}', text: 'Counter, 4 digits {counter:4}' },
       { key: '{yyyy}', text: 'Year {yyyy}' },
       { key: '{yy}', text: 'Year, 2 digits {yy}' },
       { key: '{MM}', text: 'Month {MM}' },
-      { key: '{dd}', text: 'Day {dd}' },
-      ...formulaInserts(this.state.columns, draft.numberColumnInternalName).map((column) => ({
-        key: column.token,
-        text: `${column.title} ${column.token}`
-      }))
+      { key: '{dd}', text: 'Day {dd}' }
     ];
     return (
       <div className={styles.panel}>
@@ -261,12 +270,14 @@ export default class FlowSettingsPanel
           options={options}
           selectedKey={draft.numberColumnInternalName || undefined}
           disabled={busy || options.length === 0}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
           onChange={this._onColumnChange}
         />
         <TextField
           label="Formula"
           required={true}
-          description="Use {counter} or {counter:4}. Dates: {yyyy} {MM} {dd}. Columns: {Title}."
+          description="Use {counter} or {counter:4}. Dates: {yyyy} {MM} {dd}. A lookup column is inserted as {Department.title}."
           multiline
           rows={2}
           value={draft.formula}
@@ -274,11 +285,23 @@ export default class FlowSettingsPanel
           onChange={this._onFormulaChange}
         />
         <Dropdown
-          label="Add to the formula"
-          placeholder="Insert a token"
+          label="Columns on this list"
+          placeholder={columns.length === 0 ? 'No columns found on this list' : 'Select a column, including lookups'}
+          options={columns}
+          selectedKey={undefined}
+          disabled={busy || columns.length === 0}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
+          onChange={this._onInsert}
+        />
+        <Dropdown
+          label="Counter and date"
+          placeholder="Insert a counter or date"
           options={inserts}
           selectedKey={undefined}
           disabled={busy}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
           onChange={this._onInsert}
         />
         <TextField
@@ -293,6 +316,8 @@ export default class FlowSettingsPanel
           options={RESET_OPTIONS}
           selectedKey={draft.resetPeriod}
           disabled={busy}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
           onChange={this._onResetChange}
         />
         <TextField
@@ -503,7 +528,7 @@ export default class FlowSettingsPanel
   };
 
   private _onInsert = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
-    if (!option || !this.state.draft) {
+    if (!option || option.itemType === DropdownMenuItemType.Header || !this.state.draft) {
       return;
     }
     const token = String(option.key);
@@ -746,6 +771,22 @@ export default class FlowSettingsPanel
   private _listTitle(): string {
     return this.props.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
   }
+}
+
+function columnMenu(columns: IFormulaColumn[], numberField: string): IDropdownOption[] {
+  const rows = formulaInserts(columns, numberField);
+  const lookups = rows.filter((column) => isLookupLike(column.type));
+  const plain = rows.filter((column) => !isLookupLike(column.type));
+  const options: IDropdownOption[] = [];
+  if (lookups.length > 0) {
+    options.push({ key: 'lookup-header', text: 'Lookup columns', itemType: DropdownMenuItemType.Header });
+    lookups.forEach((column) => options.push({ key: column.token, text: `${column.title} ${column.token}` }));
+  }
+  if (plain.length > 0) {
+    options.push({ key: 'column-header', text: 'Other columns', itemType: DropdownMenuItemType.Header });
+    plain.forEach((column) => options.push({ key: column.token, text: `${column.title} ${column.token}` }));
+  }
+  return options;
 }
 
 function messageOf(error: unknown): string {

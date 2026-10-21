@@ -8,10 +8,14 @@ describe('list fill', () => {
     expect(isBlankNumber('REQ-00001')).toBe(false);
     expect(readColumnValues({
       Title: 'Desk',
-      Department: { Title: 'Finance' }
-    }, ['Title', 'Department.title'])).toEqual({
+      Department: { Title: 'Finance' },
+      Site: { LookupValue: 'Plant' },
+      Watchers: [{ Title: 'Ada' }, { Title: 'Ben' }]
+    }, ['Title', 'Department.title', 'Site.title', 'Watchers.title'])).toEqual({
       Title: 'Desk',
-      'Department.title': 'Finance'
+      'Department.title': 'Finance',
+      'Site.title': 'Plant',
+      'Watchers.title': 'Ada, Ben'
     });
     expect(oldestFirst([{ Id: 9 }, { Id: 8 }])).toEqual([{ Id: 8 }, { Id: 9 }]);
   });

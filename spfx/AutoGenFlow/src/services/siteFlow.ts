@@ -243,26 +243,29 @@ function createdActions(site: string, web: string, bakedTitle: string): { [name:
     Set_previous: setVariable('Previous', "@if(outputs('Seed_rolled'), 0, int(coalesce(outputs('Config')?['CurrentCount'], 0)))", {
       Seed_rolled: ['Succeeded']
     }),
-    ...itemActions(site, bakedTitle, '@triggerBody()', { Set_previous: ['Succeeded'] })
+    ...itemActions(site, bakedTitle, { Set_previous: ['Succeeded'] })
   };
 }
 
 function itemActions(
   site: string,
   bakedTitle: string,
-  itemInput: string,
   itemRunAfter: { [action: string]: string[] }
 ): { [name: string]: object } {
-  const itemId = "coalesce(outputs('Item')?['Id'], outputs('Item')?['ID'])";
+  const triggerId = "coalesce(triggerBody()?['ID'], triggerBody()?['Id'])";
+  const itemId = "coalesce(outputs('Item')?['Id'], outputs('Item')?['ID'], triggerBody()?['ID'], triggerBody()?['Id'])";
   const configId = "coalesce(outputs('Config')?['Id'], outputs('Config')?['ID'])";
   const configUri = `@concat('_api/web/lists/getbytitle(''${bakedTitle}'')/items(', string(${configId}), ')')`;
-  const itemUri = `@concat('_api/web/lists(guid''', coalesce(outputs('Config')?['TargetListGuid'], ''), ''')/items(', string(${itemId}), ')')`;
+  const listGuid = "replace(replace(string(coalesce(outputs('Config')?['TargetListGuid'], '')), '{', ''), '}', '')";
+  const itemFieldsUri = `@concat('_api/web/lists(guid''', ${listGuid}, ''')/items(', string(${triggerId}), ')?', coalesce(outputs('Config')?['ItemQuery'], '$select=Id,Created'))`;
+  const itemUri = `@concat('_api/web/lists(guid''', ${listGuid}, ''')/items(', string(${itemId}), ')')`;
   const stamp = "utcNow('yyyy-MM-ddTHH:mm:ssZ')";
   return {
+    Get_item: http('@outputs(\'Web\')', 'GET', itemFieldsUri, undefined, itemRunAfter),
     Item: {
       type: 'Compose',
-      inputs: itemInput,
-      runAfter: itemRunAfter
+      inputs: "@coalesce(body('Get_item'), triggerBody())",
+      runAfter: { Get_item: ['Succeeded', 'Failed', 'TimedOut'] }
     },
     Current_value: {
       type: 'Compose',
@@ -335,7 +338,8 @@ function codeExpression(): string {
 
 function columnExpression(): string {
   const field = "outputs('Item')?[first(split(item(), '.'))]";
-  return `@if(equals(item(), '__none__'), variables('Code'), replace(variables('Code'), concat('{', item(), '}'), coalesce(${field}?['Title'], ${field}?['Value'], string(${field}))))`;
+  const title = `coalesce(${field}?['Title'], ${field}?['LookupValue'], ${field}?['EMail'], ${field}?['Email'], ${field}?['Value'], string(${field}))`;
+  return `@if(equals(item(), '__none__'), variables('Code'), replace(variables('Code'), concat('{', item(), '}'), ${title}))`;
 }
 
 function variable(name: string, type: string, value: number | string): object {

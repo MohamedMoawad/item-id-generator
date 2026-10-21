@@ -6,14 +6,14 @@ The number is written while someone has that list open. An item created while no
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.37.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.38.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Update the app on the site after the catalog deploy.
 3. On the site collection, open **Site contents → Add an app → From your organization** and add **AutoGen Flow**.
 4. Open a list or library. On the command bar choose **AutoGen Flow**.
 5. Choose **Add AutoGen Configuration**.
-6. Select the single-line text column and the formula. Leave **Active** checked. **Save settings**.
+6. Select the single-line text column and the formula. **Columns on this list** shows every column on that list. A lookup or person column is inserted as `{Department.title}`. Leave **Active** checked. **Save settings**.
 7. Add an item and leave the number column empty. The number appears on the list.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**.

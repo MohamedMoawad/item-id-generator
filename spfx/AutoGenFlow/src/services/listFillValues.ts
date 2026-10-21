@@ -10,18 +10,40 @@ export function readColumnValues(item: { [name: string]: unknown }, tokens: stri
   tokens.forEach((token) => {
     const name = token.split('.')[0];
     const raw = item[name];
-    if (token.indexOf('.') >= 0 && raw && typeof raw === 'object') {
-      const record = raw as { Title?: unknown; Value?: unknown };
-      values[token] = textOf(record.Title !== undefined ? record.Title : record.Value);
-      return;
-    }
-    values[token] = textOf(raw);
+    values[token] = token.indexOf('.') >= 0 ? lookupText(raw) : textOf(raw);
   });
   return values;
 }
 
 export function oldestFirst<T>(items: T[]): T[] {
   return items.slice().reverse();
+}
+
+function lookupText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => lookupText(item)).filter((text) => text.length > 0).join(', ');
+  }
+  if (value && typeof value === 'object') {
+    const record = value as { [key: string]: unknown };
+    if (Array.isArray(record.results)) {
+      return lookupText(record.results);
+    }
+    const picked = firstText(record, ['Title', 'LookupValue', 'EMail', 'Email', 'Value']);
+    if (picked !== undefined) {
+      return textOf(picked);
+    }
+  }
+  return textOf(value);
+}
+
+function firstText(record: { [key: string]: unknown }, names: string[]): unknown {
+  for (let index = 0; index < names.length; index += 1) {
+    const picked = record[names[index]];
+    if (picked !== undefined && picked !== null && typeof picked !== 'object') {
+      return picked;
+    }
+  }
+  return undefined;
 }
 
 function textOf(value: unknown): string {

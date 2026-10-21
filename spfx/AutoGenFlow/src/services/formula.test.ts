@@ -1,6 +1,7 @@
 import {
   applyFormula,
   columnTokensInFormula,
+  formulaColumns,
   formulaInserts,
   padForFlow,
   padSequence,
@@ -67,5 +68,19 @@ describe('formula', () => {
       { internalName: 'ColorTag', title: 'Color', type: 'Text', token: '{ColorTag}' }
     ], 'autogenflow').map((column) => column.internalName);
     expect(names).toEqual(['Title', 'ColorTag']);
+  });
+
+  it('offers lookup and person columns and reads a lookup when only the field kind is present', () => {
+    const columns = formulaColumns([
+      { InternalName: 'Department', Title: 'Department', FieldTypeKind: 7, Hidden: false },
+      { InternalName: 'Owner', Title: 'Owner', TypeAsString: 'User', Hidden: 'False' },
+      { InternalName: 'Author', Title: 'Created By', TypeAsString: 'User', Hidden: false },
+      { InternalName: 'Secret', Title: 'Secret', TypeAsString: 'Lookup', Hidden: 'TRUE' },
+      { InternalName: 'Title', Title: 'Title', TypeAsString: 'Text', Hidden: false }
+    ]);
+    expect(columns.filter((column) => column.internalName === 'Department')[0].token).toBe('{Department.title}');
+    expect(columns.filter((column) => column.internalName === 'Owner')[0].token).toBe('{Owner.title}');
+    const offered = formulaInserts(columns, '').map((column) => column.internalName);
+    expect(offered).toEqual(['Department', 'Owner', 'Title']);
   });
 });

@@ -293,23 +293,49 @@ export async function loadFormulaColumns(
   webAbsoluteUrl: string,
   listGuid: string
 ): Promise<IFormulaColumn[]> {
-  try {
-    const guid = listGuid.replace(/[{}]/g, '');
+  const guid = listGuid.replace(/[{}]/g, '');
+  const root = webAbsoluteUrl.replace(/\/+$/, '');
+  const queries = [
+    `${root}/_api/web/lists(guid'${guid}')/fields?$select=InternalName,Title,TypeAsString,Hidden,FieldTypeKind&$top=500`,
+    `${root}/_api/web/lists(guid'${guid}')/fields?$top=500`
+  ];
+  for (let index = 0; index < queries.length; index += 1) {
+    try {
+      const fields = await readFieldPages(spHttpClient, queries[index]);
+      if (fields.length > 0) {
+        return formulaColumns(fields);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+async function readFieldPages(
+  spHttpClient: SPHttpClient,
+  startUrl: string
+): Promise<Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean | string | number; FieldTypeKind?: number }>> {
+  const rows: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean | string | number; FieldTypeKind?: number }> = [];
+  let url = startUrl;
+  for (let page = 0; page < 6 && url; page += 1) {
     const response = await spHttpClient.get(
-      `${webAbsoluteUrl.replace(/\/+$/, '')}/_api/web/lists(guid'${guid}')/fields?$select=InternalName,Title,TypeAsString,Hidden&$top=300`,
+      url,
       SPHttpClient.configurations.v1,
       { headers: { Accept: 'application/json;odata=nometadata' } }
     );
     if (!response.ok) {
-      return [];
+      throw new Error(String(response.status));
     }
     const payload = await response.json() as {
-      value?: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean }>;
+      value?: Array<{ InternalName?: string; Title?: string; TypeAsString?: string; Hidden?: boolean | string | number; FieldTypeKind?: number }>;
+      'odata.nextLink'?: string;
     };
-    return formulaColumns(payload.value || []);
-  } catch {
-    return [];
+    rows.push(...(payload.value || []));
+    const next = payload['odata.nextLink'] || '';
+    url = next && next !== url ? next : '';
   }
+  return rows;
 }
 
 export async function canEditConfigList(
