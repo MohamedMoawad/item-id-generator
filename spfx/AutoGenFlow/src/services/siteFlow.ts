@@ -1,3 +1,5 @@
+import { normalizeGuid } from './contract';
+
 export interface ISiteFlowDefinition {
   $schema: string;
   contentVersion: string;
@@ -31,10 +33,8 @@ export interface ICreateFlowPayload {
   };
 }
 
-export function flowDisplayName(siteUrl: string): string {
-  const trimmed = siteUrl.trim().replace(/\/+$/, '');
-  const parts = trimmed.split('/');
-  const leaf = parts[parts.length - 1] || 'site';
+export function flowDisplayName(listTitle: string): string {
+  const leaf = listTitle.trim() || 'list';
   return `AutoGen Flow · ${leaf}`.slice(0, 80);
 }
 
@@ -50,7 +50,7 @@ export function buildCreateFlowPayload(target: IListFlowTarget, connectionName: 
   }
   return {
     properties: {
-      displayName: flowDisplayName(target.siteUrl),
+      displayName: flowDisplayName(target.listTitle),
       definition: buildSiteFlowDefinition(target),
       connectionReferences,
       state,
@@ -139,6 +139,8 @@ export function buildShellFlowPayload(listTitle: string): ICreateFlowPayload {
 
 export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefinition {
   const site = target.siteUrl.replace(/\/+$/, '');
+  const web = target.webUrl.replace(/\/+$/, '');
+  const guid = normalizeGuid(target.listGuid);
   const bakedTitle = target.configListTitle.replace(/'/g, "''''");
   return {
     $schema: 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#',
@@ -148,9 +150,22 @@ export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefin
       $authentication: { defaultValue: {}, type: 'SecureObject' }
     },
     triggers: {
-      Recurrence: {
-        type: 'Recurrence',
+      When_an_item_is_created: {
+        type: 'OpenApiConnection',
+        inputs: {
+          host: {
+            connectionName: 'shared_sharepointonline',
+            operationId: 'GetOnNewItems',
+            apiId: '/providers/Microsoft.PowerApps/apis/shared_sharepointonline'
+          },
+          parameters: {
+            dataset: web,
+            table: guid
+          },
+          authentication: "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+        },
         recurrence: { frequency: 'Minute', interval: 1 },
+        splitOn: "@triggerBody()?['value']",
         runtimeConfiguration: { concurrency: { runs: 1 } }
       }
     },
@@ -158,38 +173,32 @@ export function buildSiteFlowDefinition(target: IListFlowTarget): ISiteFlowDefin
       Initialize_next: variable('Next', 'integer', 0),
       Initialize_code: variable('Code', 'string', ''),
       Initialize_previous: variable('Previous', 'integer', 0),
-      Get_rules: http(site, 'GET', rulesUri(target.configListTitle), undefined, {
+      Get_rule: http(site, 'GET', oneRuleUri(target.configListTitle, guid), undefined, {
         Initialize_next: ['Succeeded'],
         Initialize_code: ['Succeeded'],
         Initialize_previous: ['Succeeded']
       }),
-      Rule_rows: {
+      Rule_row: {
         type: 'Compose',
-        inputs: "@coalesce(body('Get_rules')?['value'], body('Get_rules')?['d']?['results'], json('[]'))",
-        runAfter: { Get_rules: ['Succeeded'] }
+        inputs: "@first(coalesce(body('Get_rule')?['value'], body('Get_rule')?['d']?['results'], json('[]')))",
+        runAfter: { Get_rule: ['Succeeded'] }
       },
-      For_each_rule: {
-        type: 'Foreach',
-        foreach: "@outputs('Rule_rows')",
-        runtimeConfiguration: { concurrency: { repetitions: 1 } },
-        runAfter: { Rule_rows: ['Succeeded'] },
-        actions: {
-          Scope_rule: {
-            type: 'Scope',
-            actions: ruleActions(site, bakedTitle)
-          },
-          Rule_done: {
-            type: 'Compose',
-            inputs: 'ok',
-            runAfter: { Scope_rule: ['Succeeded', 'Failed', 'Skipped', 'TimedOut'] }
+      Has_rule: {
+        type: 'If',
+        expression: {
+          not: {
+            equals: ["@coalesce(outputs('Rule_row')?['Id'], outputs('Rule_row')?['ID'], '')", '']
           }
-        }
+        },
+        runAfter: { Rule_row: ['Succeeded'] },
+        else: { actions: {} },
+        actions: createdActions(site, web, bakedTitle)
       }
     }
   };
 }
 
-function rulesUri(title: string): string {
+function oneRuleUri(title: string, guid: string): string {
   const select = [
     'Id',
     'TargetListUrl',
@@ -206,70 +215,44 @@ function rulesUri(title: string): string {
     'IsActive'
   ].join(',');
   const listTitle = title.replace(/'/g, "''");
-  const filter = encodeURIComponent("IsActive eq 1 and TargetListGuid ne 'site'");
-  return `_api/web/lists/getbytitle('${listTitle}')/items?$select=${select}&$filter=${filter}&$top=200`;
+  const filter = encodeURIComponent(`IsActive eq 1 and TargetListGuid eq '${guid}'`);
+  return `_api/web/lists/getbytitle('${listTitle}')/items?$select=${select}&$filter=${filter}&$top=1`;
 }
 
-function ruleActions(site: string, bakedTitle: string): { [name: string]: object } {
+function createdActions(site: string, web: string, bakedTitle: string): { [name: string]: object } {
   return {
     Config: {
       type: 'Compose',
-      inputs: '@item()'
+      inputs: "@outputs('Rule_row')"
     },
     Column_name: {
       type: 'Compose',
       inputs: "@outputs('Config')?['NumberColumnInternalName']",
       runAfter: { Config: ['Succeeded'] }
     },
-    Is_active: {
-      type: 'If',
-      expression: activeExpression(),
-      runAfter: { Column_name: ['Succeeded'] },
-      else: { actions: {} },
-      actions: {
-        Web: {
-          type: 'Compose',
-          inputs: webExpression()
-        },
-        Seed_rolled: {
-          type: 'Compose',
-          inputs: `@${rolledExpression()}`
-        },
-        Set_previous: setVariable('Previous', "@if(outputs('Seed_rolled'), 0, int(coalesce(outputs('Config')?['CurrentCount'], 0)))", {
-          Seed_rolled: ['Succeeded']
-        }),
-        Get_items: http('@outputs(\'Web\')', 'GET', recentItemsUri(), undefined, {
-          Web: ['Succeeded'],
-          Set_previous: ['Succeeded']
-        }),
-        Item_rows: {
-          type: 'Compose',
-          inputs: "@reverse(coalesce(body('Get_items')?['value'], body('Get_items')?['d']?['results'], json('[]')))",
-          runAfter: { Get_items: ['Succeeded'] }
-        },
-        For_each_item: {
-          type: 'Foreach',
-          foreach: "@outputs('Item_rows')",
-          runtimeConfiguration: { concurrency: { repetitions: 1 } },
-          runAfter: { Item_rows: ['Succeeded'] },
-          actions: {
-            Scope_item: {
-              type: 'Scope',
-              actions: itemActions(site, bakedTitle)
-            },
-            Item_done: {
-              type: 'Compose',
-              inputs: 'ok',
-              runAfter: { Scope_item: ['Succeeded', 'Failed', 'Skipped', 'TimedOut'] }
-            }
-          }
-        }
-      }
-    }
+    Web: {
+      type: 'Compose',
+      inputs: web,
+      runAfter: { Column_name: ['Succeeded'] }
+    },
+    Seed_rolled: {
+      type: 'Compose',
+      inputs: `@${rolledExpression()}`,
+      runAfter: { Web: ['Succeeded'] }
+    },
+    Set_previous: setVariable('Previous', "@if(outputs('Seed_rolled'), 0, int(coalesce(outputs('Config')?['CurrentCount'], 0)))", {
+      Seed_rolled: ['Succeeded']
+    }),
+    ...itemActions(site, bakedTitle, '@triggerBody()', { Set_previous: ['Succeeded'] })
   };
 }
 
-function itemActions(site: string, bakedTitle: string): { [name: string]: object } {
+function itemActions(
+  site: string,
+  bakedTitle: string,
+  itemInput: string,
+  itemRunAfter: { [action: string]: string[] }
+): { [name: string]: object } {
   const itemId = "coalesce(outputs('Item')?['Id'], outputs('Item')?['ID'])";
   const configId = "coalesce(outputs('Config')?['Id'], outputs('Config')?['ID'])";
   const configUri = `@concat('_api/web/lists/getbytitle(''${bakedTitle}'')/items(', string(${configId}), ')')`;
@@ -278,7 +261,8 @@ function itemActions(site: string, bakedTitle: string): { [name: string]: object
   return {
     Item: {
       type: 'Compose',
-      inputs: '@item()'
+      inputs: itemInput,
+      runAfter: itemRunAfter
     },
     Current_value: {
       type: 'Compose',
@@ -330,41 +314,6 @@ function itemActions(site: string, bakedTitle: string): { [name: string]: object
         )
       }
     }
-  };
-}
-
-function webExpression(): string {
-  const url = "coalesce(outputs('Config')?['TargetListUrl'], '')";
-  const lower = `toLower(${url})`;
-  const listsAt = `indexOf(${lower}, '/lists/')`;
-  const slashAt = `lastIndexOf(${url}, '/')`;
-  return `@if(contains(${lower}, '/lists/'), substring(${url}, 0, ${listsAt}), if(greater(${slashAt}, 0), substring(${url}, 0, ${slashAt}), ${url}))`;
-}
-
-function recentItemsUri(): string {
-  return "@concat('_api/web/lists(guid''', coalesce(outputs('Config')?['TargetListGuid'], ''), ''')/items?', coalesce(outputs('Config')?['ItemQuery'], ''), '&$orderby=Modified%20desc&$top=25')";
-}
-
-function activeExpression(): { and: object[] } {
-  const value = "@outputs('Config')?['IsActive']";
-  return {
-    and: [
-      {
-        not: {
-          or: [
-            { equals: [value, false] },
-            { equals: ["@toLower(string(outputs('Config')?['IsActive']))", 'false'] },
-            { equals: [value, 0] },
-            { equals: ["@string(outputs('Config')?['IsActive'])", '0'] }
-          ]
-        }
-      },
-      {
-        not: {
-          equals: ["@toLower(coalesce(outputs('Config')?['TargetListGuid'], ''))", 'site']
-        }
-      }
-    ]
   };
 }
 

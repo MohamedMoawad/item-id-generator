@@ -513,7 +513,7 @@ export async function createRemoteFlow(
     }
   }
   if (portalFallback(lastError)) {
-    const adopted = await findNamedFlowRemote(client, located, flowDisplayName(target.siteUrl));
+    const adopted = await findNamedFlowRemote(client, located, flowDisplayName(target.listTitle));
     if (adopted.id && adopted.state === 'Started') {
       return adopted;
     }

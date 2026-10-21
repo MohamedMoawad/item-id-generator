@@ -34,10 +34,12 @@ import {
   loadConfigRows,
   loadFormulaColumns,
   saveConfigRow,
+  saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
 import { FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { readFlowProblem } from '../../services/flowClient';
+import { readFlowProblem, syncListFlow } from '../../services/flowClient';
+import { flowDisplayName, IListFlowTarget } from '../../services/siteFlow';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { fillBlankNumbers } from '../../services/listFill';
@@ -132,7 +134,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.36',
+          title: 'AutoGen Flow 1.37',
           showCloseButton: true
         }}
         modalProps={{
@@ -243,7 +245,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Set the number column and the formula, then save. Leave that column empty on the item. The number is written on this list. Each completed step is stored in AutoGenFlowLog.
+          Set the number column and the formula, then save. This creates an automated cloud flow for this list. The trigger is When an item is created. Each step is stored in AutoGenFlowLog.
         </p>
         {!this.state.canEdit && (
           <div className={styles.status}>
@@ -613,10 +615,7 @@ export default class FlowSettingsPanel
       this.props.listGuid,
       next.numberColumnInternalName
     );
-    const saved: IConfigDraft = { ...next, id };
-    const statusMessage = saved.isActive
-      ? 'Saved. Leave the number column empty. The number is written on this list. Open AutoGenFlowLog to see each step.'
-      : 'Saved. This list is off, so new items stay blank. Open AutoGenFlowLog to see each step.';
+    let saved: IConfigDraft = { ...next, id };
     await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
       step: 'Save rule',
       status: 'Completed',
@@ -624,7 +623,17 @@ export default class FlowSettingsPanel
       listTitle: this.props.listTitle,
       listGuid: this.props.listGuid
     });
-    this.setState({ saving: false, statusMessage, warningMessage: '', consentUrl: '', draft: saved, showingForm: false });
+    let statusMessage = saved.isActive
+      ? 'Saved. The automated flow for this list is being created. Open AutoGenFlowLog to see each step.'
+      : 'Saved. This list is off. Open AutoGenFlowLog to see each step.';
+    let warningMessage = '';
+    if (saved.isActive) {
+      const created = await this._createListFlow(saved);
+      saved = created.draft;
+      statusMessage = created.statusMessage;
+      warningMessage = created.warningMessage;
+    }
+    this.setState({ saving: false, statusMessage, warningMessage, consentUrl: '', draft: saved, showingForm: false });
     if (saved.isActive) {
       await fillBlankNumbers({
         spHttpClient: this.props.spHttpClient,
@@ -636,6 +645,71 @@ export default class FlowSettingsPanel
       });
     }
     await this._load();
+  }
+
+  private async _createListFlow(draft: IConfigDraft): Promise<{ draft: IConfigDraft; statusMessage: string; warningMessage: string }> {
+    const target: IListFlowTarget = {
+      webUrl: this.props.webAbsoluteUrl,
+      siteUrl: this.props.siteAbsoluteUrl,
+      listGuid: this.props.listGuid,
+      listTitle: this.props.listTitle,
+      configListTitle: this._listTitle()
+    };
+    const name = flowDisplayName(this.props.listTitle);
+    try {
+      const synced = await syncListFlow(this.props.aadHttpClientFactory, target, {
+        flowId: draft.flowId,
+        flowEnvironment: draft.flowEnvironment,
+        flowConnection: draft.flowConnection,
+        flowState: draft.flowState,
+        note: '',
+        consentUrl: ''
+      }, true);
+      if (draft.id !== undefined && synced.flowId) {
+        await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id, {
+          flowId: synced.flowId,
+          flowEnvironment: synced.flowEnvironment,
+          flowConnection: synced.flowConnection,
+          flowState: synced.flowState
+        });
+      }
+      const started = synced.flowState === 'Started' && synced.flowId.trim().length > 0;
+      const detail = `Name ${name}. Trigger When an item is created. Id ${synced.flowId || 'none'}. State ${synced.flowState || 'none'}. ${synced.note}`;
+      await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
+        step: 'Create flow',
+        status: started ? 'Completed' : 'Failed',
+        detail,
+        listTitle: this.props.listTitle,
+        listGuid: this.props.listGuid
+      });
+      return {
+        draft: {
+          ...draft,
+          flowId: synced.flowId,
+          flowEnvironment: synced.flowEnvironment,
+          flowConnection: synced.flowConnection,
+          flowState: synced.flowState
+        },
+        statusMessage: started
+          ? 'Saved. The automated flow is on for this list. Leave the number column empty. Open AutoGenFlowLog for each step.'
+          : 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.',
+        warningMessage: started ? '' : (synced.note || 'The flow was not created.')
+      };
+    } catch (error) {
+      const detail = messageOf(error);
+      await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
+        step: 'Create flow',
+        status: 'Failed',
+        detail: `Name ${name}. Trigger When an item is created. ${detail}`,
+        listTitle: this.props.listTitle,
+        listGuid: this.props.listGuid
+      });
+      return {
+        draft,
+        statusMessage: 'Saved. The flow was not created. Open AutoGenFlowLog and read the Create flow row.',
+        warningMessage: detail
+      };
+    }
   }
 
   private _storedFlowId(): string {

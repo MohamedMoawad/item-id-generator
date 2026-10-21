@@ -1,12 +1,12 @@
 # AutoGen Flow
 
-AutoGen Flow gives each list its own running number. Open a list, choose **AutoGen Flow**, and set the number column and the formula. Saving the rule is enough. Leave the number column empty on the item. The number is written on the list.
+AutoGen Flow gives each list its own running number. Open a list, choose **AutoGen Flow**, and set the number column and the formula. Saving the rule creates an automated cloud flow for that list. The trigger is When an item is created. Leave the number column empty. The flow writes the number.
 
 The number is written while someone has that list open. An item created while nobody has the list open receives its number the next time the list is opened.
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.36.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.37.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Update the app on the site after the catalog deploy.
@@ -18,7 +18,7 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**.
 
-`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. Each row is one completed step: **Save rule**, **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**. **Status** is Completed or Failed. **Detail** has the SharePoint error when a step fails. A pass that finds no blank number does not add a row.
+`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. **Create flow** records the flow name, id, state, and the error text when the create call fails. The open list also records **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**.
 
 ## A list rule
 
