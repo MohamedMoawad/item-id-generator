@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { BaseListViewCommandSet, IListViewCommandSetExecuteEventParameters } from '@microsoft/sp-listview-extensibility';
-import { buildListAbsoluteUrl, DEFAULT_CONFIG_LIST_TITLE, isFlowConfigList } from '../../services/contract';
+import { buildListAbsoluteUrl, DEFAULT_CONFIG_LIST_TITLE, isAutoGenSystemList } from '../../services/contract';
 import { watchListNumbers } from '../../services/listFill';
 import FlowSettingsPanel from './FlowSettingsPanel';
 
@@ -42,7 +42,7 @@ export default class FlowSettingsCommandSet
   private _watchList(): void {
     const list = this.context.pageContext.list;
     const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
-    if (!list || isFlowConfigList(list.title, list.serverRelativeUrl, configTitle)) {
+    if (!list || isAutoGenSystemList(list.title, list.serverRelativeUrl, configTitle)) {
       return;
     }
     watchListNumbers({
@@ -50,7 +50,8 @@ export default class FlowSettingsCommandSet
       siteAbsoluteUrl: this.context.pageContext.site.absoluteUrl,
       webAbsoluteUrl: this.context.pageContext.web.absoluteUrl,
       configListTitle: configTitle,
-      listGuid: list.id.toString()
+      listGuid: list.id.toString(),
+      listTitle: list.title
     });
   }
 
@@ -61,7 +62,7 @@ export default class FlowSettingsCommandSet
     }
     const list = this.context.pageContext.list;
     const configTitle = this.properties.configListTitle || DEFAULT_CONFIG_LIST_TITLE;
-    command.visible = !!list && !isFlowConfigList(list.title, list.serverRelativeUrl, configTitle);
+    command.visible = !!list && !isAutoGenSystemList(list.title, list.serverRelativeUrl, configTitle);
     command.disabled = false;
     command.title = 'AutoGen Flow';
   }

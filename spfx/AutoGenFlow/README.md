@@ -6,7 +6,7 @@ The number is written while someone has that list open. An item created while no
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.35.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.36.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Update the app on the site after the catalog deploy.
@@ -17,6 +17,8 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 7. Add an item and leave the number column empty. The number appears on the list.
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**.
+
+`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. Each row is one completed step: **Save rule**, **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**. **Status** is Completed or Failed. **Detail** has the SharePoint error when a step fails. A pass that finds no blank number does not add a row.
 
 ## A list rule
 

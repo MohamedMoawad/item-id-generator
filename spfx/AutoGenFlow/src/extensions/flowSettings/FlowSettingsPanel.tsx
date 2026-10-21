@@ -41,6 +41,7 @@ import { readFlowProblem } from '../../services/flowClient';
 import { formulaInserts, IFormulaColumn, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
 import { buildItemQuery } from '../../services/itemQuery';
 import { fillBlankNumbers } from '../../services/listFill';
+import { writeFlowLog } from '../../services/flowLog';
 import styles from './FlowSettingsPanel.module.scss';
 
 export interface IFlowSettingsPanelProps {
@@ -131,7 +132,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.35',
+          title: 'AutoGen Flow 1.36',
           showCloseButton: true
         }}
         modalProps={{
@@ -242,7 +243,7 @@ export default class FlowSettingsPanel
     return (
       <div className={styles.panel}>
         <p className={styles.intro}>
-          Set the number column and the formula, then save. Leave that column empty on the item. The number is written on this list.
+          Set the number column and the formula, then save. Leave that column empty on the item. The number is written on this list. Each completed step is stored in AutoGenFlowLog.
         </p>
         {!this.state.canEdit && (
           <div className={styles.status}>
@@ -476,7 +477,15 @@ export default class FlowSettingsPanel
 
   private _onSave = (): void => {
     this._save().catch((error: unknown) => {
-      this.setState({ saving: false, errorMessage: messageOf(error) });
+      const detail = messageOf(error);
+      this.setState({ saving: false, errorMessage: detail });
+      writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
+        step: 'Save rule',
+        status: 'Failed',
+        detail,
+        listTitle: this.props.listTitle,
+        listGuid: this.props.listGuid
+      }).catch(() => undefined);
     });
   };
 
@@ -606,8 +615,15 @@ export default class FlowSettingsPanel
     );
     const saved: IConfigDraft = { ...next, id };
     const statusMessage = saved.isActive
-      ? 'Saved. Leave the number column empty. The number is written on this list.'
-      : 'Saved. This list is off, so new items stay blank.';
+      ? 'Saved. Leave the number column empty. The number is written on this list. Open AutoGenFlowLog to see each step.'
+      : 'Saved. This list is off, so new items stay blank. Open AutoGenFlowLog to see each step.';
+    await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
+      step: 'Save rule',
+      status: 'Completed',
+      detail: `Column ${saved.numberColumnInternalName}. Formula ${saved.formula}. Active ${saved.isActive ? 'yes' : 'no'}.`,
+      listTitle: this.props.listTitle,
+      listGuid: this.props.listGuid
+    });
     this.setState({ saving: false, statusMessage, warningMessage: '', consentUrl: '', draft: saved, showingForm: false });
     if (saved.isActive) {
       await fillBlankNumbers({
@@ -615,7 +631,8 @@ export default class FlowSettingsPanel
         siteAbsoluteUrl: this.props.siteAbsoluteUrl,
         webAbsoluteUrl: this.props.webAbsoluteUrl,
         configListTitle: listTitle,
-        listGuid: this.props.listGuid
+        listGuid: this.props.listGuid,
+        listTitle: this.props.listTitle
       });
     }
     await this._load();

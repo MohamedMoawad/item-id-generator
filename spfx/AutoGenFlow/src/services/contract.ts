@@ -2,6 +2,8 @@ import { CONFIG_FIELD_DEFINITIONS } from './fields';
 
 export const DEFAULT_CONFIG_LIST_TITLE = 'AutoGenFlowConfiguration';
 
+export const DEFAULT_LOG_LIST_TITLE = 'AutoGenFlowLog';
+
 export const SITE_FLOW_SENTINEL = 'site';
 
 export type ResetPeriod = 'None' | 'Day' | 'Month' | 'Year';
@@ -260,6 +262,17 @@ export function isFlowConfigList(listTitle: string, serverRelativeUrl: string, c
     return true;
   }
   return /\/lists\/autogenflowconfiguration$/i.test(serverRelativeUrl);
+}
+
+export function isAutoGenSystemList(listTitle: string, serverRelativeUrl: string, configListTitle: string): boolean {
+  if (isFlowConfigList(listTitle, serverRelativeUrl, configListTitle)) {
+    return true;
+  }
+  const title = listTitle.trim().toLowerCase();
+  if (title === DEFAULT_LOG_LIST_TITLE.toLowerCase()) {
+    return true;
+  }
+  return /\/lists\/autogenflowlog$/i.test(serverRelativeUrl);
 }
 
 export function escapeListTitle(title: string): string {
