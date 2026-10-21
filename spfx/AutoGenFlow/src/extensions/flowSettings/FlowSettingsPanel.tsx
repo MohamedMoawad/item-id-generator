@@ -40,7 +40,7 @@ import {
   saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
+import { createFlowLogDetail, FlowConsentError, flowPortalUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
 import { readFlowProblem, syncListFlow } from '../../services/flowClient';
 import { flowDisplayName, IListFlowTarget } from '../../services/siteFlow';
 import { formulaInserts, IFormulaColumn, isLookupLike, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
@@ -146,7 +146,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.38',
+          title: 'AutoGen Flow 1.39',
           showCloseButton: true
         }}
         modalProps={{
@@ -690,7 +690,7 @@ export default class FlowSettingsPanel
         note: '',
         consentUrl: ''
       }, true);
-      if (draft.id !== undefined && synced.flowId) {
+      if (draft.id !== undefined && (synced.flowId || synced.flowEnvironment)) {
         await saveFlowBinding(this.props.spHttpClient, this.props.siteAbsoluteUrl, this._listTitle(), draft.id, {
           flowId: synced.flowId,
           flowEnvironment: synced.flowEnvironment,
@@ -699,7 +699,13 @@ export default class FlowSettingsPanel
         });
       }
       const started = synced.flowState === 'Started' && synced.flowId.trim().length > 0;
-      const detail = `Name ${name}. Trigger When an item is created. Id ${synced.flowId || 'none'}. State ${synced.flowState || 'none'}. ${synced.note}`;
+      const detail = createFlowLogDetail({
+        name,
+        environmentId: synced.flowEnvironment,
+        flowId: synced.flowId,
+        flowState: synced.flowState,
+        note: synced.note
+      });
       await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
         step: 'Create flow',
         status: started ? 'Completed' : 'Failed',

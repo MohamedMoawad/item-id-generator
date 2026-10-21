@@ -6,6 +6,7 @@ import {
   flowApiHosts,
   flowCreateUrl,
   flowPutUrl,
+  createFlowFailureNote,
   flowHomeUrl,
   FlowConsentError,
   FlowRunState,
@@ -528,9 +529,9 @@ export async function createRemoteFlow(
       }
       throw new FlowStartError(adopted.id, 'Turn the numbering flow on in the Power Automate tab.');
     }
-    throw new Error('No numbering flow was created.');
+    throw new Error(createFlowFailureNote(located, lastError));
   }
-  throw new Error(publicFlowError(environment.id, lastError));
+  throw new Error(createFlowFailureNote(located, publicFlowError(environment.id, lastError)));
 }
 
 export async function redeployRemoteFlow(

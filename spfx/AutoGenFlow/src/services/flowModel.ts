@@ -436,6 +436,27 @@ export function flowHomeUrl(environmentId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/home`;
 }
 
+export function createFlowLogDetail(input: {
+  name: string;
+  environmentId: string;
+  flowId: string;
+  flowState: string;
+  note: string;
+}): string {
+  return `Name ${input.name}. Trigger When an item is created. Environment ${input.environmentId.trim() || 'none'}. Id ${input.flowId.trim() || 'none'}. State ${input.flowState.trim() || 'none'}. ${input.note}`.trim();
+}
+
+export function createFlowFailureNote(environment: { id: string; displayName: string }, detail: string): string {
+  const id = environment.id.trim() || 'none';
+  const name = environment.displayName.trim() || 'Default';
+  const reason = detail.replace(/\s+/g, ' ').trim();
+  const where = `Environment ${name}. Environment id ${id}. ${flowHomeUrl(id)}.`;
+  if (!reason) {
+    return `No numbering flow was created. ${where}`;
+  }
+  return `No numbering flow was created. ${where} ${reason}`;
+}
+
 export function flowListUrl(environmentId: string): string {
   const environment = encodeURIComponent(environmentId.trim());
   return `https://make.powerautomate.com/environments/${environment}/flows`;

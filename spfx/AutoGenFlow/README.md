@@ -6,7 +6,7 @@ The number is written while someone has that list open. An item created while no
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.38.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.39.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Update the app on the site after the catalog deploy.
@@ -18,7 +18,7 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**.
 
-`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. **Create flow** records the flow name, id, state, and the error text when the create call fails. The open list also records **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**.
+`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. **Create flow** records the flow name, environment id, flow id, state, and the error text when the create call fails. Id none and State none mean Power Automate did not return a flow. The open list also records **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**.
 
 ## A list rule
 
