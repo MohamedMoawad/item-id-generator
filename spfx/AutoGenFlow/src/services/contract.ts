@@ -366,7 +366,11 @@ function sharedBody(draft: IConfigDraft): Record<string, string | number | boole
     ItemQuery: draft.itemQuery.trim(),
     ResetPeriod: draft.resetPeriod,
     IsActive: draft.isActive,
-    PadLength: draft.padLength
+    PadLength: draft.padLength,
+    FlowId: draft.flowId.trim(),
+    FlowEnvironment: draft.flowEnvironment.trim(),
+    FlowConnection: draft.flowConnection.trim(),
+    FlowState: draft.flowState.trim()
   };
 }
 

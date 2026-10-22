@@ -18,7 +18,7 @@ List owners set the formula, the number column, and the reset. Saving an active 
 
 ## AutoGen Flow
 
-`autogen-flow.sppkg` is package **1.40.0.0**, separate from AutoGen Feature. Upload it and add the app to the site. It uses **Microsoft Flow Service** permissions **Flows.Read.All** and **Flows.Manage.All**. Open a list, choose **AutoGen Flow**, set the column and formula, and save. **Columns on this list** lists the columns on that list, including lookups. Leave the number column empty. The number is written on the list while that list is open. `AutoGenFlowLog` records each completed step and the step that failed. An item created while nobody has the list open receives its number the next time the list is opened. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
+`autogen-flow.sppkg` is package **1.41.0.0**, separate from AutoGen Feature. Upload it and add the app to the site. It uses **Microsoft Flow Service** permissions **Flows.Read.All** and **Flows.Manage.All**. Open a list, choose **AutoGen Flow**, set the column and formula, and save. **Columns on this list** lists the columns on that list, including lookups. Leave the number column empty. The number is written on the list while that list is open. `AutoGenFlowLog` records each completed step and the step that failed. An item created while nobody has the list open receives its number the next time the list is opened. The steps are in [spfx/AutoGenFlow/README.md](../spfx/AutoGenFlow/README.md). On a list that uses it, clear **Active** on the Autogen Feature rule.
 
 ## Repeating Rows
 

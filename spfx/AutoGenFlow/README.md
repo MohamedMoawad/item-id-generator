@@ -6,7 +6,7 @@ The number is written while someone has that list open. An item created while no
 
 ## Upload
 
-The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.40.0.0**.
+The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), solution **AutoGen Flow**, version **1.41.0.0**.
 
 1. Upload it in the SharePoint app catalog and deploy it.
 2. The package uses **Microsoft Flow Service** / **Flows.Read.All** and **Flows.Manage.All**. Update the app on the site after the catalog deploy.
@@ -18,7 +18,7 @@ The package is [deploy/autogen-flow.sppkg](../../deploy/autogen-flow.sppkg), sol
 
 `AutoGenFlowConfiguration` appears in site contents. Each list has one row. The popup shows that row with **Edit**, **View**, and **Delete**.
 
-`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. **Environment** lists the Power Automate environment names. **Edit flow** opens the created flow in a new tab. **Create flow** records the flow name, environment id, flow id, state, and the error text when the create call fails. Id none and State none mean Power Automate did not return a flow. When the create call returns HTTP 401, **Create flow with PowerShell** downloads a script that signs you in, creates the flow, and opens Edit flow. The open list also records **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**.
+`AutoGenFlowLog` appears in site contents. Sort it by **Created**, newest first. **Review permissions** opens SharePoint admin API access for **Flows.Read.All** and **Flows.Manage.All**. **Environment id**, **Connection name**, and **Flow id** accept any value you type. **Edit flow** opens the created flow in a new tab. **Create flow** records the flow name, environment id, flow id, state, and the error text when the create call fails. Id none and State none mean Power Automate did not return a flow. When the create call returns HTTP 401, **Create flow with PowerShell** downloads a script that signs you in, creates the flow, and opens Edit flow. The open list also records **Load rule**, **Load items**, **Plan number**, **Write number**, **Save count**, and **Refresh list**.
 
 ## A list rule
 

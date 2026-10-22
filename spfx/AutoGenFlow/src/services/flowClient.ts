@@ -16,6 +16,7 @@ import {
   IFlowEnvironment,
   IRawListedFlow,
   chooseEnvironment,
+  environmentForId,
   readConnectionNamesFromFlows,
   readConnections,
   readCreatedConnection,
@@ -163,7 +164,7 @@ export async function syncListFlow(
   active: boolean
 ): Promise<ISyncedFlow> {
   const environments = await listEnvironments(factory);
-  const environment = environments.filter((item) => item.id === current.flowEnvironment)[0] || environments[0];
+  const environment = environmentForId(environments, current.flowEnvironment);
   if (!active) {
     if (current.flowId && environment) {
       const stopAt = environments.filter((item) => item.id === current.flowEnvironment)[0] || environment;
@@ -185,10 +186,13 @@ export async function syncListFlow(
     };
   }
   if (!environment) {
-    return { ...current, note: 'Saved the rule. Power Automate did not return an environment for this account.', consentUrl: '' };
+    return { ...current, note: 'Enter an environment id. Review permissions, then type any environment id.', consentUrl: '' };
   }
-  const ensured = await ensureSharePointConnection(factory, environment, current.flowConnection);
-  const names = ensured.connection ? [ensured.connection.name] : [''];
+  const typedConnection = current.flowConnection.trim();
+  const ensured = typedConnection
+    ? { connection: undefined, consentUrl: '', error: '' }
+    : await ensureSharePointConnection(factory, environment, '');
+  const names = typedConnection ? [typedConnection] : (ensured.connection ? [ensured.connection.name] : ['']);
   let lastError = ensured.error;
   for (let index = 0; index < names.length; index += 1) {
     const connectionName = names[index];

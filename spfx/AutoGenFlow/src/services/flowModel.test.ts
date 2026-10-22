@@ -1,4 +1,7 @@
-import { chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowListUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, readNamedFlow, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
+import {
+  apiAccessUrl,
+  environmentForId,
+  REQUESTED_API_PERMISSIONS, chooseConnection, chooseEnvironment, connectionListUrls, connectionPortalUrl, flowCreateUrls, flowPutUrl, flowGeoCandidates, flowHomeUrl, flowListUrl, flowPortalUrl, isConsentFailure, publicFlowRedirect, readConnectionNamesFromFlows, readConnections, readCreatedConnection, readEnvironments, readFailedAction, readFlowState, readLatestRun, readNamedFlow, sharePointConnectionBody, sharePointConnectionCreateUrls, sharePointConnectionPutUrl } from './flowModel';
 
 describe('flow model', () => {
   it('uses the default environment endpoint and SharePoint connections', () => {
@@ -291,5 +294,15 @@ describe('flow model', () => {
         { name: 'Write_item', properties: { status: 'Failed', error: { message: 'The field was not found.' } } }
       ]
     })).toBe('Write item: The field was not found.');
+  });
+
+  it('keeps an environment id and permission page the person typed', () => {
+    expect(REQUESTED_API_PERMISSIONS.map((item) => item.scope)).toEqual(['Flows.Read.All', 'Flows.Manage.All']);
+    expect(apiAccessUrl('https://contoso.sharepoint.com/sites/Portal')).toBe(
+      'https://contoso-admin.sharepoint.com/_layouts/15/online/AdminHome.aspx#/webApiPermissionManagement'
+    );
+    const typed = environmentForId([], 'Default-typed');
+    expect(typed && typed.id).toBe('Default-typed');
+    expect(environmentForId([], '')).toBeUndefined();
   });
 });

@@ -437,6 +437,43 @@ export function flowEditUrl(environmentId: string, flowId: string): string {
   return `https://make.powerautomate.com/environments/${environment}/flows/${flow}`;
 }
 
+export const REQUESTED_API_PERMISSIONS: Array<{ resource: string; scope: string }> = [
+  { resource: 'Microsoft Flow Service', scope: 'Flows.Read.All' },
+  { resource: 'Microsoft Flow Service', scope: 'Flows.Manage.All' }
+];
+
+export function apiAccessUrl(siteAbsoluteUrl: string): string {
+  const host = new URL(siteAbsoluteUrl).hostname;
+  const marker = '.sharepoint.';
+  const at = host.indexOf(marker);
+  if (at <= 0) {
+    return siteAbsoluteUrl;
+  }
+  const tenant = host.slice(0, at);
+  const suffix = host.slice(at);
+  return `https://${tenant}-admin${suffix}/_layouts/15/online/AdminHome.aspx#/webApiPermissionManagement`;
+}
+
+export function environmentForId(environments: IFlowEnvironment[], id: string): IFlowEnvironment | undefined {
+  const trimmed = id.trim();
+  const found = environments.filter((item) => item.id === trimmed)[0];
+  if (found) {
+    return found;
+  }
+  if (!trimmed) {
+    return undefined;
+  }
+  return {
+    id: trimmed,
+    endpoint: 'https://api.flow.microsoft.com',
+    powerAppsEndpoint: 'https://api.powerapps.com',
+    displayName: trimmed,
+    isDefault: false,
+    location: '',
+    instanceUrl: ''
+  };
+}
+
 export function flowHomeUrl(environmentId: string): string {
   const environment = encodeURIComponent(environmentId.trim());
   return `https://make.powerautomate.com/environments/${environment}/home`;

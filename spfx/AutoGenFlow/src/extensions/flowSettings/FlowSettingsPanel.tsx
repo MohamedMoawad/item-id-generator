@@ -40,8 +40,8 @@ import {
   saveFlowBinding,
   showConfigList
 } from '../../services/configListClient';
-import { createFlowLogDetail, FlowConsentError, flowEditUrl, flowListUrl, IFlowConnection, IFlowEnvironment } from '../../services/flowModel';
-import { listEnvironments, readFlowProblem, syncListFlow } from '../../services/flowClient';
+import { apiAccessUrl, createFlowLogDetail, environmentForId, FlowConsentError, flowEditUrl, flowListUrl, IFlowConnection, IFlowEnvironment, REQUESTED_API_PERMISSIONS } from '../../services/flowModel';
+import { listConnections, listEnvironments, readFlowProblem, syncListFlow } from '../../services/flowClient';
 import { buildFlowPowerShell, isFlowUnauthorized } from '../../services/flowScript';
 import { flowDisplayName, IListFlowTarget } from '../../services/siteFlow';
 import { formulaInserts, IFormulaColumn, isLookupLike, numberColumnChoices, planNextCode, prepareRule } from '../../services/formula';
@@ -149,7 +149,7 @@ export default class FlowSettingsPanel
         minWidth={280}
         dialogContentProps={{
           type: DialogType.normal,
-          title: 'AutoGen Flow 1.40',
+          title: 'AutoGen Flow 1.41',
           showCloseButton: true
         }}
         modalProps={{
@@ -360,21 +360,73 @@ export default class FlowSettingsPanel
   }
 
   private _environmentPicker(): React.ReactElement {
+    const locked = this.state.loading || this.state.saving || !this.state.canEdit;
+    const environmentId = this.state.environmentId;
     const options = this.state.environments.map((environment) => ({
       key: environment.id,
       text: environment.isDefault ? `${environment.displayName} (default)` : environment.displayName
     }));
+    if (environmentId && !options.some((option) => option.key === environmentId)) {
+      options.unshift({ key: environmentId, text: environmentId });
+    }
+    const connectionOptions = this.state.connections.map((connection) => ({
+      key: connection.name,
+      text: connection.accountName ? `${connection.displayName} (${connection.accountName})` : connection.displayName || connection.name
+    }));
+    const connectionKnown = connectionOptions.some((option) => option.key === this.state.connectionName);
+    if (this.state.connectionName && !connectionKnown) {
+      connectionOptions.unshift({ key: this.state.connectionName, text: this.state.connectionName });
+    }
+    const flowId = (this.state.draft && this.state.draft.flowId) || '';
     return (
       <div className={styles.pickers}>
+        <div className={styles.status}>
+          <p className={styles.intro}>Review these API permissions, then enter any environment, connection, or flow id.</p>
+          {REQUESTED_API_PERMISSIONS.map((permission) => (
+            <p key={permission.scope}>{permission.resource}: {permission.scope}</p>
+          ))}
+          <DefaultButton text="Review permissions" onClick={this._onReviewPermissions} disabled={this.state.saving} />
+        </div>
         <Dropdown
-          label="Environment"
-          placeholder={options.length === 0 ? 'No Power Automate environment was returned' : 'Select an environment'}
+          label="Environment name"
+          placeholder={options.length === 0 ? 'Type an environment id below' : 'Select an environment, or type any id below'}
           options={options}
-          selectedKey={this.state.environmentId || undefined}
-          disabled={this.state.loading || this.state.saving || options.length === 0}
+          selectedKey={environmentId || undefined}
+          disabled={locked || options.length === 0}
           responsiveMode={ResponsiveMode.large}
           calloutProps={OPEN_MENU}
           onChange={this._onEnvironmentChange}
+        />
+        <TextField
+          label="Environment id"
+          description="Any Power Automate environment id. The name list does not limit this."
+          value={environmentId}
+          disabled={locked}
+          onChange={this._onEnvironmentIdChange}
+        />
+        <Dropdown
+          label="SharePoint connection"
+          placeholder={this.state.connectionsLoading ? 'Loading connections' : 'Select a connection, or type any name below'}
+          options={connectionOptions}
+          selectedKey={this.state.connectionName || undefined}
+          disabled={locked || connectionOptions.length === 0}
+          responsiveMode={ResponsiveMode.large}
+          calloutProps={OPEN_MENU}
+          onChange={this._onConnectionChange}
+        />
+        <TextField
+          label="Connection name"
+          description="Any connection name, such as shared-sharepointonl-1."
+          value={this.state.connectionName}
+          disabled={locked}
+          onChange={this._onConnectionText}
+        />
+        <TextField
+          label="Flow id"
+          description="Leave blank to create a flow. Paste any existing flow id to open that flow."
+          value={flowId}
+          disabled={locked}
+          onChange={this._onFlowIdChange}
         />
         <div className={styles.actions}>
           <DefaultButton
@@ -395,14 +447,66 @@ export default class FlowSettingsPanel
     );
   }
 
+  private _onReviewPermissions = (): void => {
+    window.open(apiAccessUrl(this.props.siteAbsoluteUrl), '_blank', 'noopener,noreferrer');
+  };
+
   private _onEnvironmentChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
     if (!option) {
       return;
     }
-    const environmentId = String(option.key);
-    this.setState({ environmentId, flowScript: '' });
-    this._patch({ flowEnvironment: environmentId });
+    this._setEnvironment(String(option.key));
   };
+
+  private _onEnvironmentIdChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
+    this._setEnvironment(value || '');
+  };
+
+  private _setEnvironment(environmentId: string): void {
+    this.setState({ environmentId, flowScript: '', connections: [] });
+    this._patch({ flowEnvironment: environmentId });
+    this._loadConnections(environmentId, this.state.environments);
+  }
+
+  private _onConnectionChange = (_event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption): void => {
+    if (!option) {
+      return;
+    }
+    this._setConnection(String(option.key));
+  };
+
+  private _onConnectionText = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
+    this._setConnection(value || '');
+  };
+
+  private _setConnection(connectionName: string): void {
+    this.setState({ connectionName, flowScript: '' });
+    this._patch({ flowConnection: connectionName });
+  }
+
+  private _onFlowIdChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, value?: string): void => {
+    this._patch({ flowId: value || '' });
+  };
+
+  private _loadConnections(environmentId: string, environments: IFlowEnvironment[]): void {
+    const environment = environmentForId(environments, environmentId);
+    if (!environment) {
+      this.setState({ connections: [], connectionsLoading: false });
+      return;
+    }
+    this.setState({ connectionsLoading: true });
+    listConnections(this.props.aadHttpClientFactory, environment).then((connections) => {
+      if ((this.state.environmentId || '').trim() !== environmentId.trim()) {
+        return;
+      }
+      this.setState({ connections, connectionsLoading: false });
+    }).catch(() => {
+      if ((this.state.environmentId || '').trim() !== environmentId.trim()) {
+        return;
+      }
+      this.setState({ connections: [], connectionsLoading: false });
+    });
+  }
 
   private _onEditFlow = (): void => {
     const environmentId = this._storedEnvironmentId();
@@ -646,6 +750,7 @@ export default class FlowSettingsPanel
       columns,
       environments,
       environmentId,
+      connectionName: draft.flowConnection,
       draft: { ...draft, flowEnvironment: environmentId || draft.flowEnvironment },
       legacySite: findSiteFlow(rows),
       countEdited: false,
@@ -654,6 +759,9 @@ export default class FlowSettingsPanel
       editing: false,
       errorMessage: ''
     });
+    if (environmentId) {
+      this._loadConnections(environmentId, environments);
+    }
     if (reportRuns) {
       this._loadFlowProblem(draft).catch((error: unknown) => {
         this.setState({ warningMessage: messageOf(error) });
@@ -734,6 +842,7 @@ export default class FlowSettingsPanel
       consentUrl: '',
       flowScript,
       environmentId: saved.flowEnvironment || this.state.environmentId,
+      connectionName: saved.flowConnection,
       draft: saved,
       showingForm: false
     });
@@ -759,12 +868,13 @@ export default class FlowSettingsPanel
       configListTitle: this._listTitle()
     };
     const name = flowDisplayName(this.props.listTitle);
-    const environmentId = this.state.environmentId || draft.flowEnvironment;
+    const environmentId = (this.state.environmentId || draft.flowEnvironment).trim();
+    const connectionName = (this.state.connectionName || draft.flowConnection).trim();
     try {
       const synced = await syncListFlow(this.props.aadHttpClientFactory, target, {
         flowId: draft.flowId,
         flowEnvironment: environmentId,
-        flowConnection: draft.flowConnection,
+        flowConnection: connectionName,
         flowState: draft.flowState,
         note: '',
         consentUrl: ''
@@ -819,7 +929,7 @@ export default class FlowSettingsPanel
         environmentName: this._environmentName(environmentId),
         apiHost: this._environmentHost(environmentId),
         target,
-        connectionName: draft.flowConnection
+        connectionName
       }) : '';
       await writeFlowLog(this.props.spHttpClient, this.props.siteAbsoluteUrl, {
         step: 'Create flow',
@@ -856,15 +966,16 @@ export default class FlowSettingsPanel
 
   private _selectedEnvironment(environments: IFlowEnvironment[], savedId: string): string {
     const saved = savedId.trim();
-    if (saved && environments.some((item) => item.id === saved)) {
+    if (saved) {
       return saved;
     }
-    return environments.length > 0 ? environments[0].id : saved;
+    const preferred = environments.filter((item) => item.isDefault)[0] || environments[0];
+    return preferred ? preferred.id : '';
   }
 
   private _environmentName(environmentId: string): string {
     const match = this.state.environments.filter((item) => item.id === environmentId)[0];
-    return match ? match.displayName : 'Default';
+    return match ? match.displayName : (environmentId.trim() || 'Default');
   }
 
   private _environmentHost(environmentId: string): string {
